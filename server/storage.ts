@@ -1,38 +1,90 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import { users, scamReports, heroNominations, votes, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote } from "@shared/schema";
+import { db } from "./db";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
+  getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  createScamReport(report: InsertScamReport): Promise<ScamReport>;
+  getScamReports(): Promise<ScamReport[]>;
+  createHeroNomination(nomination: InsertHeroNomination): Promise<HeroNomination>;
+  getHeroNominations(): Promise<HeroNomination[]>;
+  createVote(vote: InsertVote): Promise<Vote>;
+  updateScamReportVotes(reportId: number, votes: number): Promise<void>;
+  updateHeroNominationVotes(nominationId: number, votes: number): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
-  }
-
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+export class DatabaseStorage implements IStorage {
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
     return user;
+  }
+
+  async createScamReport(report: InsertScamReport): Promise<ScamReport> {
+    const [scamReport] = await db
+      .insert(scamReports)
+      .values(report)
+      .returning();
+    return scamReport;
+  }
+
+  async getScamReports(): Promise<ScamReport[]> {
+    return await db
+      .select()
+      .from(scamReports)
+      .orderBy(desc(scamReports.createdAt));
+  }
+
+  async createHeroNomination(nomination: InsertHeroNomination): Promise<HeroNomination> {
+    const [heroNomination] = await db
+      .insert(heroNominations)
+      .values(nomination)
+      .returning();
+    return heroNomination;
+  }
+
+  async getHeroNominations(): Promise<HeroNomination[]> {
+    return await db
+      .select()
+      .from(heroNominations)
+      .orderBy(desc(heroNominations.votes));
+  }
+
+  async createVote(vote: InsertVote): Promise<Vote> {
+    const [newVote] = await db
+      .insert(votes)
+      .values(vote)
+      .returning();
+    return newVote;
+  }
+
+  async updateScamReportVotes(reportId: number, newVotes: number): Promise<void> {
+    await db
+      .update(scamReports)
+      .set({ votes: newVotes })
+      .where(eq(scamReports.id, reportId));
+  }
+
+  async updateHeroNominationVotes(nominationId: number, newVotes: number): Promise<void> {
+    await db
+      .update(heroNominations)
+      .set({ votes: newVotes })
+      .where(eq(heroNominations.id, nominationId));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

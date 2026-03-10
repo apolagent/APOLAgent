@@ -1,0 +1,214 @@
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
+import { Shield, AlertTriangle, Link as LinkIcon, ArrowLeft } from "lucide-react";
+import { Link } from "wouter";
+import { insertScamReportSchema, type InsertScamReport, type ScamReport } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
+
+const scamTypes = [
+  "Rug Pull",
+  "Fake Token",
+  "Ponzi Scheme", 
+  "Phishing Site",
+  "Fake Exchange",
+  "Romance Scam",
+  "Investment Fraud",
+  "Fake Airdrop",
+  "Impersonation",
+  "Other"
+];
+
+export default function ReportScam() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const form = useForm<InsertScamReport>({
+    resolver: zodResolver(insertScamReportSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      scamType: "",
+      evidenceUrl: "",
+    },
+  });
+
+  const { data: scamReports = [], isLoading } = useQuery<ScamReport[]>({
+    queryKey: ["/api/scam-reports"],
+  });
+
+  const createReportMutation = useMutation({
+    mutationFn: async (data: InsertScamReport) => {
+      const response = await fetch("/api/scam-reports", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to submit report");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/scam-reports"] });
+      toast({
+        title: "Report Submitted",
+        description: "Your scam report has been submitted for review by the community.",
+      });
+      form.reset();
+      setIsSubmitting(false);
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to submit report. Please try again.",
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
+    },
+  });
+
+  const onSubmit = (data: InsertScamReport) => {
+    setIsSubmitting(true);
+    createReportMutation.mutate(data);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-900 text-white">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="font-meme text-4xl md:text-6xl gradient-text mb-4 flex items-center justify-center gap-3">
+            <Shield className="w-12 h-12 md:w-16 md:h-16 text-red-500" />
+            Report a Scam
+          </h1>
+          <p className="text-xl text-gray-400 mb-8">
+            Help protect the community by reporting suspicious projects and scams
+          </p>
+          <Link href="/">
+            <Button variant="outline" className="text-blue-400 border-blue-400 hover:bg-blue-400 hover:text-slate-900">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Home
+            </Button>
+          </Link>
+        </div>
+
+        <div className="grid lg:grid-cols-2 gap-12">
+          {/* Report Form */}
+          <Card className="bg-gradient-to-br from-red-900/20 to-red-800/30 border-red-600/50">
+            <CardHeader>
+              <CardTitle className="text-2xl font-meme text-red-400 flex items-center gap-2">
+                <AlertTriangle className="w-6 h-6" />
+                Submit Scam Report
+              </CardTitle>
+              <CardDescription className="text-gray-300">
+                Provide detailed information about the scam to help warn others
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                  <FormField
+                    control={form.control}
+                    name="title"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-white">Scam Title *</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="e.g., FakeToken Rug Pull, Phishing Website"
+                            className="bg-slate-800 border-slate-600 text-white placeholder:text-gray-400"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="scamType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-white">Scam Type *</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                              <SelectValue placeholder="Select scam type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-slate-800 border-slate-600">
+                            {scamTypes.map((type) => (
+                              <SelectItem key={type} value={type} className="text-white hover:bg-slate-700">
+                                {type}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-white">Detailed Description *</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            {...field}
+                            placeholder="Describe the scam in detail: How it works, who's behind it, estimated losses, warning signs, etc."
+                            className="bg-slate-800 border-slate-600 text-white placeholder:text-gray-400 min-h-[120px]"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="evidenceUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-white">Evidence URL (Optional)</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            value={field.value || ""}
+                            placeholder="https://... (Screenshots, blockchain explorer, social media)"
+                            className="bg-slate-800 border-slate-600 text-white placeholder:text-gray-400"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3"
+                  >
+                    {isSubmitting ? "Submitting..." : "Submit Report"}
+                  </Button>
+                </form>
+              </Form>
+            </CardContent>
+          </Card> **...**
+
+_This response is too long to display in full._
