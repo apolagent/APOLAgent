@@ -1,0 +1,47 @@
+Here are all the key project files organized by category:
+
+Configuration Files
+package.json - Dependencies and npm scripts
+vite.config.ts - Vite build configuration
+tailwind.config.ts - Tailwind CSS theming
+tsconfig.json - TypeScript configuration
+drizzle.config.ts - Database configuration
+replit.md - Project documentation and architecture
+Backend Files (server/)
+server/index.ts - Express server setup with logging
+server/routes.ts - API endpoints for scam reports, hero nominations, and voting
+server/storage.ts - Database operations interface
+server/db.ts - PostgreSQL connection setup
+server/vite.ts - Vite integration (don't edit)
+Database & Shared
+shared/schema.ts - Drizzle ORM schema definitions, Zod validation schemas, and TypeScript types
+Frontend - Main Files (client/src/)
+client/src/main.tsx - App entry point
+client/src/App.tsx - Router configuration
+client/src/index.css - Global styles, animations, and custom APE POLICE theme colors
+Frontend - Pages (client/src/pages/)
+client/src/pages/home.tsx - Main marketing site with all sections
+client/src/pages/report-scam.tsx - Scam reporting forum page
+client/src/pages/nominate-hero.tsx - Hero nomination page
+client/src/pages/rankings.tsx - Community leaderboard/rankings
+client/src/pages/not-found.tsx - 404 error page
+Frontend - Components (client/src/components/)
+client/src/components/navigation.tsx - Top nav with logo and menu
+client/src/components/hero-section.tsx - Hero banner with APE character
+client/src/components/mission-section.tsx - Mission statement
+client/src/components/channel-section.tsx - Channel description with leaderboard preview
+client/src/components/tokenomics-section.tsx - Token details (name, supply, 0% tax, 0% team, LP locked)
+client/src/components/roadmap-section.tsx - 4-phase roadmap
+client/src/components/join-section.tsx - Social buttons (Telegram, X, APE Channel, Buy)
+client/src/components/footer.tsx - Footer with disclaimer
+Frontend - UI Components (client/src/components/ui/)
+50+ pre-built shadcn/ui components (don't edit these)
+
+Frontend - Utilities
+client/src/lib/queryClient.ts - TanStack Query setup
+client/src/lib/utils.ts - Utility functions
+client/src/hooks/use-toast.ts - Toast notification hook
+client/src/hooks/use-mobile.tsx - Mobile detection hook
+Assets
+attached_assets/ - Custom images and GIFs used throughout the site
+public/ - Static files
