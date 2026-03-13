@@ -64,6 +64,11 @@ export default function HeroSection() {
             <Send size={20} />
             Join the Patrol
           </a>
+
+          <div className="animate-bounce">
+            <ChevronDown className="w-8 h-8 text-yellow-400" />
+          </div>
+
           <button
             data-testid="button-buy-apol"
             style={{
@@ -90,9 +95,6 @@ export default function HeroSection() {
           </button>
         </div>
 
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
-          <ChevronDown className="w-8 h-8 text-yellow-400" />
-        </div>
       </div>
     </section>
   );
