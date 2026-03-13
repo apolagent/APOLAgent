@@ -45,7 +45,7 @@ export default function HeroSection() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              height: "42px",
+              height: "38px",
               minWidth: "210px",
               width: "fit-content",
               backgroundColor: "#3b82f6",
