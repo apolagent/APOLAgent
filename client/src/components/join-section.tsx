@@ -1,70 +1,75 @@
 import { Button } from "@/components/ui/button";
-import { SiTelegram, SiX } from "react-icons/si";
-import { ExternalLink, ShoppingCart } from "lucide-react";
-
-const socialLinks = [
-  {
-    label: "Telegram",
-    icon: SiTelegram,
-    href: "https://t.me/apepolice",
-    color: "bg-[#0088cc] hover:bg-[#006da3]",
-  },
-  {
-    label: "X (Twitter)",
-    icon: SiX,
-    href: "https://x.com/apepolice",
-    color: "bg-gray-800 hover:bg-gray-700",
-  },
-  {
-    label: "APE Channel",
-    icon: ExternalLink,
-    href: "https://t.me/apepolice",
-    color: "bg-gradient-to-r from-blue-600 to-green-500 hover:from-blue-700 hover:to-green-600",
-  },
-  {
-    label: "Buy $APEPOL",
-    icon: ShoppingCart,
-    href: "#",
-    color: "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600",
-  },
-];
+import { Send, Radio, Coins } from "lucide-react";
+import { Link } from "wouter";
 
 export default function JoinSection() {
   return (
-    <section id="join" className="py-24 px-4 bg-slate-900 relative" data-testid="join-section">
-      <div className="absolute inset-0 hero-bg opacity-30" />
-
-      <div className="max-w-4xl mx-auto text-center relative z-10">
-        <h2 className="font-meme text-4xl md:text-6xl gradient-text mb-6" data-testid="text-join-title">
-          Join the Force
-        </h2>
-        <p className="text-gray-300 text-xl mb-12 max-w-2xl mx-auto">
-          Every ape counts. Join APE POLICE and help us keep the crypto jungle safe.
-          Together, we are unstoppable. 🦍🚔
-        </p>
-
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-3xl mx-auto">
-          {socialLinks.map((link) => (
-            <a
-              key={link.label}
-              href={link.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid={`button-social-${link.label.toLowerCase().replace(/\s+/g, '-')}`}
-            >
-              <Button className={`w-full ${link.color} text-white font-bold py-6 rounded-xl text-base`}>
-                <link.icon className="w-5 h-5 mr-2" />
-                {link.label}
-              </Button>
-            </a>
-          ))}
+    <section id="join" className="py-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-16">
+          <h2 className="font-meme text-5xl md:text-6xl gradient-text mb-8">
+            Join the APE POLICE Force
+          </h2>
+          <div className="max-w-4xl mx-auto">
+            <p className="text-xl md:text-2xl mb-8 leading-relaxed">
+              You don't need a badge — just <span className="text-yellow-400 font-bold">memes and morals</span>. 
+              If you're here to fight scams and celebrate legends, you're one of us.
+            </p>
+          </div>
         </div>
 
-        <div className="mt-16 p-8 rounded-2xl bg-slate-800/50 border border-slate-700" data-testid="card-contract">
-          <div className="text-gray-400 text-sm mb-2">Contract Address</div>
-          <div className="font-mono text-blue-400 text-sm md:text-base break-all">
-            Coming Soon...
-          </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
+          <a href="https://t.me/+rHmFDw-NcYcyMjI0" target="_blank" rel="noopener noreferrer" className="w-full">
+            <Button className="w-full bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-6 px-6 rounded-2xl transition-all duration-300 transform hover:scale-105 neon-glow flex flex-col items-center space-y-3 h-auto">
+              <Send className="w-8 h-8" />
+              <span className="text-lg">Telegram</span>
+              <span className="text-sm opacity-80">Join the Squad 💬</span>
+            </Button>
+          </a>
+
+          <a href="https://x.com/apepoliceonline" target="_blank" rel="noopener noreferrer" className="w-full">
+            <Button className="w-full bg-gradient-to-br from-gray-800 to-black hover:from-gray-700 hover:to-gray-800 text-white font-bold py-6 px-6 rounded-2xl transition-all duration-300 transform hover:scale-105 neon-glow flex flex-col items-center space-y-3 h-auto">
+              <svg className="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+              </svg>
+              <span className="text-lg">X</span>
+              <span className="text-sm opacity-80">Follow Updates</span>
+            </Button>
+          </a>
+
+          <Link href="/report-scam" className="w-full">
+            <Button className="w-full bg-gradient-to-br from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-6 px-6 rounded-2xl transition-all duration-300 transform hover:scale-105 neon-glow flex flex-col items-center space-y-3 h-auto">
+              <Radio className="w-8 h-8" />
+              <span className="text-lg">APE Channel</span>
+              <span className="text-sm opacity-80">Report Scams 📡</span>
+            </Button>
+          </Link>
+
+          <Button className="bg-gradient-to-br from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-slate-900 font-bold py-6 px-6 rounded-2xl transition-all duration-300 transform hover:scale-105 neon-glow flex flex-col items-center space-y-3 h-auto">
+            <Coins className="w-8 h-8" />
+            <span className="text-lg">Buy $APOL</span>
+            <span className="text-sm opacity-80">Get Badge 🪙</span>
+          </Button>
+        </div>
+
+        <div className="mt-24 flex justify-center space-x-4 overflow-hidden">
+          <img
+            src="/ape-police-logo.png"
+            alt="APE POLICE officer on patrol"
+            className="w-20 h-20 md:w-24 md:h-24 rounded-xl border-2 border-blue-500 animate-float object-cover"
+          />
+          <img
+            src="/ape-police-logo.png"
+            alt="APE POLICE issuing citation"
+            className="w-24 h-24 md:w-28 md:h-28 rounded-xl border-2 border-yellow-400 animate-float z-10 object-cover"
+            style={{ animationDelay: '0.3s' }}
+          />
+          <img
+            src="/ape-police-logo.png"
+            alt="APE POLICE meme lab"
+            className="w-20 h-20 md:w-24 md:h-24 rounded-xl border-2 border-green-500 animate-float object-cover"
+            style={{ animationDelay: '0.6s' }}
+          />
         </div>
       </div>
     </section>
