@@ -35,6 +35,33 @@ export default function HeroSection() {
           and celebrating those who make it better.
         </p>
 
+        <div style={{ display: "flex", justifyContent: "center", marginTop: "30px" }}>
+          <a
+            href="https://t.me/+rHmFDw-NcYcyMjI0"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="button-join-patrol"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: "55px",
+              minWidth: "210px",
+              backgroundColor: "#3b82f6",
+              color: "#ffffff",
+              fontSize: "18px",
+              fontWeight: 800,
+              borderRadius: "10px",
+              textDecoration: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: "0 24px",
+              boxSizing: "border-box",
+            }}
+          >
+            Join the Patrol
+          </a>
+        </div>
 
         <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
           <ChevronDown className="w-8 h-8 text-yellow-400" />
