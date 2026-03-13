@@ -15,7 +15,7 @@ export default function HeroSection() {
       <div className="relative z-10 text-center px-4 max-w-5xl mx-auto">
         <div className="mb-8 flex justify-center">
           <div className="relative">
-            <div className="w-48 h-48 md:w-64 md:h-64 rounded-2xl overflow-hidden border-4 border-blue-400/40 shadow-2xl animate-float" style={{ boxShadow: '0 0 40px rgba(59,130,246,0.4), 0 0 80px rgba(59,130,246,0.2)' }}>
+            <div className="w-48 h-48 md:w-64 md:h-64 rounded-full overflow-hidden border-4 border-blue-400/40 shadow-2xl animate-float" style={{ boxShadow: '0 0 40px rgba(59,130,246,0.4), 0 0 80px rgba(59,130,246,0.2)' }}>
               <img
                 src="/ape-police-logo.png"
                 alt="APE POLICE"
