@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import { ChevronDown, Send, Coins } from "lucide-react";
 
 export default function HeroSection() {
@@ -36,16 +35,23 @@ export default function HeroSection() {
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-          <a href="https://t.me/+rHmFDw-NcYcyMjI0" target="_blank" rel="noopener noreferrer" data-testid="button-join-patrol">
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 transform hover:scale-105 neon-glow flex items-center space-x-2">
-              <Send className="w-5 h-5" />
-              <span>Join the Patrol</span>
-            </Button>
+          <a
+            href="https://t.me/+rHmFDw-NcYcyMjI0"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="button-join-patrol"
+            className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 transform hover:scale-105 neon-glow"
+          >
+            <Send className="w-5 h-5" />
+            <span>Join the Patrol</span>
           </a>
-          <Button className="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 transform hover:scale-105 neon-glow flex items-center space-x-2" data-testid="button-buy-apol">
+          <button
+            data-testid="button-buy-apol"
+            className="inline-flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 transform hover:scale-105 neon-glow"
+          >
             <Coins className="w-5 h-5" />
             <span>Buy $APOL</span>
-          </Button>
+          </button>
         </div>
 
         <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
