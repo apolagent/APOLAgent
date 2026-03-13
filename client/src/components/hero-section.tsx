@@ -34,22 +34,59 @@ export default function HeroSection() {
           and celebrating those who make it better.
         </p>
 
-        <div className="hero-buttons">
+        <div className="flex flex-row justify-center items-center" style={{ gap: '20px', marginTop: '30px' }}>
           <a
             href="https://t.me/+rHmFDw-NcYcyMjI0"
             target="_blank"
             rel="noopener noreferrer"
             data-testid="button-join-patrol"
-            className="bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-300 neon-glow"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              height: '55px',
+              minWidth: '210px',
+              padding: '0 30px',
+              backgroundColor: '#2563eb',
+              color: 'white',
+              fontWeight: 700,
+              fontSize: '18px',
+              borderRadius: '10px',
+              textDecoration: 'none',
+              transition: 'background-color 0.2s',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+            onMouseOver={e => (e.currentTarget.style.backgroundColor = '#1d4ed8')}
+            onMouseOut={e => (e.currentTarget.style.backgroundColor = '#2563eb')}
           >
-            <Send className="w-5 h-5 shrink-0" />
+            <Send size={20} />
             <span>Join the Patrol</span>
           </a>
           <button
             data-testid="button-buy-apol"
-            className="bg-green-600 hover:bg-green-700 text-white transition-colors duration-300 neon-glow"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              height: '55px',
+              minWidth: '210px',
+              padding: '0 30px',
+              backgroundColor: '#16a34a',
+              color: 'white',
+              fontWeight: 700,
+              fontSize: '18px',
+              borderRadius: '10px',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'background-color 0.2s',
+            }}
+            onMouseOver={e => (e.currentTarget.style.backgroundColor = '#15803d')}
+            onMouseOut={e => (e.currentTarget.style.backgroundColor = '#16a34a')}
           >
-            <Coins className="w-5 h-5 shrink-0" />
+            <Coins size={20} />
             <span>Buy $APOL</span>
           </button>
         </div>
