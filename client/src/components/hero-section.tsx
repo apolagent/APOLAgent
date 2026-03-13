@@ -1,4 +1,4 @@
-import { ChevronDown, Send, Coins } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 export default function HeroSection() {
   return (
@@ -34,62 +34,6 @@ export default function HeroSection() {
           and celebrating those who make it better.
         </p>
 
-        <div className="flex flex-row justify-center items-center" style={{ gap: '20px', marginTop: '30px' }}>
-          <a
-            href="https://t.me/+rHmFDw-NcYcyMjI0"
-            target="_blank"
-            rel="noopener noreferrer"
-            data-testid="button-join-patrol"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              height: '55px',
-              minWidth: '210px',
-              padding: '0 30px',
-              backgroundColor: '#2563eb',
-              color: 'white',
-              fontWeight: 700,
-              fontSize: '18px',
-              borderRadius: '10px',
-              textDecoration: 'none',
-              transition: 'background-color 0.2s',
-              border: 'none',
-              cursor: 'pointer',
-            }}
-            onMouseOver={e => (e.currentTarget.style.backgroundColor = '#1d4ed8')}
-            onMouseOut={e => (e.currentTarget.style.backgroundColor = '#2563eb')}
-          >
-            <Send size={20} />
-            <span>Join the Patrol</span>
-          </a>
-          <button
-            data-testid="button-buy-apol"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              height: '55px',
-              minWidth: '210px',
-              padding: '0 30px',
-              backgroundColor: '#16a34a',
-              color: 'white',
-              fontWeight: 700,
-              fontSize: '18px',
-              borderRadius: '10px',
-              border: 'none',
-              cursor: 'pointer',
-              transition: 'background-color 0.2s',
-            }}
-            onMouseOver={e => (e.currentTarget.style.backgroundColor = '#15803d')}
-            onMouseOut={e => (e.currentTarget.style.backgroundColor = '#16a34a')}
-          >
-            <Coins size={20} />
-            <span>Buy $APOL</span>
-          </button>
-        </div>
 
         <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
           <ChevronDown className="w-8 h-8 text-yellow-400" />
