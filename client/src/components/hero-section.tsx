@@ -32,7 +32,7 @@ export default function HeroSection() {
           and celebrating those who make it better.
         </p>
 
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "16px", marginTop: "30px" }}>
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "16px", marginTop: "60px" }}>
           <button
             data-testid="button-join-patrol"
             style={{
