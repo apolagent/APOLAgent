@@ -1,4 +1,4 @@
-import { Shield, Siren, AlertTriangle } from "lucide-react";
+import { Siren, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
@@ -15,11 +15,15 @@ export default function HeroSection() {
       <div className="relative z-10 text-center px-4 max-w-5xl mx-auto">
         <div className="mb-8 flex justify-center">
           <div className="relative">
-            <div className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-gradient-to-br from-blue-500 to-green-500 flex items-center justify-center animate-wiggle">
-              <Shield className="w-16 h-16 md:w-20 md:h-20 text-white" />
+            <div className="w-48 h-48 md:w-64 md:h-64 rounded-2xl overflow-hidden border-4 border-blue-400/40 shadow-2xl animate-float" style={{ boxShadow: '0 0 40px rgba(59,130,246,0.4), 0 0 80px rgba(59,130,246,0.2)' }}>
+              <img
+                src="/ape-police-logo.png"
+                alt="APE POLICE"
+                className="w-full h-full object-cover"
+              />
             </div>
-            <div className="absolute -top-2 -right-2 w-8 h-8 rounded-full animate-siren-flash" />
-            <div className="absolute -bottom-2 -left-2 w-6 h-6 rounded-full animate-siren-flash" style={{ animationDelay: '0.2s' }} />
+            <div className="absolute -top-3 -right-3 w-8 h-8 rounded-full animate-siren-flash" />
+            <div className="absolute -bottom-3 -left-3 w-6 h-6 rounded-full animate-siren-flash" style={{ animationDelay: '0.2s' }} />
           </div>
         </div>
 

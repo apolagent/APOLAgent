@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Shield, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Navigation() {
@@ -20,10 +20,11 @@ export default function Navigation() {
         <div className="flex items-center justify-between h-16">
           <Link href="/">
             <div className="flex items-center gap-2 cursor-pointer group" data-testid="link-home-logo">
-              <div className="relative">
-                <Shield className="w-8 h-8 text-blue-400 group-hover:text-blue-300 transition-colors" />
-                <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full animate-siren-flash" />
-              </div>
+              <img
+                src="/ape-police-logo.png"
+                alt="APE POLICE"
+                className="w-10 h-10 rounded-full object-cover border-2 border-blue-400/50 group-hover:border-blue-300 transition-all"
+              />
               <span className="font-meme text-xl gradient-text">APE POLICE</span>
             </div>
           </Link>

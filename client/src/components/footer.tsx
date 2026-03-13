@@ -1,12 +1,10 @@
-import { Shield } from "lucide-react";
-
 export default function Footer() {
   return (
     <footer className="py-12 px-4 bg-slate-900 border-t border-slate-800" data-testid="footer">
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
           <div className="flex items-center gap-2">
-            <Shield className="w-6 h-6 text-blue-400" />
+            <img src="/ape-police-logo.png" alt="APE POLICE" className="w-8 h-8 rounded-full object-cover border border-blue-400/40" />
             <span className="font-meme text-lg gradient-text">APE POLICE</span>
           </div>
 
