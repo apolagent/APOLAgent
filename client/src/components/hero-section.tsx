@@ -40,16 +40,14 @@ export default function HeroSection() {
             target="_blank"
             rel="noopener noreferrer"
             data-testid="button-join-patrol"
-            className="inline-flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300 transform hover:scale-105 neon-glow"
-            style={{ height: '52px', minWidth: '200px', padding: '0 30px', fontSize: '18px', fontWeight: 600, borderRadius: '8px' }}
+            className="bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-300 neon-glow"
           >
             <Send className="w-5 h-5 shrink-0" />
             <span>Join the Patrol</span>
           </a>
           <button
             data-testid="button-buy-apol"
-            className="inline-flex items-center justify-center space-x-2 bg-green-600 hover:bg-green-700 text-white transition-all duration-300 transform hover:scale-105 neon-glow"
-            style={{ height: '52px', minWidth: '200px', padding: '0 30px', fontSize: '18px', fontWeight: 600, borderRadius: '8px' }}
+            className="bg-green-600 hover:bg-green-700 text-white transition-colors duration-300 neon-glow"
           >
             <Coins className="w-5 h-5 shrink-0" />
             <span>Buy $APOL</span>
