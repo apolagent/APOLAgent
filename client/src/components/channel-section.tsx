@@ -24,12 +24,10 @@ export default function ChannelSection() {
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
-              <a href="https://t.me/+rHmFDw-NcYcyMjI0" target="_blank" rel="noopener noreferrer">
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 neon-glow flex items-center justify-center space-x-2">
-                  <MessageSquare className="w-5 h-5" />
-                  <span>Join the Channel</span>
-                </Button>
-              </a>
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 neon-glow flex items-center justify-center space-x-2">
+                <MessageSquare className="w-5 h-5" />
+                <span>Join the Channel</span>
+              </Button>
               <Link href="/nominate-hero">
                 <Button className="bg-yellow-500 hover:bg-yellow-600 text-slate-900 font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center space-x-2">
                   <Trophy className="w-5 h-5" />

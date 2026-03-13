@@ -33,10 +33,7 @@ export default function HeroSection() {
         </p>
 
         <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "16px", marginTop: "30px" }}>
-          <a
-            href="https://t.me/+rHmFDw-NcYcyMjI0"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
             data-testid="button-join-patrol"
             style={{
               display: "flex",
@@ -60,7 +57,7 @@ export default function HeroSection() {
           >
             <Send size={20} />
             Join the Patrol
-          </a>
+          </button>
 
           <div className="animate-bounce">
             <ChevronDown className="w-8 h-8 text-yellow-400" />

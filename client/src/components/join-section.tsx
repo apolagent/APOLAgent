@@ -19,23 +19,19 @@ export default function JoinSection() {
         </div>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
-          <a href="https://t.me/+rHmFDw-NcYcyMjI0" target="_blank" rel="noopener noreferrer" className="w-full">
-            <Button className="w-full bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-6 px-6 rounded-2xl transition-all duration-300 transform hover:scale-105 neon-glow flex flex-col items-center space-y-3 h-auto">
-              <Send className="w-8 h-8" />
-              <span className="text-lg">Telegram</span>
-              <span className="text-sm opacity-80">Join the Squad 💬</span>
-            </Button>
-          </a>
+          <Button className="w-full bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-6 px-6 rounded-2xl transition-all duration-300 transform hover:scale-105 neon-glow flex flex-col items-center space-y-3 h-auto">
+            <Send className="w-8 h-8" />
+            <span className="text-lg">Telegram</span>
+            <span className="text-sm opacity-80">Join the Squad 💬</span>
+          </Button>
 
-          <a href="https://x.com/apepoliceonline" target="_blank" rel="noopener noreferrer" className="w-full">
-            <Button className="w-full bg-gradient-to-br from-gray-800 to-black hover:from-gray-700 hover:to-gray-800 text-white font-bold py-6 px-6 rounded-2xl transition-all duration-300 transform hover:scale-105 neon-glow flex flex-col items-center space-y-3 h-auto">
-              <svg className="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-              </svg>
-              <span className="text-lg">X</span>
-              <span className="text-sm opacity-80">Follow Updates</span>
-            </Button>
-          </a>
+          <Button className="w-full bg-gradient-to-br from-gray-800 to-black hover:from-gray-700 hover:to-gray-800 text-white font-bold py-6 px-6 rounded-2xl transition-all duration-300 transform hover:scale-105 neon-glow flex flex-col items-center space-y-3 h-auto">
+            <svg className="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+            <span className="text-lg">X</span>
+            <span className="text-sm opacity-80">Follow Updates</span>
+          </Button>
 
           <Link href="/report-scam" className="w-full">
             <Button className="w-full bg-gradient-to-br from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-6 px-6 rounded-2xl transition-all duration-300 transform hover:scale-105 neon-glow flex flex-col items-center space-y-3 h-auto">
