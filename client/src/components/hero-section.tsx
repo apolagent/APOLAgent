@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Send, Coins } from "lucide-react";
 
 export default function HeroSection() {
   return (
@@ -34,6 +34,26 @@ export default function HeroSection() {
           and celebrating those who make it better.
         </p>
 
+
+        <div className="hero-buttons">
+          <a
+            href="https://t.me/+rHmFDw-NcYcyMjI0"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="button-join-patrol"
+            className="hero-btn-blue"
+          >
+            <Send size={20} />
+            <span>Join the Patrol</span>
+          </a>
+          <button
+            data-testid="button-buy-apol"
+            className="hero-btn-green"
+          >
+            <Coins size={20} />
+            <span>Buy $APOL</span>
+          </button>
+        </div>
 
         <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
           <ChevronDown className="w-8 h-8 text-yellow-400" />
