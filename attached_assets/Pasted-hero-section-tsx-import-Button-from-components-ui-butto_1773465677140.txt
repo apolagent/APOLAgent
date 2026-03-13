@@ -1,0 +1,262 @@
+hero-section.tsx
+import { Button } from "@/components/ui/button";
+import { ChevronDown, Send, Coins } from "lucide-react";
+import apePoliceImage from "@assets/ChatGPT Image May 27, 2025, 02_22_45 PM.png";
+import backgroundImage from "@assets/ChatGPT Image Jun 6, 2025, 04_10_26 PM.png";
+import sirenGif from "@assets/Police Siren Siren GIF - Police Siren Siren - Discover & Share GIFs.gif";
+export default function HeroSection() {
+  return (
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden hero-bg">
+      {/* APE POLICE crypto cityscape background */}
+      <div className="absolute inset-0 z-0">
+        <img 
+          src={backgroundImage}
+          alt="Crypto city with APE POLICE officers patrolling"
+          className="w-full h-full object-cover"
+        />
+        
+        {/* Police siren GIF positioned on the police car in background */}
+        <div className="absolute bottom-[25%] left-[45%] transform -translate-x-1/2">
+          <img 
+            src={sirenGif}
+            alt="Police siren light"
+            className="w-8 h-8 md:w-12 md:h-12 object-contain opacity-95 mix-blend-screen"
+            style={{
+              filter: 'drop-shadow(0 0 10px rgba(239, 68, 68, 0.9)) brightness(1.5) contrast(1.4)',
+              background: 'transparent'
+            }}
+          />
+        </div>
+        
+        {/* Overlay to ensure text readability */}
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/70 to-slate-900/80"></div>
+      </div>
+      <div className="relative z-10 text-center px-4 max-w-6xl mx-auto">
+        {/* Main police ape character */}
+        <div className="mb-8 relative">
+          <img 
+            src={apePoliceImage}
+            alt="APE POLICE character in tactical gear with banana and police badge"
+            className="w-32 h-32 md:w-48 md:h-48 mx-auto rounded-full border-4 border-yellow-400 animate-float neon-glow object-cover"
+          />
+          <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center animate-bounce-slow">
+            <span className="text-slate-900 text-lg">🛡️</span>
+          </div>
+        </div>
+        <h1 className="font-meme text-4xl md:text-7xl lg:text-8xl mb-6 leading-tight">
+          <span className="block text-yellow-400 animate-pulse">APE POLICE</span>
+          <span className="block gradient-text text-2xl md:text-4xl lg:text-5xl mt-2">is Watching</span>
+        </h1>
+        <p className="text-lg md:text-2xl mb-8 max-w-4xl mx-auto leading-relaxed text-white">
+          The <span className="text-green-400 font-bold">meme-powered task force</span> protecting crypto from chaos — 
+          and celebrating those who make it better.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <a href="https://t.me/+rHmFDw-NcYcyMjI0" target="_blank" rel="noopener noreferrer">
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 transform hover:scale-105 neon-glow flex items-center space-x-2">
+              <Send className="w-5 h-5" />
+              <span>Join the Patrol</span>
+            </Button>
+          </a>
+          <Button className="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 transform hover:scale-105 neon-glow flex items-center space-x-2">
+            <Coins className="w-5 h-5" />
+            <span>Buy $APOL</span>
+          </Button>
+        </div>
+        {/* Scroll indicator */}
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
+          <ChevronDown className="w-8 h-8 text-yellow-400" />
+        </div>
+      </div>
+    </section>
+  );
+}
+navigation.tsx
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Shield, Menu, X } from "lucide-react";
+import apePoliceImage from "@assets/ChatGPT Image May 27, 2025, 02_22_45 PM.png";
+export default function Navigation() {
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 50);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setIsMobileMenuOpen(false);
+    }
+  };
+  return (
+    <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${
+      isScrolled ? 'bg-slate-900/95 backdrop-blur-md border-b border-blue-500/30' : 'bg-transparent'
+    }`}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center animate-pulse overflow-hidden">
+              <img src={apePoliceImage} alt="APE POLICE logo" className="w-full h-full object-cover" />
+            </div>
+            <span className="font-meme text-xl gradient-text">APE POLICE</span>
+          </div>
+          <div className="hidden md:flex space-x-6">
+            {['mission','tokenomics','channel','roadmap','join'].map(id => (
+              <button key={id} onClick={() => scrollToSection(id)} className="hover:text-yellow-400 transition-colors capitalize">
+                {id === 'join' ? 'Join Squad' : id.charAt(0).toUpperCase() + id.slice(1)}
+              </button>
+            ))}
+          </div>
+          <Button className="hidden md:flex bg-red-600 hover:bg-red-500 text-white font-bold animate-pulse">
+            Buy $APOL 🚨
+          </Button>
+          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+            {isMobileMenuOpen ? <X /> : <Menu />}
+          </Button>
+        </div>
+      </div>
+      {isMobileMenuOpen && (
+        <div className="md:hidden bg-slate-900/95 backdrop-blur-md border-t border-blue-500/30">
+          <div className="px-4 pt-2 pb-4 space-y-2">
+            {['mission','tokenomics','channel','roadmap','join'].map(id => (
+              <button key={id} onClick={() => scrollToSection(id)} className="block w-full text-left py-2 hover:text-yellow-400 transition-colors">
+                {id === 'join' ? 'Join Squad' : id.charAt(0).toUpperCase() + id.slice(1)}
+              </button>
+            ))}
+            <Button className="w-full mt-4 bg-red-600 hover:bg-red-500 text-white font-bold">Buy $APOL 🚨</Button>
+          </div>
+        </div>
+      )}
+    </nav>
+  );
+}
+index.css (full)
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Fredoka+One:wght@400&family=Inter:wght@300;400;500;600;700;800&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root {
+  --background: 15 23 42;
+  --foreground: 255 255 255;
+  --muted: 30 41 59;
+  --muted-foreground: 203 213 225;
+  --popover: 15 23 42;
+  --popover-foreground: 255 255 255;
+  --card: 30 41 59;
+  --card-foreground: 255 255 255;
+  --border: 51 65 85;
+  --input: 51 65 85;
+  --primary: 59 130 246;
+  --primary-foreground: 255 255 255;
+  --secondary: 30 41 59;
+  --secondary-foreground: 255 255 255;
+  --accent: 30 41 59;
+  --accent-foreground: 255 255 255;
+  --destructive: 239 68 68;
+  --destructive-foreground: 255 255 255;
+  --ring: 59 130 246;
+  --radius: 0.75rem;
+  --electric-blue: 0 102 255;
+  --jungle-green: 0 204 102;
+  --warning-yellow: 255 215 0;
+  --deep-navy: 26 27 62;
+  --neon-pink: 255 0 128;
+  --police-blue: 0 51 170;
+}
+.dark {
+  --background: 15 23 42;
+  --foreground: 255 255 255;
+  --muted: 30 41 59;
+  --muted-foreground: 203 213 225;
+  --popover: 15 23 42;
+  --popover-foreground: 255 255 255;
+  --card: 30 41 59;
+  --card-foreground: 255 255 255;
+  --border: 51 65 85;
+  --input: 51 65 85;
+  --primary: 59 130 246;
+  --primary-foreground: 255 255 255;
+  --secondary: 30 41 59;
+  --secondary-foreground: 255 255 255;
+  --accent: 30 41 59;
+  --accent-foreground: 255 255 255;
+  --destructive: 239 68 68;
+  --destructive-foreground: 255 255 255;
+  --ring: 59 130 246;
+}
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+  }
+}
+@layer utilities {
+  .font-meme { font-family: 'Fredoka One', cursive; }
+  .font-orbitron { font-family: 'Orbitron', monospace; }
+  .gradient-text {
+    background: linear-gradient(45deg, rgb(var(--electric-blue)), rgb(var(--jungle-green)), rgb(var(--warning-yellow)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero-bg {
+    background: linear-gradient(135deg, rgb(var(--deep-navy)) 0%, rgb(var(--police-blue)) 50%, rgb(var(--jungle-green)) 100%);
+  }
+  .neon-glow {
+    box-shadow: 0 0 20px rgba(var(--electric-blue), 0.5), 0 0 40px rgba(var(--electric-blue), 0.3);
+  }
+  .siren-glow { box-shadow: 0 0 30px rgba(239, 68, 68, 0.8); }
+  .animate-float { animation: float 3s ease-in-out infinite; }
+  .animate-siren { animation: siren 1s ease-in-out infinite alternate; }
+  .animate-wiggle { animation: wiggle 1s ease-in-out infinite; }
+  .animate-flash { animation: flash 1.5s infinite; }
+  .animate-bounce-slow { animation: bounce 2s infinite; }
+  .animate-rotate-siren { animation: rotateSiren 0.8s linear infinite; }
+  .animate-siren-flash { animation: sirenFlash 0.4s linear infinite; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+@keyframes siren {
+  0% { background-color: rgb(var(--electric-blue)); }
+  100% { background-color: rgb(var(--neon-pink)); }
+}
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+@keyframes flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+@keyframes rotateSiren {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes sirenFlash {
+  0% { box-shadow: 0 0 20px rgba(239,68,68,0.8), 0 0 40px rgba(239,68,68,0.6); background-color: rgb(239,68,68); }
+  50% { box-shadow: 0 0 30px rgba(59,130,246,0.8), 0 0 60px rgba(59,130,246,0.6); background-color: rgb(59,130,246); }
+  100% { box-shadow: 0 0 20px rgba(239,68,68,0.8), 0 0 40px rgba(239,68,68,0.6); background-color: rgb(239,68,68); }
+}
+html { scroll-behavior: smooth; }
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: rgb(var(--deep-navy)); }
+::-webkit-scrollbar-thumb { background: rgb(var(--electric-blue)); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--jungle-green)); }
+tailwind.config.ts
+(standard shadcn setup — key custom bits: darkMode: ["class"], fonts are loaded via Google Fonts in index.css not Tailwind)
+
+Fonts used
+.font-meme → Fredoka One (cursive) — used for all headings like "APE POLICE"
+.font-orbitron → Orbitron (monospace) — tech/crypto style
+Body → Inter
+All loaded from: https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Fredoka+One:wght@400&family=Inter:wght@300;400;500;600;700;800
+client/public/
+There is no public/ folder — all static assets (images, GIFs) live in attached_assets/ and are imported directly via Vite using the @assets/ alias.

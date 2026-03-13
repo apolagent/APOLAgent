@@ -1,97 +1,55 @@
-import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SiTelegram } from "react-icons/si";
-import { Coins } from "lucide-react";
+import { ChevronDown, Send, Coins } from "lucide-react";
 
 export default function HeroSection() {
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden" data-testid="hero-section">
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: "url('/hero-bg.png')" }}
-      />
-      <div
-        className="absolute inset-0"
-        style={{
-          background: "linear-gradient(to bottom, rgba(10,15,40,0.3) 0%, rgba(10,15,40,0.55) 50%, rgba(10,15,40,0.85) 100%)"
-        }}
-      />
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden hero-bg" data-testid="hero-section">
+      <div className="absolute inset-0 z-0">
+        <img
+          src="/hero-bg.png"
+          alt="Crypto city with APE POLICE officers patrolling"
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/70 to-slate-900/80"></div>
+      </div>
 
-      <div className="relative z-10 text-center px-4 max-w-2xl mx-auto pt-10">
-        <div className="mb-5 flex justify-center">
-          <div
-            className="w-40 h-40 md:w-48 md:h-48 rounded-full overflow-hidden"
-            style={{
-              border: "6px solid #FFD700",
-              boxShadow: "0 0 0 2px rgba(255,215,0,0.25), 0 0 30px rgba(255,215,0,0.3)"
-            }}
-          >
-            <img
-              src="/ape-police-logo.png"
-              alt="APE POLICE"
-              className="w-full h-full object-cover"
-            />
+      <div className="relative z-10 text-center px-4 max-w-6xl mx-auto">
+        <div className="mb-8 relative inline-block">
+          <img
+            src="/ape-police-logo.png"
+            alt="APE POLICE character in tactical gear with banana and police badge"
+            className="w-32 h-32 md:w-48 md:h-48 mx-auto rounded-full border-4 border-yellow-400 animate-float neon-glow object-cover"
+          />
+          <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center animate-bounce-slow">
+            <span className="text-slate-900 text-lg">🛡️</span>
           </div>
         </div>
 
-        <h1
-          className="font-meme font-black leading-none mb-1"
-          style={{
-            fontSize: "clamp(3.5rem, 10vw, 7rem)",
-            color: "#FFD700",
-            textShadow: "0 2px 20px rgba(255,215,0,0.35)"
-          }}
-          data-testid="text-headline"
-        >
-          APE POLICE
+        <h1 className="font-meme text-4xl md:text-7xl lg:text-8xl mb-6 leading-tight">
+          <span className="block text-yellow-400 animate-pulse" data-testid="text-headline">APE POLICE</span>
+          <span className="block gradient-text text-2xl md:text-4xl lg:text-5xl mt-2" data-testid="text-tagline">is Watching</span>
         </h1>
 
-        <p
-          className="font-meme font-bold italic mb-6"
-          style={{
-            fontSize: "clamp(1.5rem, 4vw, 2.25rem)",
-            color: "#00CC44"
-          }}
-          data-testid="text-tagline"
-        >
-          is Watching
+        <p className="text-lg md:text-2xl mb-8 max-w-4xl mx-auto leading-relaxed text-white" data-testid="text-description">
+          The <span className="text-green-400 font-bold">meme-powered task force</span> protecting crypto from chaos —
+          and celebrating those who make it better.
         </p>
 
-        <p
-          className="text-base md:text-lg text-white mb-8 mx-auto leading-relaxed"
-          style={{ maxWidth: "520px" }}
-          data-testid="text-description"
-        >
-          The{" "}
-          <span className="font-semibold" style={{ color: "#00CC44" }}>
-            meme-powered task force
-          </span>{" "}
-          protecting crypto from chaos — and celebrating those who make it better.
-        </p>
-
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
-          <a href="https://t.me/apepolice" target="_blank" rel="noopener noreferrer" data-testid="button-join-patrol">
-            <Button
-              className="text-white font-bold px-7 py-5 text-base rounded-xl flex items-center gap-2 min-w-[180px] justify-center"
-              style={{ backgroundColor: "#2563eb" }}
-            >
-              <SiTelegram className="w-4 h-4" />
-              Join the Patrol
+        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <a href="https://t.me/+rHmFDw-NcYcyMjI0" target="_blank" rel="noopener noreferrer" data-testid="button-join-patrol">
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 transform hover:scale-105 neon-glow flex items-center space-x-2">
+              <Send className="w-5 h-5" />
+              <span>Join the Patrol</span>
             </Button>
           </a>
-          <a href="#" data-testid="button-buy-apol">
-            <Button
-              className="text-white font-bold px-7 py-5 text-base rounded-xl flex items-center gap-2 min-w-[160px] justify-center"
-              style={{ backgroundColor: "#16a34a" }}
-            >
-              <Coins className="w-4 h-4" />
-              Buy $APOL
-            </Button>
-          </a>
+          <Button className="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 transform hover:scale-105 neon-glow flex items-center space-x-2" data-testid="button-buy-apol">
+            <Coins className="w-5 h-5" />
+            <span>Buy $APOL</span>
+          </Button>
         </div>
 
-        <div className="flex justify-center">
-          <ChevronDown className="w-6 h-6 animate-bounce" style={{ color: "#00CC44" }} />
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
+          <ChevronDown className="w-8 h-8 text-yellow-400" />
         </div>
       </div>
     </section>
