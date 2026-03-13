@@ -50,19 +50,19 @@ export default function JoinSection() {
 
         <div className="mt-24 flex justify-center space-x-4 overflow-hidden">
           <img
-            src="/ape-police-logo.png"
-            alt="APE POLICE officer on patrol"
+            src="/squad-scooter.png"
+            alt="APE POLICE officer on patrol scooter chasing scammers"
             className="w-20 h-20 md:w-24 md:h-24 rounded-xl border-2 border-blue-500 animate-float object-cover"
           />
           <img
-            src="/ape-police-logo.png"
-            alt="APE POLICE issuing citation"
+            src="/squad-court.png"
+            alt="APE POLICE issuing cringe citation in internet court"
             className="w-24 h-24 md:w-28 md:h-28 rounded-xl border-2 border-yellow-400 animate-float z-10 object-cover"
             style={{ animationDelay: '0.3s' }}
           />
           <img
-            src="/ape-police-logo.png"
-            alt="APE POLICE meme lab"
+            src="/squad-memelab.png"
+            alt="APE POLICE officers at the meme lab headquarters"
             className="w-20 h-20 md:w-24 md:h-24 rounded-xl border-2 border-green-500 animate-float object-cover"
             style={{ animationDelay: '0.6s' }}
           />
