@@ -1,0 +1,207 @@
+Here's the full roadmap section code:
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Check, Clock } from "lucide-react";
+const roadmapPhases = [
+  {
+    phase: 1,
+    title: "Meme Patrol",
+    status: "completed",
+    progress: 100,
+    color: "slate",
+    items: [
+      { text: "Launch", completed: true },
+      { text: "DEX listing", completed: true },
+      { text: "Meme Raid Squads", completed: true }
+    ]
+  },
+  {
+    phase: 2,
+    title: "Enforcement",
+    status: "in-progress",
+    progress: 75,
+    color: "blue",
+    items: [
+      { text: "NFT Collection", completed: false },
+      { text: "Meme Contests", completed: false },
+      { text: "Merch Drop", completed: false }
+    ]
+  },
+  {
+    phase: 3,
+    title: "Recognition",
+    status: "upcoming",
+    progress: 25,
+    color: "teal",
+    items: [
+      { text: "Channel Awards Voting", completed: false },
+      { text: "Verified Influencer Recognition", completed: false },
+      { text: "$APOL-funded Giveaways", completed: false }
+    ]
+  },
+  {
+    phase: 4,
+    title: "Full Deployment",
+    status: "planned",
+    progress: 0,
+    color: "indigo",
+    items: [
+      { text: "DAO Voting", completed: false },
+      { text: "Meme Game", completed: false },
+      { text: "Tier 1 CEX Listings", completed: false }
+    ]
+  }
+];
+export default function RoadmapSection() {
+  return (
+    <section id="roadmap" className="py-20 bg-gradient-to-r from-blue-900 to-slate-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-16">
+          <h2 className="font-meme text-5xl md:text-6xl gradient-text mb-4">
+            The Road to Meme Justice
+          </h2>
+          <p className="text-xl text-white">Our mission phases for crypto protection</p>
+        </div>
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+          {roadmapPhases.map((phase) => (
+            <Card
+              key={phase.phase}
+              className={`bg-gradient-to-br from-${phase.color}-600/20 to-${phase.color}-800/20 border-${phase.color}-500/30 hover:border-${phase.color}-500/60 transition-all duration-300 transform hover:scale-105`}
+            >
+              <CardHeader>
+                <div className="text-center mb-6">
+                  <div className={`w-16 h-16 bg-${phase.color}-600 rounded-full flex items-center justify-center mx-auto mb-4 ${phase.status === 'completed' ? 'neon-glow' : ''}`}>
+                    <span className="text-white font-meme text-xl">{phase.phase}</span>
+                  </div>
+                  <CardTitle className="font-meme text-2xl text-white mb-2 font-normal">
+                    {phase.title}
+                  </CardTitle>
+                  <div className="w-full bg-gray-700 rounded-full h-2">
+                    <Progress value={phase.progress} className={`h-2 bg-${phase.color}-600`} />
+                  </div>
+                  <span className={`text-xs text-${phase.color}-400 font-semibold uppercase`}>
+                    {phase.status.replace('-', ' ')}
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-
+Here's the full roadmap section code:
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Check, Clock } from "lucide-react";
+const roadmapPhases = [
+  {
+    phase: 1,
+    title: "Meme Patrol",
+    status: "completed",
+    progress: 100,
+    color: "slate",
+    items: [
+      { text: "Launch", completed: true },
+      { text: "DEX listing", completed: true },
+      { text: "Meme Raid Squads", completed: true }
+    ]
+  },
+  {
+    phase: 2,
+    title: "Enforcement",
+    status: "in-progress",
+    progress: 75,
+    color: "blue",
+    items: [
+      { text: "NFT Collection", completed: false },
+      { text: "Meme Contests", completed: false },
+      { text: "Merch Drop", completed: false }
+    ]
+  },
+  {
+    phase: 3,
+    title: "Recognition",
+    status: "upcoming",
+    progress: 25,
+    color: "teal",
+    items: [
+      { text: "Channel Awards Voting", completed: false },
+      { text: "Verified Influencer Recognition", completed: false },
+      { text: "$APOL-funded Giveaways", completed: false }
+    ]
+  },
+  {
+    phase: 4,
+    title: "Full Deployment",
+    status: "planned",
+    progress: 0,
+    color: "indigo",
+    items: [
+      { text: "DAO Voting", completed: false },
+      { text: "Meme Game", completed: false },
+      { text: "Tier 1 CEX Listings", completed: false }
+    ]
+  }
+];
+export default function RoadmapSection() {
+  return (
+    <section id="roadmap" className="py-20 bg-gradient-to-r from-blue-900 to-slate-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-16">
+          <h2 className="font-meme text-5xl md:text-6xl gradient-text mb-4">
+            The Road to Meme Justice
+          </h2>
+          <p className="text-xl text-white">Our mission phases for crypto protection</p>
+        </div>
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+          {roadmapPhases.map((phase) => (
+            <Card
+              key={phase.phase}
+              className={`bg-gradient-to-br from-${phase.color}-600/20 to-${phase.color}-800/20 border-${phase.color}-500/30 hover:border-${phase.color}-500/60 transition-all duration-300 transform hover:scale-105`}
+            >
+              <CardHeader>
+                <div className="text-center mb-6">
+                  <div className={`w-16 h-16 bg-${phase.color}-600 rounded-full flex items-center justify-center mx-auto mb-4 ${phase.status === 'completed' ? 'neon-glow' : ''}`}>
+                    <span className="text-white font-meme text-xl">{phase.phase}</span>
+                  </div>
+                  <CardTitle className="font-meme text-2xl text-white mb-2 font-normal">
+                    {phase.title}
+                  </CardTitle>
+                  <div className="w-full bg-gray-700 rounded-full h-2">
+                    <Progress value={phase.progress} className={`h-2 bg-${phase.color}-600`} />
+                  </div>
+                  <span className={`text-xs text-${phase.color}-400 font-semibold uppercase`}>
+                    {phase.status.replace('-', ' ')}
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-sm">
+                  {phase.items.map((item, index) => (
+                    <li key={index} className="flex items-center">
+                      {item.completed ? (
+                        <Check className={`w-4 h-4 text-${phase.color}-400 mr-2`} />
+                      ) : (
+                        <Clock className="w-4 h-4 text-gray-400 mr-2" />
+                      )}
+                      {item.text}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+Layout summary:
+
+4 phase cards in a row on large screens (lg:grid-cols-4), 2-col on medium, stacked on mobile
+Each card has a colored phase number circle, title, progress bar, status label, and checklist
+Phase 1 (slate) — 100% complete, all items checked
+Phase 2 (blue) — 75% in-progress, items pending
+Phase 3 (teal) — 25% upcoming
+Phase 4 (indigo) — 0% planned
+Completed items show a Check icon, pending items show a Clock icon
+Section background: dark gradient blue-900 → slate-900
