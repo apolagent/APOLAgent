@@ -20,9 +20,6 @@ export default function HeroSection() {
             alt="APE POLICE character in tactical gear with banana and police badge"
             className="w-32 h-32 md:w-48 md:h-48 mx-auto rounded-full border-4 border-yellow-400 animate-float neon-glow object-cover"
           />
-          <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center animate-bounce-slow">
-            <span className="text-slate-900 text-lg">🛡️</span>
-          </div>
         </div>
 
         <h1 className="font-meme text-4xl md:text-7xl lg:text-8xl mb-6 leading-tight">
