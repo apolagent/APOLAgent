@@ -34,7 +34,7 @@ export default function HeroSection() {
           and celebrating those who make it better.
         </p>
 
-        <div className="flex flex-row justify-center items-center" style={{ gap: '20px' }}>
+        <div className="hero-buttons">
           <a
             href="https://t.me/+rHmFDw-NcYcyMjI0"
             target="_blank"

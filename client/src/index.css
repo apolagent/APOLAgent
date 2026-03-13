@@ -263,3 +263,23 @@ html {
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--jungle-green));
 }
+
+.hero-buttons {
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: center !important;
+  gap: 20px !important;
+  margin-top: 30px !important;
+}
+
+.btn-primary, .btn-secondary, .hero-buttons a, .hero-buttons button {
+  height: 55px !important;
+  min-width: 210px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  border-radius: 10px !important;
+  text-decoration: none !important;
+}
