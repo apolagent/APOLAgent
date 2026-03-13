@@ -1,45 +1,53 @@
-import { useEffect } from "react";
 import { ChevronDown, Send, Coins } from "lucide-react";
 
-export default function HeroSection() {
-  useEffect(() => {
-    const id = "hero-btn-override";
-    if (document.getElementById(id)) return;
-    const tag = document.createElement("style");
-    tag.id = id;
-    tag.textContent = `
-      .hero-buttons {
-        display: flex !important;
-        flex-direction: row !important;
-        gap: 20px !important;
-        justify-content: center !important;
-        align-items: center !important;
-        margin-top: 30px !important;
-      }
-      .hero-buttons a,
-      .hero-buttons button {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        gap: 8px !important;
-        height: 55px !important;
-        min-width: 210px !important;
-        font-size: 18px !important;
-        font-weight: 800 !important;
-        border-radius: 10px !important;
-        color: #ffffff !important;
-        text-decoration: none !important;
-        border: none !important;
-        cursor: pointer !important;
-        padding: 0 24px !important;
-        box-sizing: border-box !important;
-      }
-      .hero-btn-blue  { background-color: #3b82f6 !important; }
-      .hero-btn-green { background-color: #22c55e !important; }
-    `;
-    document.head.appendChild(tag);
-  }, []);
+const containerStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "row",
+  gap: "20px",
+  justifyContent: "center",
+  alignItems: "center",
+  marginTop: "30px",
+};
 
+const blueBtn: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
+  height: "55px",
+  minWidth: "210px",
+  padding: "0 24px",
+  backgroundColor: "#3b82f6",
+  color: "#ffffff",
+  fontSize: "18px",
+  fontWeight: 800,
+  borderRadius: "10px",
+  border: "none",
+  cursor: "pointer",
+  textDecoration: "none",
+  boxSizing: "border-box",
+};
+
+const greenBtn: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
+  height: "55px",
+  minWidth: "210px",
+  padding: "0 24px",
+  backgroundColor: "#22c55e",
+  color: "#ffffff",
+  fontSize: "18px",
+  fontWeight: 800,
+  borderRadius: "10px",
+  border: "none",
+  cursor: "pointer",
+  textDecoration: "none",
+  boxSizing: "border-box",
+};
+
+export default function HeroSection() {
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden hero-bg" data-testid="hero-section">
       <div className="absolute inset-0 z-0">
@@ -73,20 +81,20 @@ export default function HeroSection() {
           and celebrating those who make it better.
         </p>
 
-        <div className="hero-buttons">
+        <div style={containerStyle}>
           <a
             href="https://t.me/+rHmFDw-NcYcyMjI0"
             target="_blank"
             rel="noopener noreferrer"
             data-testid="button-join-patrol"
-            className="hero-btn-blue"
+            style={blueBtn}
           >
             <Send size={20} />
             <span>Join the Patrol</span>
           </a>
           <button
             data-testid="button-buy-apol"
-            className="hero-btn-green"
+            style={greenBtn}
           >
             <Coins size={20} />
             <span>Buy $APOL</span>
