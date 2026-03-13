@@ -29,27 +29,27 @@ export default function HeroSection() {
           <span className="block gradient-text text-2xl md:text-4xl lg:text-5xl mt-2" data-testid="text-tagline">is Watching</span>
         </h1>
 
-        <p className="text-lg md:text-2xl mb-8 max-w-4xl mx-auto leading-relaxed text-white" data-testid="text-description">
+        <p className="text-lg md:text-xl mb-8 max-w-xl mx-auto leading-relaxed text-white text-center" data-testid="text-description">
           The <span className="text-green-400 font-bold">meme-powered task force</span> protecting crypto from chaos —
           and celebrating those who make it better.
         </p>
 
-        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+        <div className="flex flex-row gap-4 justify-center items-center">
           <a
             href="https://t.me/+rHmFDw-NcYcyMjI0"
             target="_blank"
             rel="noopener noreferrer"
             data-testid="button-join-patrol"
-            className="inline-flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 transform hover:scale-105 neon-glow"
+            className="inline-flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-7 rounded-xl text-base transition-all duration-300 transform hover:scale-105 neon-glow min-w-[180px]"
           >
-            <Send className="w-5 h-5" />
+            <Send className="w-4 h-4 shrink-0" />
             <span>Join the Patrol</span>
           </a>
           <button
             data-testid="button-buy-apol"
-            className="inline-flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 transform hover:scale-105 neon-glow"
+            className="inline-flex items-center justify-center space-x-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-7 rounded-xl text-base transition-all duration-300 transform hover:scale-105 neon-glow min-w-[160px]"
           >
-            <Coins className="w-5 h-5" />
+            <Coins className="w-4 h-4 shrink-0" />
             <span>Buy $APOL</span>
           </button>
         </div>
