@@ -12,7 +12,7 @@ const leaderboardPreview = [
 
 export default function ChannelSection() {
   return (
-    <section className="py-24 px-4 bg-slate-900 relative" data-testid="channel-section">
+    <section id="channel" className="py-24 px-4 bg-slate-900 relative" data-testid="channel-section">
       <div className="max-w-6xl mx-auto">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div>

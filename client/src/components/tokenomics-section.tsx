@@ -33,7 +33,7 @@ const tokenDetails = [
 
 export default function TokenomicsSection() {
   return (
-    <section className="py-24 px-4 bg-slate-800/50 relative" data-testid="tokenomics-section">
+    <section id="tokenomics" className="py-24 px-4 bg-slate-800/50 relative" data-testid="tokenomics-section">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-16">
           <h2 className="font-meme text-4xl md:text-5xl gradient-text mb-4" data-testid="text-tokenomics-title">

@@ -37,7 +37,7 @@ const missions = [
 
 export default function MissionSection() {
   return (
-    <section className="py-24 px-4 bg-slate-900 relative" data-testid="mission-section">
+    <section id="mission" className="py-24 px-4 bg-slate-900 relative" data-testid="mission-section">
       <div className="absolute inset-0 bg-gradient-to-b from-slate-900 via-slate-800/50 to-slate-900" />
 
       <div className="max-w-6xl mx-auto relative z-10">

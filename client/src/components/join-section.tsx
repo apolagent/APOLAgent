@@ -31,7 +31,7 @@ const socialLinks = [
 
 export default function JoinSection() {
   return (
-    <section className="py-24 px-4 bg-slate-900 relative" data-testid="join-section">
+    <section id="join" className="py-24 px-4 bg-slate-900 relative" data-testid="join-section">
       <div className="absolute inset-0 hero-bg opacity-30" />
 
       <div className="max-w-4xl mx-auto text-center relative z-10">

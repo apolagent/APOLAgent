@@ -65,7 +65,7 @@ const phases = [
 
 export default function RoadmapSection() {
   return (
-    <section className="py-24 px-4 bg-slate-800/50 relative" data-testid="roadmap-section">
+    <section id="roadmap" className="py-24 px-4 bg-slate-800/50 relative" data-testid="roadmap-section">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-16">
           <h2 className="font-meme text-4xl md:text-5xl gradient-text mb-4" data-testid="text-roadmap-title">
