@@ -45,8 +45,9 @@ export default function HeroSection() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              height: "45px",
-              minWidth: "250px",
+              height: "42px",
+              minWidth: "210px",
+              width: "fit-content",
               backgroundColor: "#3b82f6",
               color: "#ffffff",
               fontSize: "18px",
@@ -55,11 +56,12 @@ export default function HeroSection() {
               textDecoration: "none",
               border: "none",
               cursor: "pointer",
-              padding: "0 24px",
+              padding: "0 16px",
+              gap: "8px",
               boxSizing: "border-box",
             }}
           >
-            <Send size={20} style={{ marginRight: "8px" }} />
+            <Send size={20} />
             Join the Patrol
           </a>
         </div>
