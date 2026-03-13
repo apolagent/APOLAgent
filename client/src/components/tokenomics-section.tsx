@@ -1,86 +1,91 @@
-import { Coins, Lock, Users, Percent } from "lucide-react";
-
-const tokenDetails = [
-  {
-    icon: Coins,
-    label: "Token Name",
-    value: "$APEPOL",
-    color: "text-blue-400",
-    bgColor: "bg-blue-500/10",
-  },
-  {
-    icon: Lock,
-    label: "Total Supply",
-    value: "1,000,000,000",
-    color: "text-green-400",
-    bgColor: "bg-green-500/10",
-  },
-  {
-    icon: Percent,
-    label: "Tax",
-    value: "0%",
-    color: "text-yellow-400",
-    bgColor: "bg-yellow-500/10",
-  },
-  {
-    icon: Users,
-    label: "Team Allocation",
-    value: "0%",
-    color: "text-purple-400",
-    bgColor: "bg-purple-500/10",
-  },
-];
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Lock, Users, Check } from "lucide-react";
 
 export default function TokenomicsSection() {
   return (
-    <section id="tokenomics" className="py-24 px-4 bg-slate-800/50 relative" data-testid="tokenomics-section">
-      <div className="max-w-6xl mx-auto">
+    <section id="tokenomics" className="py-20 bg-gradient-to-r from-slate-900 to-blue-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
-          <h2 className="font-meme text-4xl md:text-5xl gradient-text mb-4" data-testid="text-tokenomics-title">
-            Tokenomics
+          <h2 className="font-meme text-5xl md:text-6xl gradient-text mb-4">
+            Tokenomics That Don't Arrest You
           </h2>
-          <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-            Fair launch. No team tokens. No hidden fees. 100% for the community.
-          </p>
+          <p className="text-xl text-white">Fair, transparent, and community-focused</p>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          {tokenDetails.map((detail) => (
-            <div
-              key={detail.label}
-              className="p-6 rounded-2xl bg-slate-800 border border-slate-700 text-center hover:border-blue-500/50 transition-all duration-300"
-              data-testid={`card-token-${detail.label.toLowerCase().replace(/\s+/g, '-')}`}
-            >
-              <div className={`w-14 h-14 rounded-xl ${detail.bgColor} flex items-center justify-center mx-auto mb-4`}>
-                <detail.icon className={`w-7 h-7 ${detail.color}`} />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-5xl mx-auto">
+          <Card className="bg-gradient-to-br from-slate-700/60 to-slate-800/80 border-slate-500/50 hover:border-slate-400/70 transition-all duration-300 transform hover:scale-105 text-center">
+            <CardHeader>
+              <div className="w-12 h-12 bg-slate-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-white text-xl">🍌</span>
               </div>
-              <div className="text-gray-400 text-sm mb-2">{detail.label}</div>
-              <div className={`font-orbitron text-2xl font-bold ${detail.color}`}>{detail.value}</div>
-            </div>
-          ))}
+              <CardTitle className="text-lg text-slate-200">Name</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-slate-300 font-meme">APE POLICE</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-blue-800/60 to-blue-900/80 border-blue-600/50 hover:border-blue-500/70 transition-all duration-300 transform hover:scale-105 text-center">
+            <CardHeader>
+              <div className="w-12 h-12 bg-blue-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-white text-xl">🚨</span>
+              </div>
+              <CardTitle className="text-lg text-blue-200">Symbol</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-blue-300 font-meme">$APOL</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-teal-800/60 to-teal-900/80 border-teal-600/50 hover:border-teal-500/70 transition-all duration-300 transform hover:scale-105 text-center">
+            <CardHeader>
+              <div className="w-12 h-12 bg-teal-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-white text-xl">🍩</span>
+              </div>
+              <CardTitle className="text-lg text-teal-200">Supply</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-teal-300 font-meme">1,000,000,000</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-indigo-800/60 to-indigo-900/80 border-indigo-600/50 hover:border-indigo-500/70 transition-all duration-300 transform hover:scale-105 text-center">
+            <CardHeader>
+              <div className="w-12 h-12 bg-indigo-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Lock className="w-6 h-6 text-white" />
+              </div>
+              <CardTitle className="text-lg text-indigo-200">Tax</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-indigo-300 font-meme">0%</p>
+            </CardContent>
+          </Card>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="p-6 rounded-2xl bg-gradient-to-br from-green-900/30 to-green-800/20 border border-green-500/30" data-testid="card-lp-locked">
-            <div className="flex items-center gap-3 mb-3">
-              <Lock className="w-6 h-6 text-green-400" />
-              <h3 className="font-meme text-xl text-green-400">LP Locked</h3>
-            </div>
-            <p className="text-gray-300">
-              Liquidity pool is permanently locked, ensuring that the project cannot be rug pulled.
-              Your investment is safe with APE POLICE.
-            </p>
-          </div>
-          <div className="p-6 rounded-2xl bg-gradient-to-br from-blue-900/30 to-blue-800/20 border border-blue-500/30" data-testid="card-community-owned">
-            <div className="flex items-center gap-3 mb-3">
-              <Users className="w-6 h-6 text-blue-400" />
-              <h3 className="font-meme text-xl text-blue-400">Community Owned</h3>
-            </div>
-            <p className="text-gray-300">
-              100% community-driven with no team allocation. Every decision is made by the community,
-              for the community.
-            </p>
-          </div>
+        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mt-12">
+          <Card className="bg-gradient-to-r from-cyan-800/60 to-cyan-900/80 border-cyan-600/50 text-center">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-center mb-4">
+                <div className="w-8 h-8 bg-cyan-700 rounded-full flex items-center justify-center mr-3">
+                  <Check className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="font-bold text-xl text-cyan-200">LP Locked ✅</h3>
+              </div>
+              <p className="text-cyan-300">Liquidity permanently secured for community trust</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-r from-slate-800/60 to-slate-900/80 border-slate-600/50 text-center">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-center mb-4">
+                <div className="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-3">
+                  <Users className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="font-bold text-xl text-slate-200">Team Allocation: 0%</h3>
+              </div>
+              <p className="text-slate-300">Pure community ownership with no team tokens</p>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </section>
