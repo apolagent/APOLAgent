@@ -29,27 +29,27 @@ export default function Navigation() {
   ];
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-transparent backdrop-blur-sm" data-testid="navigation">
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-transparent" data-testid="navigation">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        <div className="relative flex items-center justify-between h-16">
           <Link href="/">
             <div className="flex items-center gap-2 cursor-pointer group" data-testid="link-home-logo">
               <img
                 src="/ape-police-logo.png"
                 alt="APE POLICE"
-                className="w-9 h-9 rounded-full object-cover border-2 border-yellow-400 group-hover:border-yellow-300 transition-all"
+                className="w-9 h-9 rounded-full object-cover border-[3px] border-yellow-400 group-hover:border-yellow-300 transition-all"
               />
-              <span className="font-meme text-lg text-cyan-400 group-hover:text-cyan-300 transition-colors">APE POLICE</span>
+              <span className="font-meme text-lg text-cyan-400 group-hover:text-cyan-300 transition-colors tracking-wide">APE POLICE</span>
             </div>
           </Link>
 
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-0">
             {isHome ? (
               scrollLinks.map((link) => (
                 <button
                   key={link.id}
                   onClick={() => scrollTo(link.id)}
-                  className="px-4 py-2 text-sm font-medium text-white hover:text-yellow-400 transition-colors cursor-pointer"
+                  className="px-4 py-2 text-sm font-medium text-white hover:text-yellow-300 transition-colors cursor-pointer whitespace-nowrap"
                   data-testid={`link-nav-${link.id}`}
                 >
                   {link.label}
@@ -59,10 +59,8 @@ export default function Navigation() {
               pageLinks.map((link) => (
                 <Link key={link.href} href={link.href}>
                   <span
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                      location === link.href
-                        ? "text-yellow-400"
-                        : "text-white hover:text-yellow-400"
+                    className={`px-4 py-2 text-sm font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                      location === link.href ? "text-yellow-400" : "text-white hover:text-yellow-300"
                     }`}
                     data-testid={`link-nav-${link.label.toLowerCase().replace(/\s+/g, '-')}`}
                   >
@@ -73,10 +71,10 @@ export default function Navigation() {
             )}
           </div>
 
-          <div className="hidden md:flex items-center gap-2">
+          <div className="hidden md:flex items-center">
             <a href="#" data-testid="link-buy-apol">
-              <Button className="bg-red-500 hover:bg-red-600 text-white font-bold text-sm px-4 py-2 rounded-lg flex items-center gap-1">
-                Buy $APOL <Rocket className="w-4 h-4" />
+              <Button className="bg-red-500 hover:bg-red-600 text-white font-bold text-sm px-5 py-2 rounded-lg flex items-center gap-1.5">
+                Buy $APOL <Rocket className="w-3.5 h-3.5" />
               </Button>
             </a>
           </div>
@@ -93,13 +91,13 @@ export default function Navigation() {
 
       {isOpen && (
         <div className="md:hidden bg-slate-900/95 backdrop-blur-xl border-b border-slate-700">
-          <div className="px-4 py-4 space-y-2">
+          <div className="px-4 py-4 space-y-1">
             {isHome ? (
               scrollLinks.map((link) => (
                 <button
                   key={link.id}
                   onClick={() => { scrollTo(link.id); setIsOpen(false); }}
-                  className="block w-full text-left px-4 py-3 rounded-lg text-sm font-medium text-white hover:text-yellow-400 transition-colors"
+                  className="block w-full text-left px-4 py-3 rounded-lg text-sm font-medium text-white hover:text-yellow-300 transition-colors"
                 >
                   {link.label}
                 </button>
@@ -108,7 +106,7 @@ export default function Navigation() {
               pageLinks.map((link) => (
                 <Link key={link.href} href={link.href}>
                   <span
-                    className="block px-4 py-3 rounded-lg text-sm font-medium text-white hover:text-yellow-400 cursor-pointer"
+                    className="block px-4 py-3 rounded-lg text-sm font-medium text-white hover:text-yellow-300 cursor-pointer"
                     onClick={() => setIsOpen(false)}
                   >
                     {link.label}
@@ -116,9 +114,9 @@ export default function Navigation() {
                 </Link>
               ))
             )}
-            <a href="#" className="block">
-              <Button className="w-full bg-red-500 hover:bg-red-600 text-white font-bold text-sm mt-2">
-                Buy $APOL <Rocket className="w-4 h-4 ml-1" />
+            <a href="#" className="block pt-2">
+              <Button className="w-full bg-red-500 hover:bg-red-600 text-white font-bold text-sm">
+                Buy $APOL <Rocket className="w-3.5 h-3.5 ml-1" />
               </Button>
             </a>
           </div>
