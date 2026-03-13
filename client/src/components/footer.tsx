@@ -1,35 +1,31 @@
+import { Shield } from "lucide-react";
+
 export default function Footer() {
   return (
-    <footer className="py-12 px-4 bg-slate-900 border-t border-slate-800" data-testid="footer">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
-          <div className="flex items-center gap-2">
-            <img src="/ape-police-logo.png" alt="APE POLICE" className="w-8 h-8 rounded-full object-cover border border-blue-400/40" />
-            <span className="font-meme text-lg gradient-text">APE POLICE</span>
+    <footer className="py-12 bg-gradient-to-r from-slate-900 to-black border-t border-blue-500/30">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center">
+          <div className="flex justify-center items-center space-x-4 mb-6">
+            <div className="w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center">
+              <Shield className="w-5 h-5 text-slate-900" />
+            </div>
+            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+              <span className="text-white text-lg">🍌</span>
+            </div>
+            <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center overflow-hidden">
+              <img
+                src="/ape-police-logo.png"
+                alt="APE POLICE logo"
+                className="w-full h-full object-cover"
+              />
+            </div>
           </div>
-
-          <div className="flex items-center gap-6 text-sm text-gray-400">
-            <a href="https://t.me/apepolice" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors" data-testid="link-footer-telegram">
-              Telegram
-            </a>
-            <a href="https://x.com/apepolice" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors" data-testid="link-footer-twitter">
-              X (Twitter)
-            </a>
-          </div>
-        </div>
-
-        <div className="border-t border-slate-800 pt-8">
-          <p className="text-gray-500 text-xs text-center leading-relaxed max-w-3xl mx-auto" data-testid="text-disclaimer">
-            ⚠️ Disclaimer: APE POLICE is a community-driven meme token project. It is not financial advice.
-            Cryptocurrency investments carry inherent risks. Always do your own research (DYOR) before
-            investing. The team is not responsible for any financial losses. This project is for
-            entertainment and community purposes. Past performance does not guarantee future results.
+          <p className="text-lg mb-4 text-white">
+            © 2025 <span className="font-meme gradient-text">APE POLICE</span>. Meme Enforcement Agency.
           </p>
-        </div>
-
-        <div className="text-center mt-6">
-          <p className="text-gray-600 text-xs">
-            © {new Date().getFullYear()} APE POLICE. All rights reserved. Protecting the jungle since Day 1. 🦍
+          <p className="text-sm text-slate-300 max-w-2xl mx-auto leading-relaxed">
+            No financial advice given — just viral justice and jungle protection. 
+            Always DYOR and stay safe in the crypto jungle! 🌿🔐
           </p>
         </div>
       </div>
