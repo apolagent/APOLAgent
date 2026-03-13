@@ -1,41 +1,40 @@
 import { ChevronDown, Send, Coins } from "lucide-react";
 
-const heroButtonStyles = `
-  .hero-btns {
-    display: flex !important;
-    flex-direction: row !important;
-    justify-content: center !important;
-    align-items: center !important;
-    gap: 20px !important;
-    margin-top: 32px !important;
+const BTN_STYLES = `
+  .hero-buttons {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 30px;
   }
-  .hero-btns a, .hero-btns button {
-    height: 60px !important;
-    min-width: 220px !important;
+  .hero-buttons a,
+  .hero-buttons button {
+    height: 55px !important;
+    min-width: 210px !important;
+    font-size: 18px !important;
+    font-weight: 800 !important;
+    border-radius: 10px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 10px !important;
-    font-size: 20px !important;
-    font-weight: 900 !important;
+    gap: 8px !important;
     color: white !important;
-    border-radius: 10px !important;
+    text-decoration: none !important;
     border: none !important;
     cursor: pointer !important;
-    text-decoration: none !important;
-    padding: 0 28px !important;
+    padding: 0 24px !important;
     box-sizing: border-box !important;
   }
-  .hero-btn-join { background-color: #3b82f6 !important; }
-  .hero-btn-join:hover { background-color: #2563eb !important; }
-  .hero-btn-buy  { background-color: #22c55e !important; }
-  .hero-btn-buy:hover  { background-color: #16a34a !important; }
+  .hero-btn-blue { background-color: #3b82f6 !important; }
+  .hero-btn-blue:hover { background-color: #2563eb !important; }
+  .hero-btn-green { background-color: #22c55e !important; }
+  .hero-btn-green:hover { background-color: #16a34a !important; }
 `;
 
 export default function HeroSection() {
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden hero-bg" data-testid="hero-section">
-      <style>{heroButtonStyles}</style>
+      <style dangerouslySetInnerHTML={{ __html: BTN_STYLES }} />
 
       <div className="absolute inset-0 z-0">
         <img
@@ -68,22 +67,22 @@ export default function HeroSection() {
           and celebrating those who make it better.
         </p>
 
-        <div className="hero-btns">
+        <div className="hero-buttons">
           <a
             href="https://t.me/+rHmFDw-NcYcyMjI0"
             target="_blank"
             rel="noopener noreferrer"
             data-testid="button-join-patrol"
-            className="hero-btn-join"
+            className="hero-btn-blue"
           >
-            <Send size={22} />
+            <Send size={20} />
             <span>Join the Patrol</span>
           </a>
           <button
             data-testid="button-buy-apol"
-            className="hero-btn-buy"
+            className="hero-btn-green"
           >
-            <Coins size={22} />
+            <Coins size={20} />
             <span>Buy $APOL</span>
           </button>
         </div>
