@@ -1,41 +1,47 @@
+import { useEffect } from "react";
 import { ChevronDown, Send, Coins } from "lucide-react";
 
-const BTN_STYLES = `
-  .hero-buttons {
-    display: flex;
-    gap: 20px;
-    justify-content: center;
-    margin-top: 30px;
-  }
-  .hero-buttons a,
-  .hero-buttons button {
-    height: 55px !important;
-    min-width: 210px !important;
-    font-size: 18px !important;
-    font-weight: 800 !important;
-    border-radius: 10px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 8px !important;
-    color: white !important;
-    text-decoration: none !important;
-    border: none !important;
-    cursor: pointer !important;
-    padding: 0 24px !important;
-    box-sizing: border-box !important;
-  }
-  .hero-btn-blue { background-color: #3b82f6 !important; }
-  .hero-btn-blue:hover { background-color: #2563eb !important; }
-  .hero-btn-green { background-color: #22c55e !important; }
-  .hero-btn-green:hover { background-color: #16a34a !important; }
-`;
-
 export default function HeroSection() {
+  useEffect(() => {
+    const id = "hero-btn-override";
+    if (document.getElementById(id)) return;
+    const tag = document.createElement("style");
+    tag.id = id;
+    tag.textContent = `
+      .hero-buttons {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 20px !important;
+        justify-content: center !important;
+        align-items: center !important;
+        margin-top: 30px !important;
+      }
+      .hero-buttons a,
+      .hero-buttons button {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        height: 55px !important;
+        min-width: 210px !important;
+        font-size: 18px !important;
+        font-weight: 800 !important;
+        border-radius: 10px !important;
+        color: #ffffff !important;
+        text-decoration: none !important;
+        border: none !important;
+        cursor: pointer !important;
+        padding: 0 24px !important;
+        box-sizing: border-box !important;
+      }
+      .hero-btn-blue  { background-color: #3b82f6 !important; }
+      .hero-btn-green { background-color: #22c55e !important; }
+    `;
+    document.head.appendChild(tag);
+  }, []);
+
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden hero-bg" data-testid="hero-section">
-      <style dangerouslySetInnerHTML={{ __html: BTN_STYLES }} />
-
       <div className="absolute inset-0 z-0">
         <img
           src="/hero-bg.png"
