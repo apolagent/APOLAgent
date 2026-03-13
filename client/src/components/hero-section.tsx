@@ -1,51 +1,6 @@
 import { ChevronDown, Send, Coins } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-const containerStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "row",
-  gap: "20px",
-  justifyContent: "center",
-  alignItems: "center",
-  marginTop: "30px",
-};
-
-const blueBtn: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "8px",
-  height: "55px",
-  minWidth: "210px",
-  padding: "0 24px",
-  backgroundColor: "#3b82f6",
-  color: "#ffffff",
-  fontSize: "18px",
-  fontWeight: 800,
-  borderRadius: "10px",
-  border: "none",
-  cursor: "pointer",
-  textDecoration: "none",
-  boxSizing: "border-box",
-};
-
-const greenBtn: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "8px",
-  height: "55px",
-  minWidth: "210px",
-  padding: "0 24px",
-  backgroundColor: "#22c55e",
-  color: "#ffffff",
-  fontSize: "18px",
-  fontWeight: 800,
-  borderRadius: "10px",
-  border: "none",
-  cursor: "pointer",
-  textDecoration: "none",
-  boxSizing: "border-box",
-};
 
 export default function HeroSection() {
   return (
@@ -81,24 +36,17 @@ export default function HeroSection() {
           and celebrating those who make it better.
         </p>
 
-        <div style={containerStyle}>
-          <a
-            href="https://t.me/+rHmFDw-NcYcyMjI0"
-            target="_blank"
-            rel="noopener noreferrer"
-            data-testid="button-join-patrol"
-            style={blueBtn}
-          >
-            <Send size={20} />
-            <span>Join the Patrol</span>
+        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <a href="https://t.me/+rHmFDw-NcYcyMjI0" target="_blank" rel="noopener noreferrer" data-testid="button-join-patrol">
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 transform hover:scale-105 neon-glow flex items-center space-x-2">
+              <Send className="w-5 h-5" />
+              <span>Join the Patrol</span>
+            </Button>
           </a>
-          <button
-            data-testid="button-buy-apol"
-            style={greenBtn}
-          >
-            <Coins size={20} />
+          <Button data-testid="button-buy-apol" className="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 transform hover:scale-105 neon-glow flex items-center space-x-2">
+            <Coins className="w-5 h-5" />
             <span>Buy $APOL</span>
-          </button>
+          </Button>
         </div>
 
         <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
