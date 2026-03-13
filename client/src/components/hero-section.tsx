@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Send } from "lucide-react";
 
 
 export default function HeroSection() {
@@ -59,6 +59,7 @@ export default function HeroSection() {
               boxSizing: "border-box",
             }}
           >
+            <Send size={20} style={{ marginRight: "8px" }} />
             Join the Patrol
           </a>
         </div>
