@@ -101,7 +101,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const data = await response.json() as any;
       if (!response.ok) {
-        return res.status(response.status).json({ error: data.message || "ChainAbuse API error" });
+        const isRateLimit = response.status === 429 || (data.message || "").toLowerCase().includes("login attempts");
+        const errorMsg = isRateLimit
+          ? "ChainAbuse is temporarily unavailable due to a rate limit. Please try again in a few hours."
+          : data.message || "ChainAbuse API error";
+        return res.status(response.status).json({ error: errorMsg });
       }
       res.json(data);
     } catch (error) {
