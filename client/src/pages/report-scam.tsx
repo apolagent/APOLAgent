@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, AlertTriangle, ArrowLeft, ThumbsUp, Clock, ExternalLink } from "lucide-react";
+import { Shield, AlertTriangle, ArrowLeft, ThumbsUp, Clock, ExternalLink, Search, CheckCircle, XCircle, Loader2, Send } from "lucide-react";
 import { Link } from "wouter";
 import { insertScamReportSchema, type InsertScamReport, type ScamReport } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
@@ -28,9 +28,46 @@ const scamTypes = [
   "Other"
 ];
 
+const chains = [
+  { value: "ethereum", label: "Ethereum (ETH)" },
+  { value: "bitcoin", label: "Bitcoin (BTC)" },
+  { value: "bsc", label: "BNB Smart Chain (BSC)" },
+  { value: "solana", label: "Solana (SOL)" },
+  { value: "polygon", label: "Polygon (MATIC)" },
+  { value: "avalanche", label: "Avalanche (AVAX)" },
+  { value: "tron", label: "Tron (TRX)" },
+  { value: "arbitrum", label: "Arbitrum" },
+  { value: "optimism", label: "Optimism" },
+  { value: "other", label: "Other" },
+];
+
+type ChainAbuseReport = {
+  id?: string;
+  description?: string;
+  category?: string;
+  createdAt?: string;
+};
+
+type ChainAbuseResult = {
+  reports?: ChainAbuseReport[];
+  total?: number;
+};
+
 export default function ReportScam() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const [checkAddress, setCheckAddress] = useState("");
+  const [checkChain, setCheckChain] = useState("ethereum");
+  const [checkResult, setCheckResult] = useState<ChainAbuseResult | null>(null);
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
+
+  const [reportAddress, setReportAddress] = useState("");
+  const [reportChain, setReportChain] = useState("ethereum");
+  const [reportDescription, setReportDescription] = useState("");
+  const [reportCategory, setReportCategory] = useState("scam");
+  const [isSubmittingChain, setIsSubmittingChain] = useState(false);
 
   const form = useForm<InsertScamReport>({
     resolver: zodResolver(insertScamReportSchema),
@@ -88,6 +125,61 @@ export default function ReportScam() {
     createReportMutation.mutate(data);
   };
 
+  const handleCheckAddress = async () => {
+    if (!checkAddress.trim()) {
+      toast({ title: "Enter an address", description: "Please enter a blockchain address to check.", variant: "destructive" });
+      return;
+    }
+    setIsChecking(true);
+    setCheckResult(null);
+    setCheckError(null);
+    try {
+      const res = await fetch(`/api/chainabuse/check?address=${encodeURIComponent(checkAddress.trim())}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setCheckError(data.error || "Failed to check address");
+      } else {
+        setCheckResult(data);
+      }
+    } catch {
+      setCheckError("Network error. Please try again.");
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  const handleChainAbuseReport = async () => {
+    if (!reportAddress.trim() || !reportDescription.trim()) {
+      toast({ title: "Missing fields", description: "Address and description are required.", variant: "destructive" });
+      return;
+    }
+    setIsSubmittingChain(true);
+    try {
+      const res = await fetch("/api/chainabuse/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          address: reportAddress.trim(),
+          chain: reportChain,
+          description: reportDescription.trim(),
+          category: reportCategory,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: "Report Failed", description: data.error || "Failed to submit to ChainAbuse.", variant: "destructive" });
+      } else {
+        toast({ title: "Reported to ChainAbuse!", description: "The address has been flagged on the ChainAbuse database." });
+        setReportAddress("");
+        setReportDescription("");
+      }
+    } catch {
+      toast({ title: "Error", description: "Network error. Please try again.", variant: "destructive" });
+    } finally {
+      setIsSubmittingChain(false);
+    }
+  };
+
   const getScamTypeColor = (type: string) => {
     const colors: Record<string, string> = {
       "Rug Pull": "bg-red-500/20 text-red-400 border-red-500/30",
@@ -122,15 +214,163 @@ export default function ReportScam() {
           </Link>
         </div>
 
+        {/* ChainAbuse Address Checker */}
+        <Card className="bg-gradient-to-br from-blue-900/30 to-blue-800/20 border-blue-600/50 mb-10">
+          <CardHeader>
+            <CardTitle className="text-2xl font-meme text-blue-400 flex items-center gap-2">
+              <Search className="w-6 h-6" />
+              Check Address on ChainAbuse
+            </CardTitle>
+            <CardDescription className="text-gray-300">
+              Look up any blockchain address to see if it has been flagged for scams
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+              <Select value={checkChain} onValueChange={setCheckChain}>
+                <SelectTrigger className="bg-slate-800 border-slate-600 text-white sm:w-48" data-testid="select-check-chain">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-600">
+                  {chains.map((c) => (
+                    <SelectItem key={c.value} value={c.value} className="text-white hover:bg-slate-700">
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                value={checkAddress}
+                onChange={(e) => setCheckAddress(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCheckAddress()}
+                placeholder="Enter wallet / contract address..."
+                className="bg-slate-800 border-slate-600 text-white placeholder:text-gray-400 flex-1"
+                data-testid="input-check-address"
+              />
+              <Button
+                onClick={handleCheckAddress}
+                disabled={isChecking}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold"
+                data-testid="button-check-address"
+              >
+                {isChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                <span className="ml-2">{isChecking ? "Checking..." : "Check"}</span>
+              </Button>
+            </div>
+
+            {checkError && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-900/30 border border-red-600/40 text-red-300" data-testid="text-check-error">
+                <XCircle className="w-5 h-5 flex-shrink-0" />
+                <span>{checkError}</span>
+              </div>
+            )}
+
+            {checkResult && (
+              <div data-testid="div-check-result">
+                {(!checkResult.reports || checkResult.reports.length === 0) ? (
+                  <div className="flex items-center gap-2 p-4 rounded-lg bg-green-900/30 border border-green-600/40 text-green-300">
+                    <CheckCircle className="w-5 h-5 flex-shrink-0" />
+                    <span className="font-semibold">No reports found for this address. It appears clean on ChainAbuse.</span>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 p-3 rounded-lg bg-red-900/30 border border-red-600/40 text-red-300">
+                      <XCircle className="w-5 h-5 flex-shrink-0" />
+                      <span className="font-bold">Warning! {checkResult.total ?? checkResult.reports.length} report(s) found for this address.</span>
+                    </div>
+                    {checkResult.reports.map((r, i) => (
+                      <div key={r.id ?? i} className="p-3 rounded-lg bg-slate-800 border border-red-500/30 text-sm text-gray-200" data-testid={`div-chainabuse-report-${i}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">{r.category || "scam"}</span>
+                          {r.createdAt && <span className="text-xs text-gray-500">{new Date(r.createdAt).toLocaleDateString()}</span>}
+                        </div>
+                        <p className="text-gray-300">{r.description || "No description provided."}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ChainAbuse Report Submission */}
+        <Card className="bg-gradient-to-br from-orange-900/20 to-red-900/20 border-orange-600/40 mb-10">
+          <CardHeader>
+            <CardTitle className="text-2xl font-meme text-orange-400 flex items-center gap-2">
+              <Send className="w-6 h-6" />
+              Report Address to ChainAbuse
+            </CardTitle>
+            <CardDescription className="text-gray-300">
+              Submit a flagged blockchain address directly to the ChainAbuse global database
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Select value={reportChain} onValueChange={setReportChain}>
+                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white sm:w-48" data-testid="select-report-chain">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-600">
+                    {chains.map((c) => (
+                      <SelectItem key={c.value} value={c.value} className="text-white hover:bg-slate-700">
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  value={reportAddress}
+                  onChange={(e) => setReportAddress(e.target.value)}
+                  placeholder="Scam wallet / contract address..."
+                  className="bg-slate-800 border-slate-600 text-white placeholder:text-gray-400 flex-1"
+                  data-testid="input-report-address"
+                />
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Select value={reportCategory} onValueChange={setReportCategory}>
+                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white sm:w-48" data-testid="select-report-category">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-600">
+                    <SelectItem value="scam" className="text-white hover:bg-slate-700">Scam</SelectItem>
+                    <SelectItem value="hack" className="text-white hover:bg-slate-700">Hack</SelectItem>
+                    <SelectItem value="rugpull" className="text-white hover:bg-slate-700">Rug Pull</SelectItem>
+                    <SelectItem value="phishing" className="text-white hover:bg-slate-700">Phishing</SelectItem>
+                    <SelectItem value="other" className="text-white hover:bg-slate-700">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Textarea
+                  value={reportDescription}
+                  onChange={(e) => setReportDescription(e.target.value)}
+                  placeholder="Describe the scam — what happened, how much was lost, any details..."
+                  className="bg-slate-800 border-slate-600 text-white placeholder:text-gray-400 min-h-[80px] flex-1"
+                  data-testid="input-report-description"
+                />
+              </div>
+              <Button
+                onClick={handleChainAbuseReport}
+                disabled={isSubmittingChain}
+                className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3"
+                data-testid="button-submit-chainabuse"
+              >
+                {isSubmittingChain ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                {isSubmittingChain ? "Submitting to ChainAbuse..." : "Submit to ChainAbuse Database"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="grid lg:grid-cols-2 gap-12">
           <Card className="bg-gradient-to-br from-red-900/20 to-red-800/30 border-red-600/50">
             <CardHeader>
               <CardTitle className="text-2xl font-meme text-red-400 flex items-center gap-2">
                 <AlertTriangle className="w-6 h-6" />
-                Submit Scam Report
+                Submit Community Report
               </CardTitle>
               <CardDescription className="text-gray-300">
-                Provide detailed information about the scam to help warn others
+                Provide detailed information about the scam to warn our community
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -225,7 +465,7 @@ export default function ReportScam() {
                     className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3"
                     data-testid="button-submit-report"
                   >
-                    {createReportMutation.isPending ? "Submitting..." : "Submit Report"}
+                    {createReportMutation.isPending ? "Submitting..." : "Submit Community Report"}
                   </Button>
                 </form>
               </Form>
@@ -235,7 +475,7 @@ export default function ReportScam() {
           <div className="space-y-4">
             <h3 className="font-meme text-2xl text-white flex items-center gap-2" data-testid="text-recent-reports">
               <Shield className="w-6 h-6 text-blue-400" />
-              Recent Reports
+              Recent Community Reports
             </h3>
 
             {isLoading ? (
