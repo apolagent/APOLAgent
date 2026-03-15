@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { MessageSquare, Trophy, Shield } from "lucide-react";
+import { MessageSquare, Trophy, Shield, AlertTriangle } from "lucide-react";
 import { Link } from "wouter";
 
 export default function ChannelSection() {
@@ -23,15 +23,21 @@ export default function ChannelSection() {
                 give awards, and drop giveaways to honor those making crypto better.
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
               <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 neon-glow flex items-center justify-center space-x-2">
                 <MessageSquare className="w-5 h-5" />
                 <span>Join the Channel</span>
               </Button>
               <Link href="/nominate-hero">
-                <Button className="bg-yellow-500 hover:bg-yellow-600 text-slate-900 font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center space-x-2">
+                <Button className="bg-yellow-500 hover:bg-yellow-600 text-slate-900 font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center space-x-2 w-full sm:w-auto">
                   <Trophy className="w-5 h-5" />
                   <span>Nominate a Hero</span>
+                </Button>
+              </Link>
+              <Link href="/report-scam">
+                <Button className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center space-x-2 w-full sm:w-auto" data-testid="button-report-scam-channel">
+                  <AlertTriangle className="w-5 h-5" />
+                  <span>Report a Scam</span>
                 </Button>
               </Link>
             </div>
