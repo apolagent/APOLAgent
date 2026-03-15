@@ -32,7 +32,7 @@ export default function HeroSection() {
           and celebrating those who make it better.
         </p>
 
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "16px", marginTop: "60px" }}>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-16 flex-wrap">
           <button
             data-testid="button-join-patrol"
             style={{
@@ -40,14 +40,13 @@ export default function HeroSection() {
               alignItems: "center",
               justifyContent: "center",
               height: "38px",
-              minWidth: "210px",
-              width: "fit-content",
+              width: "100%",
+              maxWidth: "220px",
               backgroundColor: "#3b82f6",
               color: "#ffffff",
               fontSize: "18px",
               fontWeight: 800,
               borderRadius: "10px",
-              textDecoration: "none",
               border: "none",
               cursor: "pointer",
               padding: "0 16px",
@@ -59,7 +58,7 @@ export default function HeroSection() {
             Join the Patrol
           </button>
 
-          <div className="animate-bounce">
+          <div className="animate-bounce hidden sm:block">
             <ChevronDown className="w-8 h-8 text-yellow-400" />
           </div>
 
@@ -70,8 +69,8 @@ export default function HeroSection() {
               alignItems: "center",
               justifyContent: "center",
               height: "38px",
-              minWidth: "210px",
-              width: "fit-content",
+              width: "100%",
+              maxWidth: "220px",
               backgroundColor: "#22c55e",
               color: "#ffffff",
               fontSize: "18px",
