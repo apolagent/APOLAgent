@@ -8,6 +8,7 @@ import NominateHero from "@/pages/nominate-hero";
 import Rankings from "@/pages/rankings";
 import ReportScam from "@/pages/report-scam";
 import NotFound from "@/pages/not-found";
+import ApolAgent from "@/components/apol-agent";
 
 function Router() {
   return (
@@ -27,6 +28,7 @@ function App() {
       <TooltipProvider>
         <Toaster />
         <Router />
+        <ApolAgent />
       </TooltipProvider>
     </QueryClientProvider>
   );
