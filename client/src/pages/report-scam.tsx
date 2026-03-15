@@ -38,6 +38,7 @@ const chains = [
   { value: "tron", label: "Tron (TRX)" },
   { value: "arbitrum", label: "Arbitrum" },
   { value: "optimism", label: "Optimism" },
+  { value: "base", label: "Base" },
   { value: "other", label: "Other" },
 ];
 
