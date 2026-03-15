@@ -24,8 +24,8 @@ export default function Footer() {
             © 2026 <span className="font-meme gradient-text">APE POLICE</span>. Meme Enforcement Agency.
           </p>
           <p className="text-sm text-slate-300 max-w-2xl mx-auto leading-relaxed">
-            No financial advice given — just viral justice and jungle protection. 
-            Always DYOR and stay safe in the crypto jungle! 🌿🔐
+            No financial advice given, just viral justice and jungle protection. 
+            Always DYOR and stay safe in the crypto jungle!
           </p>
         </div>
       </div>
