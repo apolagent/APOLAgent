@@ -27,7 +27,7 @@ export default function HeroSection() {
           <span className="block gradient-text text-2xl md:text-4xl lg:text-5xl mt-2" data-testid="text-tagline">is Watching</span>
         </h1>
 
-        <p className="text-lg md:text-xl mb-8 max-w-xl mx-auto leading-relaxed text-white text-center" data-testid="text-description">
+        <p className="text-lg md:text-xl mb-8 w-full max-w-xl mx-auto leading-relaxed text-white text-center px-2 break-words" data-testid="text-description">
           The <span className="text-green-400 font-bold">meme-powered task force</span> protecting crypto from chaos —
           and celebrating those who make it better.
         </p>
