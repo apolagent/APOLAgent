@@ -219,8 +219,8 @@ export default function ReportScam() {
         {/* ChainAbuse Address Checker */}
         <Card className="bg-gradient-to-br from-blue-900/30 to-blue-800/20 border-blue-600/50 mb-10">
           <CardHeader>
-            <CardTitle className="text-2xl font-meme text-blue-400 flex items-center gap-2">
-              <Search className="w-6 h-6" />
+            <CardTitle className="text-xl font-semibold text-white flex items-center gap-2">
+              <Search className="w-5 h-5 text-blue-400" />
               Check Address on ChainAbuse
             </CardTitle>
             <CardDescription className="text-gray-300">
@@ -299,8 +299,8 @@ export default function ReportScam() {
         {/* ChainAbuse Report Submission */}
         <Card className="bg-gradient-to-br from-orange-900/20 to-red-900/20 border-orange-600/40 mb-10">
           <CardHeader>
-            <CardTitle className="text-2xl font-meme text-orange-400 flex items-center gap-2">
-              <Send className="w-6 h-6" />
+            <CardTitle className="text-xl font-semibold text-white flex items-center gap-2">
+              <Send className="w-5 h-5 text-orange-400" />
               Report Address to ChainAbuse
             </CardTitle>
             <CardDescription className="text-gray-300">
@@ -367,8 +367,8 @@ export default function ReportScam() {
         <div className="grid lg:grid-cols-2 gap-12">
           <Card className="bg-gradient-to-br from-red-900/20 to-red-800/30 border-red-600/50">
             <CardHeader>
-              <CardTitle className="text-2xl font-meme text-red-400 flex items-center gap-2">
-                <AlertTriangle className="w-6 h-6" />
+              <CardTitle className="text-xl font-semibold text-white flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
                 Submit Community Report
               </CardTitle>
               <CardDescription className="text-gray-300">
