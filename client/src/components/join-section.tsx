@@ -12,7 +12,7 @@ export default function JoinSection() {
           </h2>
           <div className="max-w-4xl mx-auto">
             <p className="text-xl md:text-2xl mb-8 leading-relaxed">
-              You don't need a badge — just <span className="text-yellow-400 font-bold">memes and morals</span>. 
+              You don't need a badge, just <span className="text-yellow-400 font-bold">memes and morals</span>. 
               If you're here to fight scams and celebrate legends, you're one of us.
             </p>
           </div>
