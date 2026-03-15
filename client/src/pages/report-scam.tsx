@@ -199,8 +199,10 @@ export default function ReportScam() {
       <Navigation />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24 pt-28">
         <div className="text-center mb-12">
-          <h1 className="font-meme text-4xl md:text-6xl gradient-text mb-4 flex items-center justify-center gap-3" data-testid="text-page-title">
-            <Shield className="w-12 h-12 md:w-16 md:h-16 text-red-500" />
+          <div className="flex justify-center mb-4">
+            <Shield className="w-14 h-14 text-red-500" />
+          </div>
+          <h1 className="font-meme text-4xl md:text-6xl gradient-text mb-4" data-testid="text-page-title">
             Report a Scam
           </h1>
           <p className="text-xl text-gray-400 mb-8" data-testid="text-page-description">
