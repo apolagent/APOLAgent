@@ -11,7 +11,7 @@ export default function MissionSection() {
           </h2>
           <div className="max-w-4xl mx-auto">
             <p className="text-xl md:text-2xl mb-8 leading-relaxed">
-              <span className="text-yellow-400 font-bold">APE POLICE</span> is more than just a memecoin —
+              <span className="text-yellow-400 font-bold">APE POLICE</span> is more than just a memecoin,
               it's a crypto watchdog powered by the community. We meme hard and call out harder.
             </p>
             <p className="text-lg md:text-xl mb-12 text-slate-200 leading-relaxed">
