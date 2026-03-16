@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -72,6 +72,18 @@ export const votesRelations = relations(votes, ({ one }) => ({
   }),
 }));
 
+export const flaggedWallets = pgTable("flagged_wallets", {
+  id: serial("id").primaryKey(),
+  address: text("address").notNull().unique(),
+  chain: text("chain").notNull().default("ethereum"),
+  reportCount: integer("report_count").notNull().default(0),
+  riskLevel: text("risk_level").notNull(),
+  topCategory: text("top_category"),
+  apolVerdict: text("apol_verdict").notNull(),
+  reports: jsonb("reports").default([]),
+  flaggedAt: timestamp("flagged_at").defaultNow().notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -108,3 +120,4 @@ export type InsertHeroNomination = z.infer<typeof insertHeroNominationSchema>;
 export type HeroNomination = typeof heroNominations.$inferSelect;
 export type InsertVote = z.infer<typeof insertVoteSchema>;
 export type Vote = typeof votes.$inferSelect;
+export type FlaggedWallet = typeof flaggedWallets.$inferSelect;

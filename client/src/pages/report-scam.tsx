@@ -52,6 +52,11 @@ type ChainAbuseReport = {
 type ChainAbuseResult = {
   reports?: ChainAbuseReport[];
   total?: number;
+  riskLevel?: string;
+  topCategory?: string;
+  apolVerdict?: string;
+  isHighRisk?: boolean;
+  isSerial?: boolean;
 };
 
 export default function ReportScam() {
@@ -158,12 +163,17 @@ export default function ReportScam() {
     setCheckResult(null);
     setCheckError(null);
     try {
-      const res = await fetch(`/api/chainabuse/check?address=${encodeURIComponent(checkAddress.trim())}`);
+      const res = await fetch(
+        `/api/detective/analyze?address=${encodeURIComponent(checkAddress.trim())}&chain=${encodeURIComponent(checkChain)}`
+      );
       const data = await res.json();
       if (!res.ok) {
         setCheckError(data.error || "Failed to check address");
       } else {
         setCheckResult(data);
+        if (data.reports && data.reports.length > 0) {
+          queryClient.invalidateQueries({ queryKey: ["/api/detective/flagged"] });
+        }
       }
     } catch {
       setCheckError("Network error. Please try again.");
@@ -319,6 +329,19 @@ export default function ReportScam() {
                       </div>
                     </div>
 
+                    {/* Risk level badge */}
+                    {checkResult.riskLevel && checkResult.riskLevel !== "Clean" && (
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-black px-3 py-1 rounded-full uppercase tracking-widest ${
+                          checkResult.isHighRisk
+                            ? "bg-red-500/20 text-red-400 border border-red-500/40"
+                            : "bg-yellow-500/20 text-yellow-400 border border-yellow-500/40"
+                        }`}>
+                          {checkResult.riskLevel}{checkResult.isSerial ? " — Suspected Serial Rugger" : ""}
+                        </span>
+                      </div>
+                    )}
+
                     {/* APOL Agent Summary */}
                     <div
                       data-testid="div-apol-summary"
@@ -329,10 +352,10 @@ export default function ReportScam() {
                       </div>
                       <div>
                         <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1 flex items-center gap-1">
-                          <Bot className="w-3 h-3" /> APOL Agent
+                          <Bot className="w-3 h-3" /> APOL Detective
                         </p>
                         <p className="text-blue-100 text-sm leading-relaxed italic">
-                          "{buildApolSummary(checkAddress, checkResult.reports)}"
+                          "{checkResult.apolVerdict || buildApolSummary(checkAddress, checkResult.reports)}"
                         </p>
                       </div>
                     </div>

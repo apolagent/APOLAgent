@@ -7,6 +7,7 @@ import ChannelSection from "@/components/channel-section";
 import RoadmapSection from "@/components/roadmap-section";
 import JoinSection from "@/components/join-section";
 import Footer from "@/components/footer";
+import RecentlyFlagged from "@/components/recently-flagged";
 
 export default function Home() {
   useEffect(() => {
@@ -33,6 +34,7 @@ export default function Home() {
       <MissionSection />
       <TokenomicsSection />
       <ChannelSection />
+      <RecentlyFlagged />
       <RoadmapSection />
       <JoinSection />
       <Footer />

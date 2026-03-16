@@ -144,6 +144,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Detective Service ──────────────────────────────────────────────────────
+
+  function buildRiskLevel(reportCount: number): string {
+    if (reportCount === 0) return "Clean";
+    if (reportCount <= 2) return "Caution";
+    return "High Risk";
+  }
+
+  function buildOfficerVerdict(address: string, reports: any[], riskLevel: string): string {
+    if (reports.length === 0) {
+      return "Citizen, this wallet appears clean in our database. Exercise standard vigilance and stay sharp out there. APE POLICE are always watching. 🦍";
+    }
+    const topCat = (reports[0]?.category || "suspicious activity").replace(/_/g, " ");
+    const dateStr = reports[0]?.createdAt
+      ? new Date(reports[0].createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+      : null;
+    const dateClause = dateStr ? ` on ${dateStr}` : "";
+    if (riskLevel === "High Risk") {
+      return `Citizen, my database shows this wallet is a REPEAT OFFENDER — ${reports.length} reports on file, primarily for ${topCat}. High Risk: Suspected Serial Rugger. Do NOT interact with this address under any circumstances. 🚨`;
+    }
+    return `Citizen, this wallet has ${reports.length} report(s) on file for ${topCat}${dateClause}. Approach with caution — this is an active investigation. 🔍`;
+  }
+
+  app.get("/api/detective/analyze", async (req, res) => {
+    const { address, chain = "ethereum" } = req.query as { address: string; chain?: string };
+    if (!address) return res.status(400).json({ error: "Address is required" });
+    if (!CHAINABUSE_API_KEY) return res.status(500).json({ error: "ChainAbuse API key not configured" });
+
+    try {
+      const response = await fetch(
+        `${CHAINABUSE_BASE}/reports?address=${encodeURIComponent(address)}&limit=20`,
+        {
+          headers: {
+            "Authorization": `Bearer ${CHAINABUSE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      const data = await response.json() as any;
+      if (!response.ok) {
+        const isRateLimit = response.status === 429 || (data.message || "").toLowerCase().includes("login attempts");
+        return res.status(response.status).json({
+          error: isRateLimit
+            ? "ChainAbuse is temporarily unavailable due to a rate limit. Please try again in a few hours."
+            : data.message || "ChainAbuse API error",
+        });
+      }
+
+      const reports: any[] = data.reports || [];
+      const riskLevel = buildRiskLevel(reports.length);
+      const topCategory = reports[0]?.category || null;
+      const apolVerdict = buildOfficerVerdict(address, reports, riskLevel);
+
+      if (reports.length > 0) {
+        await storage.upsertFlaggedWallet({
+          address,
+          chain,
+          reportCount: reports.length,
+          riskLevel,
+          topCategory,
+          apolVerdict,
+          reports: reports.slice(0, 5),
+        });
+      }
+
+      res.json({
+        address,
+        chain,
+        reports,
+        total: data.total ?? reports.length,
+        riskLevel,
+        topCategory,
+        apolVerdict,
+        isHighRisk: riskLevel === "High Risk",
+        isSerial: reports.length > 2,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Detective analysis failed" });
+    }
+  });
+
+  app.get("/api/detective/flagged", async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+      const wallets = await storage.getFlaggedWallets(limit);
+      res.json(wallets);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch flagged wallets" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

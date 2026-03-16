@@ -1,4 +1,4 @@
-import { users, scamReports, heroNominations, votes, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote } from "@shared/schema";
+import { users, scamReports, heroNominations, votes, flaggedWallets, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
 
@@ -13,6 +13,16 @@ export interface IStorage {
   createVote(vote: InsertVote): Promise<Vote>;
   updateScamReportVotes(reportId: number, votes: number): Promise<void>;
   updateHeroNominationVotes(nominationId: number, votes: number): Promise<void>;
+  upsertFlaggedWallet(data: {
+    address: string;
+    chain: string;
+    reportCount: number;
+    riskLevel: string;
+    topCategory: string | null;
+    apolVerdict: string;
+    reports: any[];
+  }): Promise<FlaggedWallet>;
+  getFlaggedWallets(limit?: number): Promise<FlaggedWallet[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -84,6 +94,51 @@ export class DatabaseStorage implements IStorage {
       .update(heroNominations)
       .set({ votes: newVotes })
       .where(eq(heroNominations.id, nominationId));
+  }
+
+  async upsertFlaggedWallet(data: {
+    address: string;
+    chain: string;
+    reportCount: number;
+    riskLevel: string;
+    topCategory: string | null;
+    apolVerdict: string;
+    reports: any[];
+  }): Promise<FlaggedWallet> {
+    const [result] = await db
+      .insert(flaggedWallets)
+      .values({
+        address: data.address,
+        chain: data.chain,
+        reportCount: data.reportCount,
+        riskLevel: data.riskLevel,
+        topCategory: data.topCategory,
+        apolVerdict: data.apolVerdict,
+        reports: data.reports,
+        flaggedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: flaggedWallets.address,
+        set: {
+          chain: data.chain,
+          reportCount: data.reportCount,
+          riskLevel: data.riskLevel,
+          topCategory: data.topCategory,
+          apolVerdict: data.apolVerdict,
+          reports: data.reports,
+          flaggedAt: new Date(),
+        },
+      })
+      .returning();
+    return result;
+  }
+
+  async getFlaggedWallets(limit = 10): Promise<FlaggedWallet[]> {
+    return await db
+      .select()
+      .from(flaggedWallets)
+      .orderBy(desc(flaggedWallets.flaggedAt))
+      .limit(limit);
   }
 }
 
