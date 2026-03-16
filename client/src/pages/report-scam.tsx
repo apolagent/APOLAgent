@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, AlertTriangle, ArrowLeft, ThumbsUp, Clock, ExternalLink, Search, CheckCircle, XCircle, Loader2, Send } from "lucide-react";
+import { Shield, AlertTriangle, ArrowLeft, ThumbsUp, Clock, ExternalLink, Search, CheckCircle, XCircle, Loader2, Send, Bot, Share2 } from "lucide-react";
 import { Link } from "wouter";
 import { insertScamReportSchema, type InsertScamReport, type ScamReport } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
@@ -69,6 +69,29 @@ export default function ReportScam() {
   const [reportDescription, setReportDescription] = useState("");
   const [reportCategory, setReportCategory] = useState("scam");
   const [isSubmittingChain, setIsSubmittingChain] = useState(false);
+
+  const buildApolSummary = (address: string, reports: any[]) => {
+    const first = reports[0];
+    const category = first?.category || "suspicious activity";
+    const dateStr = first?.createdAt
+      ? new Date(first.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+      : null;
+    const count = reports.length;
+    const categoryLabel = category.replace(/_/g, " ");
+    const dateClause = dateStr ? ` on ${dateStr}` : "";
+    const multi = count > 1 ? ` Repeat offender — ${count} reports on file.` : "";
+    return `Citizen, this wallet was flagged for ${categoryLabel}${dateClause}. Approach with extreme caution.${multi} Stay safe out there — APE POLICE have your back. 🚨🦍`;
+  };
+
+  const buildTweetText = (address: string, reports: any[]) => {
+    const first = reports[0];
+    const category = (first?.category || "scam").replace(/_/g, " ");
+    const count = reports.length;
+    const short = address.slice(0, 6) + "…" + address.slice(-4);
+    return encodeURIComponent(
+      `🚨 APOL ALERT 🚨\n\nWallet ${short} has ${count} report(s) on ChainAbuse for: ${category}.\n\nVerified by @ApePolice — do NOT interact with this address.\n\n#APOL #CryptoScam #ApePolice #DYOR`
+    );
+  };
 
   const form = useForm<InsertScamReport>({
     resolver: zodResolver(insertScamReportSchema),
@@ -269,28 +292,87 @@ export default function ReportScam() {
             )}
 
             {checkResult && (
-              <div data-testid="div-check-result">
+              <div data-testid="div-check-result" className="space-y-4">
                 {(!checkResult.reports || checkResult.reports.length === 0) ? (
-                  <div className="flex items-center gap-2 p-4 rounded-lg bg-green-900/30 border border-green-600/40 text-green-300">
-                    <CheckCircle className="w-5 h-5 flex-shrink-0" />
-                    <span className="font-semibold">No reports found for this address. It appears clean on ChainAbuse.</span>
+                  <div className="flex items-center gap-3 p-4 rounded-xl bg-green-900/30 border border-green-600/40 text-green-300">
+                    <CheckCircle className="w-6 h-6 flex-shrink-0" />
+                    <div>
+                      <p className="font-bold text-green-200">All Clear — No Reports Found</p>
+                      <p className="text-sm text-green-400 mt-0.5">This address has no records on ChainAbuse. Proceed with your usual caution.</p>
+                    </div>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 p-3 rounded-lg bg-red-900/30 border border-red-600/40 text-red-300">
-                      <XCircle className="w-5 h-5 flex-shrink-0" />
-                      <span className="font-bold">Warning! {checkResult.total ?? checkResult.reports.length} report(s) found for this address.</span>
-                    </div>
-                    {checkResult.reports.map((r, i) => (
-                      <div key={r.id ?? i} className="p-3 rounded-lg bg-slate-800 border border-red-500/30 text-sm text-gray-200" data-testid={`div-chainabuse-report-${i}`}>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">{r.category || "scam"}</span>
-                          {r.createdAt && <span className="text-xs text-gray-500">{new Date(r.createdAt).toLocaleDateString()}</span>}
-                        </div>
-                        <p className="text-gray-300">{r.description || "No description provided."}</p>
+                  <>
+                    {/* 🚨 POLICE RECORD FOUND banner */}
+                    <div
+                      data-testid="div-police-record-alert"
+                      className="relative overflow-hidden rounded-xl border-2 border-red-500 bg-red-950/60 p-5 text-center"
+                      style={{ boxShadow: "0 0 30px rgba(239,68,68,0.4)" }}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-br from-red-900/40 to-transparent pointer-events-none" />
+                      <div className="relative z-10">
+                        <div className="text-5xl mb-2">🚨</div>
+                        <h3 className="text-2xl font-black text-red-400 tracking-widest uppercase">Police Record Found</h3>
+                        <p className="text-red-300 mt-1 font-semibold">
+                          {checkResult.total ?? checkResult.reports.length} report(s) on file for this address
+                        </p>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+
+                    {/* APOL Agent Summary */}
+                    <div
+                      data-testid="div-apol-summary"
+                      className="flex gap-3 p-4 rounded-xl bg-blue-950/50 border border-blue-500/40"
+                    >
+                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white font-black text-sm">
+                        🦍
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                          <Bot className="w-3 h-3" /> APOL Agent
+                        </p>
+                        <p className="text-blue-100 text-sm leading-relaxed italic">
+                          "{buildApolSummary(checkAddress, checkResult.reports)}"
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Report details */}
+                    <div className="space-y-2">
+                      {checkResult.reports.map((r: any, i: number) => (
+                        <div key={r.id ?? i} className="p-3 rounded-lg bg-slate-800/80 border border-red-500/30 text-sm text-gray-200" data-testid={`div-chainabuse-report-${i}`}>
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 font-semibold uppercase tracking-wide">
+                              {(r.category || "scam").replace(/_/g, " ")}
+                            </span>
+                            {r.createdAt && (
+                              <span className="text-xs text-gray-500">
+                                {new Date(r.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-gray-300">{r.description || "No description provided."}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Share to X */}
+                    <a
+                      data-testid="button-share-x"
+                      href={`https://twitter.com/intent/tweet?text=${buildTweetText(checkAddress, checkResult.reports)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl font-bold text-white transition-all"
+                      style={{ background: "#000", border: "1px solid #333" }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "#1a1a1a")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "#000")}
+                    >
+                      <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.402 6.231H2.744l7.736-8.848L1.254 2.25H8.08l4.259 5.63 5.905-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                      </svg>
+                      Share APOL Warning to X
+                    </a>
+                  </>
                 )}
               </div>
             )}
