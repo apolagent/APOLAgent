@@ -77,7 +77,8 @@ function WalletCard({ wallet }: { wallet: FlaggedWallet }) {
 
 export default function RecentlyFlagged() {
   const { data: wallets = [], isLoading } = useQuery<FlaggedWallet[]>({
-    queryKey: ["/api/detective/flagged"],
+    queryKey: ["/api/detective/flagged", { limit: 10 }],
+    queryFn: () => fetch("/api/detective/flagged?limit=10").then(r => r.json()),
   });
 
   if (isLoading) {

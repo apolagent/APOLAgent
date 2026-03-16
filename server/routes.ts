@@ -146,25 +146,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ── Detective Service ──────────────────────────────────────────────────────
 
-  function buildRiskLevel(reportCount: number): string {
+  function pickRandom<T>(arr: T[]): T {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  function buildRiskLevel(reportCount: number, internalFlag = false): string {
+    if (reportCount === 0 && internalFlag) return "High Risk";
     if (reportCount === 0) return "Clean";
     if (reportCount <= 2) return "Caution";
     return "High Risk";
   }
 
-  function buildOfficerVerdict(address: string, reports: any[], riskLevel: string): string {
-    if (reports.length === 0) {
-      return "Citizen, this wallet appears clean in our database. Exercise standard vigilance and stay sharp out there. APE POLICE are always watching. 🦍";
-    }
+  function buildOfficerVerdict(address: string, reports: any[], riskLevel: string, internalFlag = false): string {
+    const count = reports.length;
     const topCat = (reports[0]?.category || "suspicious activity").replace(/_/g, " ");
     const dateStr = reports[0]?.createdAt
       ? new Date(reports[0].createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
       : null;
     const dateClause = dateStr ? ` on ${dateStr}` : "";
-    if (riskLevel === "High Risk") {
-      return `Citizen, my database shows this wallet is a REPEAT OFFENDER — ${reports.length} reports on file, primarily for ${topCat}. High Risk: Suspected Serial Rugger. Do NOT interact with this address under any circumstances. 🚨`;
+
+    if (count === 0 && internalFlag) {
+      return pickRandom([
+        `Fresh off the crime scene, Citizen. No ChainAbuse record yet — but APE POLICE internal intelligence flagged this address in the last 24 hours. Treat as High Risk. 🚨`,
+        `New to our system, but already on our radar. Internal reports link this wallet to suspicious activity in the last 24 hours. New Offender designation applied, Citizen. 🚨`,
+        `ChainAbuse shows clean, but our own community flagged this address recently. Don't be fooled, Citizen — new criminals don't have records until they do. 🚨`,
+        `Brand new threat detected, Citizen. No external history, but APE POLICE internal sources lit up for this wallet in the last 24 hours. Stay far away. 🚨`,
+        `First offense detected, Citizen. This wallet may not have a ChainAbuse record yet, but our internal intelligence says otherwise. Consider this address hostile. 🚨`,
+      ]);
     }
-    return `Citizen, this wallet has ${reports.length} report(s) on file for ${topCat}${dateClause}. Approach with caution — this is an active investigation. 🔍`;
+
+    if (count === 0) {
+      return pickRandom([
+        `Citizen, this wallet appears clean in our database. Exercise standard vigilance and stay sharp out there. APE POLICE are always watching. 🦍`,
+        `All clear on this one, Citizen. No prior record on file. Don't let your guard down though — new threats emerge daily. Stay sharp. 🦍`,
+        `Nothing here, Citizen. Clean as a whistle. Our database shows no criminal activity for this address. Stay vigilant out there. 🦍`,
+        `Wallet cleared, Citizen. No reports found. I've checked a thousand scammers — this one doesn't match any known patterns. Proceed with standard caution. 🦍`,
+        `No charges, no record, no flags. This wallet is clean for now, Citizen. But don't go getting sloppy — always do your homework before you ape in. 🦍`,
+      ]);
+    }
+
+    if (riskLevel === "High Risk") {
+      return pickRandom([
+        `Citizen, my database shows this wallet is a REPEAT OFFENDER — ${count} reports on file, primarily for ${topCat}. High Risk: Suspected Serial Rugger. Do NOT interact under any circumstances. 🚨`,
+        `Stop right there, Citizen. This wallet is a known menace. I've seen this pattern a thousand times. ${count} reports don't lie. Walk away. Don't look back. 🚨`,
+        `Warrant issued, Citizen. ${count} reports and counting — serial offense: ${topCat}. This address is DANGEROUS. Back away slowly and do not engage. 🚨`,
+        `RED ALERT, Citizen. ${count} reports on file for ${topCat}. This wallet operates at the highest threat level. I've arrested scammers like this before. Run. 🚨`,
+        `I've been on the force a long time, Citizen. This wallet? Pure criminal. ${count} reports, primary offense: ${topCat}. Suspect goes straight to the hall of shame. 🚨`,
+      ]);
+    }
+
+    return pickRandom([
+      `Citizen, this wallet has ${count} report(s) on file for ${topCat}${dateClause}. Approach with caution — this is an active investigation. 🔍`,
+      `Hold it right there, Citizen. We've got ${count} prior complaint(s) against this address for ${topCat}. I'd keep my distance if I were you. 🔍`,
+      `Suspicious activity logged, Citizen. ${count} report(s) for ${topCat}${dateClause}. We're watching this one closely. Don't get caught in the crossfire. 🔍`,
+      `This address is on our watchlist, Citizen — ${count} report(s) for ${topCat}. Tread carefully. You've been officially warned. 🔍`,
+      `Our records don't look great for this wallet, Citizen. ${count} flag(s) for ${topCat}. Don't say I didn't warn you. 🔍`,
+    ]);
   }
 
   app.get("/api/detective/analyze", async (req, res) => {
@@ -193,17 +230,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const reports: any[] = data.reports || [];
-      const riskLevel = buildRiskLevel(reports.length);
+      const internalFlag = reports.length === 0
+        ? await storage.checkInternalReports(address)
+        : false;
+      const riskLevel = buildRiskLevel(reports.length, internalFlag);
       const topCategory = reports[0]?.category || null;
-      const apolVerdict = buildOfficerVerdict(address, reports, riskLevel);
+      const apolVerdict = buildOfficerVerdict(address, reports, riskLevel, internalFlag);
 
-      if (reports.length > 0) {
+      if (reports.length > 0 || internalFlag) {
         await storage.upsertFlaggedWallet({
           address,
           chain,
           reportCount: reports.length,
           riskLevel,
-          topCategory,
+          topCategory: internalFlag && !topCategory ? "internal report (24h)" : topCategory,
           apolVerdict,
           reports: reports.slice(0, 5),
         });
@@ -219,6 +259,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         apolVerdict,
         isHighRisk: riskLevel === "High Risk",
         isSerial: reports.length > 2,
+        isNewOffender: internalFlag && reports.length === 0,
       });
     } catch (error) {
       res.status(500).json({ error: "Detective analysis failed" });

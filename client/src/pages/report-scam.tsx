@@ -57,6 +57,7 @@ type ChainAbuseResult = {
   apolVerdict?: string;
   isHighRisk?: boolean;
   isSerial?: boolean;
+  isNewOffender?: boolean;
 };
 
 export default function ReportScam() {
@@ -313,19 +314,37 @@ export default function ReportScam() {
                   </div>
                 ) : (
                   <>
-                    {/* 🚨 POLICE RECORD FOUND banner */}
+                    {/* 🚨 Alert Banner */}
                     <div
                       data-testid="div-police-record-alert"
-                      className="relative overflow-hidden rounded-xl border-2 border-red-500 bg-red-950/60 p-5 text-center"
-                      style={{ boxShadow: "0 0 30px rgba(239,68,68,0.4)" }}
+                      className={`relative overflow-hidden rounded-xl border-2 p-5 text-center ${
+                        checkResult.isNewOffender
+                          ? "border-orange-500 bg-orange-950/50"
+                          : "border-red-500 bg-red-950/60"
+                      }`}
+                      style={{ boxShadow: checkResult.isNewOffender
+                        ? "0 0 30px rgba(249,115,22,0.35)"
+                        : "0 0 30px rgba(239,68,68,0.4)" }}
                     >
-                      <div className="absolute inset-0 bg-gradient-to-br from-red-900/40 to-transparent pointer-events-none" />
+                      <div className="absolute inset-0 bg-gradient-to-br from-red-900/30 to-transparent pointer-events-none" />
                       <div className="relative z-10">
                         <div className="text-5xl mb-2">🚨</div>
-                        <h3 className="text-2xl font-black text-red-400 tracking-widest uppercase">Police Record Found</h3>
-                        <p className="text-red-300 mt-1 font-semibold">
-                          {checkResult.total ?? checkResult.reports.length} report(s) on file for this address
-                        </p>
+                        {checkResult.isNewOffender ? (
+                          <>
+                            <h3 className="text-2xl font-black text-orange-400 tracking-widest uppercase">New Offender Detected</h3>
+                            <p className="text-orange-300 mt-1 font-semibold">
+                              Flagged by APE POLICE internal intelligence in the last 24 hours
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <h3 className="text-2xl font-black text-red-400 tracking-widest uppercase">Police Record Found</h3>
+                            <p className="text-red-300 mt-1 font-semibold">
+                              {checkResult.total ?? checkResult.reports.length} report(s) on file for this address
+                              {checkResult.isSerial && " — Suspected Serial Rugger"}
+                            </p>
+                          </>
+                        )}
                       </div>
                     </div>
 

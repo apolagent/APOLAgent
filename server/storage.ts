@@ -1,6 +1,6 @@
 import { users, scamReports, heroNominations, votes, flaggedWallets, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, gte, or, and, sql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -23,6 +23,7 @@ export interface IStorage {
     reports: any[];
   }): Promise<FlaggedWallet>;
   getFlaggedWallets(limit?: number): Promise<FlaggedWallet[]>;
+  checkInternalReports(address: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -139,6 +140,26 @@ export class DatabaseStorage implements IStorage {
       .from(flaggedWallets)
       .orderBy(desc(flaggedWallets.flaggedAt))
       .limit(limit);
+  }
+
+  async checkInternalReports(address: string): Promise<boolean> {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const lowerAddr = address.toLowerCase();
+    const results = await db
+      .select({ id: scamReports.id })
+      .from(scamReports)
+      .where(
+        and(
+          gte(scamReports.createdAt, cutoff),
+          or(
+            sql`lower(${scamReports.description}) like ${"%" + lowerAddr + "%"}`,
+            sql`lower(${scamReports.title}) like ${"%" + lowerAddr + "%"}`,
+            sql`lower(coalesce(${scamReports.evidenceUrl}, '')) like ${"%" + lowerAddr + "%"}`
+          )
+        )
+      )
+      .limit(1);
+    return results.length > 0;
   }
 }
 
