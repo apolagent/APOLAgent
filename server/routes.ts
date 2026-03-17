@@ -210,26 +210,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!CHAINABUSE_API_KEY) return res.status(500).json({ error: "ChainAbuse API key not configured" });
 
     try {
-      const response = await fetch(
-        `${CHAINABUSE_BASE}/reports?address=${encodeURIComponent(address)}&limit=20`,
-        {
-          headers: {
-            "Authorization": `Bearer ${CHAINABUSE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
+      // Attempt ChainAbuse lookup — degrade gracefully on any failure
+      let reports: any[] = [];
+      let chainabuseUnavailable = false;
+
+      try {
+        const response = await fetch(
+          `${CHAINABUSE_BASE}/reports?address=${encodeURIComponent(address)}&limit=20`,
+          {
+            headers: {
+              "Authorization": `Bearer ${CHAINABUSE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        const data = await response.json() as any;
+        if (response.ok) {
+          reports = data.reports || [];
+        } else {
+          chainabuseUnavailable = true;
         }
-      );
-      const data = await response.json() as any;
-      if (!response.ok) {
-        const isRateLimit = response.status === 429 || (data.message || "").toLowerCase().includes("login attempts");
-        return res.status(response.status).json({
-          error: isRateLimit
-            ? "ChainAbuse is temporarily unavailable due to a rate limit. Please try again in a few hours."
-            : data.message || "ChainAbuse API error",
-        });
+      } catch {
+        chainabuseUnavailable = true;
       }
 
-      const reports: any[] = data.reports || [];
       const internalFlag = reports.length === 0
         ? await storage.checkInternalReports(address)
         : false;
@@ -253,13 +257,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         address,
         chain,
         reports,
-        total: data.total ?? reports.length,
+        total: reports.length,
         riskLevel,
         topCategory,
         apolVerdict,
         isHighRisk: riskLevel === "High Risk",
         isSerial: reports.length > 2,
         isNewOffender: internalFlag && reports.length === 0,
+        chainabuseUnavailable,
       });
     } catch (error) {
       res.status(500).json({ error: "Detective analysis failed" });

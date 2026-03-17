@@ -58,6 +58,7 @@ type ChainAbuseResult = {
   isHighRisk?: boolean;
   isSerial?: boolean;
   isNewOffender?: boolean;
+  chainabuseUnavailable?: boolean;
 };
 
 export default function ReportScam() {
@@ -304,12 +305,29 @@ export default function ReportScam() {
 
             {checkResult && (
               <div data-testid="div-check-result" className="space-y-4">
-                {(!checkResult.reports || checkResult.reports.length === 0) ? (
-                  <div className="flex items-center gap-3 p-4 rounded-xl bg-green-900/30 border border-green-600/40 text-green-300">
-                    <CheckCircle className="w-6 h-6 flex-shrink-0" />
-                    <div>
-                      <p className="font-bold text-green-200">All Clear — No Reports Found</p>
-                      <p className="text-sm text-green-400 mt-0.5">This address has no records on ChainAbuse. Proceed with your usual caution.</p>
+                {(!checkResult.reports || checkResult.reports.length === 0) && !checkResult.isNewOffender ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3 p-4 rounded-xl bg-green-900/30 border border-green-600/40 text-green-300">
+                      <CheckCircle className="w-6 h-6 flex-shrink-0" />
+                      <div>
+                        <p className="font-bold text-green-200">All Clear — No Reports Found</p>
+                        <p className="text-sm text-green-400 mt-0.5">No records found in APE POLICE internal database.</p>
+                      </div>
+                    </div>
+                    {checkResult.chainabuseUnavailable && (
+                      <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-900/20 border border-yellow-600/30 text-yellow-400 text-xs">
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                        <span>ChainAbuse external check is temporarily unavailable. Showing internal database results only.</span>
+                      </div>
+                    )}
+                    <div className="flex gap-3 p-4 rounded-xl bg-blue-950/50 border border-blue-500/40">
+                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-sm">🦍</div>
+                      <div>
+                        <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                          <Bot className="w-3 h-3" /> APOL Detective
+                        </p>
+                        <p className="text-blue-100 text-sm leading-relaxed italic">"{checkResult.apolVerdict}"</p>
+                      </div>
                     </div>
                   </div>
                 ) : (
