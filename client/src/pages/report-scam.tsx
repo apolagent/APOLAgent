@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, AlertTriangle, ArrowLeft, ThumbsUp, Clock, ExternalLink, Search, CheckCircle, XCircle, Loader2, Send, Bot, Share2 } from "lucide-react";
+import { Shield, AlertTriangle, ArrowLeft, ThumbsUp, Clock, ExternalLink, Search, CheckCircle, XCircle, Loader2, Send, Bot, Share2, Upload, ImageIcon, X } from "lucide-react";
 import { Link } from "wouter";
 import { insertScamReportSchema, type InsertScamReport, type ScamReport } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
@@ -76,6 +76,56 @@ export default function ReportScam() {
   const [checkError, setCheckError] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(false);
 
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 900;
+          let w = img.width, h = img.height;
+          if (w > MAX || h > MAX) {
+            if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+            else { w = Math.round(w * MAX / h); h = MAX; }
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = w; canvas.height = h;
+          canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", 0.72));
+        };
+        img.onerror = reject;
+        img.src = e.target!.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageError(null);
+    if (!file.type.startsWith("image/")) {
+      setImageError("Please select an image file (JPG, PNG, GIF, WebP)");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setImageError("Image must be under 10 MB");
+      return;
+    }
+    try {
+      const compressed = await compressImage(file);
+      setUploadedImage(compressed);
+    } catch {
+      setImageError("Failed to process image. Please try another file.");
+    }
+    e.target.value = "";
+  };
+
   const buildTweetText = (result: GoPlusResult) => {
     const addr = result.address || checkAddress;
     const short = addr.slice(0, 8) + "…" + addr.slice(-4);
@@ -118,6 +168,8 @@ export default function ReportScam() {
         description: "Your scam report has been submitted for review by the community.",
       });
       form.reset();
+      setUploadedImage(null);
+      setImageError(null);
     },
     onError: () => {
       toast({
@@ -144,7 +196,7 @@ export default function ReportScam() {
   });
 
   const onSubmit = (data: InsertScamReport) => {
-    createReportMutation.mutate(data);
+    createReportMutation.mutate({ ...data, evidenceImage: uploadedImage ?? undefined });
   };
 
   const handleCheckAddress = async () => {
@@ -569,6 +621,59 @@ export default function ReportScam() {
                     )}
                   />
 
+                  {/* Image upload */}
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-white flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4 text-gray-400" />
+                      Upload Evidence Screenshot (Optional)
+                    </p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageUpload}
+                      data-testid="input-image-upload"
+                    />
+                    {!uploadedImage ? (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full border-2 border-dashed border-slate-600 hover:border-red-500/60 rounded-xl p-6 flex flex-col items-center gap-2 text-gray-400 hover:text-red-400 transition-colors bg-slate-800/50"
+                        data-testid="button-upload-image"
+                      >
+                        <Upload className="w-7 h-7" />
+                        <span className="text-sm font-medium">Click to upload screenshot</span>
+                        <span className="text-xs text-gray-500">JPG, PNG, GIF, WebP · Max 10 MB</span>
+                      </button>
+                    ) : (
+                      <div className="relative rounded-xl overflow-hidden border border-slate-600 bg-slate-800">
+                        <img
+                          src={uploadedImage}
+                          alt="Evidence preview"
+                          className="w-full max-h-64 object-contain"
+                          data-testid="img-evidence-preview"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => { setUploadedImage(null); setImageError(null); }}
+                          className="absolute top-2 right-2 p-1.5 rounded-full bg-black/70 hover:bg-red-600 text-white transition-colors"
+                          data-testid="button-remove-image"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                        <div className="absolute bottom-0 left-0 right-0 px-3 py-1.5 bg-black/60 text-xs text-green-400 flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3" /> Image ready to submit
+                        </div>
+                      </div>
+                    )}
+                    {imageError && (
+                      <p className="text-xs text-red-400 flex items-center gap-1">
+                        <XCircle className="w-3.5 h-3.5" /> {imageError}
+                      </p>
+                    )}
+                  </div>
+
                   <Button
                     type="submit"
                     disabled={createReportMutation.isPending}
@@ -618,6 +723,17 @@ export default function ReportScam() {
                     </span>
                   </div>
                   <p className="text-gray-300 text-sm mb-4 line-clamp-3">{report.description}</p>
+
+                  {report.evidenceImage && (
+                    <div className="mb-4 rounded-lg overflow-hidden border border-slate-600">
+                      <img
+                        src={report.evidenceImage}
+                        alt="Evidence screenshot"
+                        className="w-full max-h-48 object-contain bg-slate-900"
+                        data-testid={`img-report-evidence-${report.id}`}
+                      />
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">

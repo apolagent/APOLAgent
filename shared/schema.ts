@@ -17,6 +17,7 @@ export const scamReports = pgTable("scam_reports", {
   reportedBy: integer("reported_by").notNull(),
   scamType: text("scam_type").notNull(),
   evidenceUrl: text("evidence_url"),
+  evidenceImage: text("evidence_image"),
   status: text("status").default("pending").notNull(),
   votes: integer("votes").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -95,6 +96,7 @@ export const insertScamReportSchema = createInsertSchema(scamReports).pick({
   reportedBy: true,
   scamType: true,
   evidenceUrl: true,
+  evidenceImage: true,
 });
 
 export const insertHeroNominationSchema = createInsertSchema(heroNominations).pick({
