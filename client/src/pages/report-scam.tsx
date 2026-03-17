@@ -200,9 +200,12 @@ export default function ReportScam() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast({ title: "Report Failed", description: data.error || "Failed to submit to ChainAbuse.", variant: "destructive" });
+        toast({ title: "Report Failed", description: data.error || "Failed to submit report.", variant: "destructive" });
       } else {
-        toast({ title: "Reported to ChainAbuse!", description: "The address has been flagged on the ChainAbuse database." });
+        toast({
+          title: data.chainabuseSubmitted ? "Reported to ChainAbuse!" : "Report Saved Internally",
+          description: data.message,
+        });
         setReportAddress("");
         setReportDescription("");
       }

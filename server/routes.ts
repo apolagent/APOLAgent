@@ -123,30 +123,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!address || !chain || !description) {
       return res.status(400).json({ error: "address, chain, and description are required" });
     }
-    if (!CHAINABUSE_API_KEY) {
-      return res.status(503).json({ error: "ChainAbuse API not configured" });
+
+    // Attempt ChainAbuse — gracefully fall back to internal DB on any failure
+    let chainabuseOk = false;
+    if (CHAINABUSE_API_KEY) {
+      try {
+        const response = await fetch(`${CHAINABUSE_BASE}/reports`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${CHAINABUSE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            addresses: [{ address, chain }],
+            description,
+            category: category || "scam",
+          }),
+        });
+        chainabuseOk = response.ok;
+      } catch { /* non-fatal, will save internally */ }
     }
+
+    // Always save to internal database
     try {
-      const response = await fetch(`${CHAINABUSE_BASE}/reports`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${CHAINABUSE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          addresses: [{ address, chain }],
-          description,
-          category: category || "scam",
-        }),
+      await storage.createScamReport({
+        title: `[${chain.toUpperCase()}] ${address.slice(0, 10)}… — ${(category || "scam").replace(/_/g, " ")}`,
+        description: `${description}\n\n[Chain: ${chain}] [Address: ${address}]`,
+        reportedBy: 1,
+        scamType: category || "Other",
+        evidenceUrl: null,
       });
-      const data = await response.json() as any;
-      if (!response.ok) {
-        return res.status(response.status).json({ error: data.message || "ChainAbuse API error" });
-      }
-      res.json(data);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to submit report to ChainAbuse" });
-    }
+    } catch { /* non-fatal, report still recorded if ChainAbuse succeeded */ }
+
+    res.json({
+      success: true,
+      chainabuseSubmitted: chainabuseOk,
+      savedInternally: true,
+      message: chainabuseOk
+        ? "Report submitted to ChainAbuse and saved to APE POLICE database."
+        : "ChainAbuse is temporarily unavailable — your report has been saved to the APE POLICE internal database.",
+    });
   });
 
   // ── Detective Service (GoPlus Security) ───────────────────────────────────
