@@ -179,8 +179,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   function buildWalletVerdict(flags: string[], riskLevel: string, internalFlag: boolean): string {
     if (flags.length === 0 && !internalFlag) {
       return pickRandom([
-        `Citizen, this wallet appears clean in our GoPlus scan. No malicious activity detected. Stay vigilant out there — APE POLICE are always watching. 🦍`,
-        `All clear on this one, Citizen. GoPlus shows no blacklist flags, no sanctions, no criminal activity. Proceed with standard caution. 🦍`,
+        `Citizen, this wallet appears clean in our security scan. No malicious activity detected. Stay vigilant out there — APE POLICE are always watching. 🦍`,
+        `All clear on this one, Citizen. Our scan shows no blacklist flags, no sanctions, no criminal activity. Proceed with standard caution. 🦍`,
         `Nothing here, Citizen. Clean as a whistle. Our security scan shows no malicious patterns for this address. 🦍`,
         `Wallet cleared, Citizen. No flags, no sanctions, no phishing history. I've seen a thousand scammers — this one doesn't match any known patterns. 🦍`,
         `No charges, no record, no flags. This wallet is clean for now, Citizen. Don't go getting sloppy — always do your homework before you ape in. 🦍`,
@@ -188,9 +188,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     if (internalFlag && flags.length === 0) {
       return pickRandom([
-        `Fresh off the crime scene, Citizen. GoPlus shows clean but APE POLICE internal intelligence flagged this address in the last 24 hours. Treat as High Risk. 🚨`,
+        `Fresh off the crime scene, Citizen. Our external scan shows clean but APE POLICE internal intelligence flagged this address in the last 24 hours. Treat as High Risk. 🚨`,
         `New to our system but already on our radar. Internal reports link this wallet to suspicious activity in the last 24 hours. 🚨`,
-        `GoPlus shows nothing yet — but our community flagged this address recently. New criminals don't have records until they do, Citizen. 🚨`,
+        `Our external scan shows nothing yet — but our community flagged this address recently. New criminals don't have records until they do, Citizen. 🚨`,
         `Brand new threat detected. No external scan history, but APE POLICE internal sources lit up for this wallet. Stay far away. 🚨`,
         `First offense, Citizen. No external record yet, but our internal intelligence says otherwise. Consider this address hostile. 🚨`,
       ]);
@@ -199,15 +199,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (riskLevel === "High Risk") {
       return pickRandom([
         `Stop right there, Citizen. This wallet is SANCTIONED or flagged for serious criminal activity: ${flagList}. Do NOT interact under any circumstances. 🚨`,
-        `Warrant issued, Citizen. GoPlus has flagged this address for: ${flagList}. This is a KNOWN THREAT. Back away and do not engage. 🚨`,
+        `Warrant issued, Citizen. APE POLICE has flagged this address for: ${flagList}. This is a KNOWN THREAT. Back away and do not engage. 🚨`,
         `RED ALERT, Citizen. Criminal record confirmed: ${flagList}. I've arrested scammers like this before. Run. 🚨`,
         `I've been on the force a long time, Citizen. This wallet? Pure criminal. Flagged for ${flagList}. Suspect goes straight to the hall of shame. 🚨`,
-        `Citizen, my database and GoPlus both agree — this address is DANGEROUS. Charges: ${flagList}. Do NOT touch this wallet. 🚨`,
+        `Citizen, our database and security scan both agree — this address is DANGEROUS. Charges: ${flagList}. Do NOT touch this wallet. 🚨`,
       ]);
     }
     return pickRandom([
       `Citizen, this wallet has flags on record: ${flagList}. Approach with caution — this is an active investigation. 🔍`,
-      `Hold it right there, Citizen. GoPlus flagged this address for: ${flagList}. I'd keep my distance if I were you. 🔍`,
+      `Hold it right there, Citizen. APE POLICE flagged this address for: ${flagList}. I'd keep my distance if I were you. 🔍`,
       `Suspicious activity logged, Citizen. Flags detected: ${flagList}. We're watching this one closely. Don't get caught in the crossfire. 🔍`,
       `This address is on our watchlist, Citizen — flagged for ${flagList}. Tread carefully. You've been officially warned. 🔍`,
       `Our records don't look great for this wallet, Citizen. Flags: ${flagList}. Don't say I didn't warn you. 🔍`,
@@ -220,7 +220,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return pickRandom([
         `Citizen, I ran a full security scan on ${token}. Open source, no honeypot, taxes in check, no mint function. This one looks legit. Always DYOR before aping in. ✅`,
         `${token} passes all APE POLICE security checks. No honeypot, no hidden taxes, no unlimited minting. Green badge earned, Citizen. ✅`,
-        `All systems go on ${token}, Citizen. GoPlus shows clean on every metric I track. Liquidity, taxes, mint — all pass. ✅`,
+        `All systems go on ${token}, Citizen. Our scan shows clean on every metric I track. Liquidity, taxes, mint — all pass. ✅`,
         `Citizen, ${token} has earned the APE POLICE Green Badge. Verified open source, safe tax structure, no malicious functions detected. ✅`,
         `I've checked ${token} top to bottom. No traps. No honeypot. No rug mechanics. This one checks out, Citizen — but stay alert. ✅`,
       ]);
@@ -228,7 +228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const issues = redFlags.join("; ");
     if (riskLevel === "High Risk") {
       return pickRandom([
-        `Citizen, ${token} is a TRAP. GoPlus flagged: ${issues}. Do NOT buy this token. This has rug written all over it. 🚨`,
+        `Citizen, ${token} is a TRAP. APE POLICE flagged: ${issues}. Do NOT buy this token. This has rug written all over it. 🚨`,
         `Stop right there, Citizen. ${token} failed critical security checks: ${issues}. Walk away. This is a known rug pattern. 🚨`,
         `RED ALERT on ${token}. My scan shows: ${issues}. I've seen this a thousand times — stay far away. 🚨`,
         `Warrant issued for ${token}. Security violations: ${issues}. Do not interact with this contract under any circumstances. 🚨`,

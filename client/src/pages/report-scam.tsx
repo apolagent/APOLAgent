@@ -76,12 +76,6 @@ export default function ReportScam() {
   const [checkError, setCheckError] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(false);
 
-  const [reportAddress, setReportAddress] = useState("");
-  const [reportChain, setReportChain] = useState("ethereum");
-  const [reportDescription, setReportDescription] = useState("");
-  const [reportCategory, setReportCategory] = useState("scam");
-  const [isSubmittingChain, setIsSubmittingChain] = useState(false);
-
   const buildTweetText = (result: GoPlusResult) => {
     const addr = result.address || checkAddress;
     const short = addr.slice(0, 8) + "…" + addr.slice(-4);
@@ -93,7 +87,7 @@ export default function ReportScam() {
       ? (result.greenBadge ? "passed all security checks ✅" : `red flags: ${result.redFlags?.join(", ")}`)
       : (result.walletFlags?.length ? `flagged for: ${result.walletFlags.join(", ")}` : "no external flags");
     return encodeURIComponent(
-      `🚨 APOL SECURITY ALERT 🚨\n\n${type} ${short} — ${risk}\nGoPlus scan: ${issues}\n\nScanned by @ApePolice — #APOL #CryptoSafety #DYOR`
+      `🚨 APOL SECURITY ALERT 🚨\n\n${type} ${short} — ${risk}\nAPOL scan: ${issues}\n\nScanned by @ApePolice — #APOL #CryptoSafety #DYOR`
     );
   };
 
@@ -181,40 +175,6 @@ export default function ReportScam() {
     }
   };
 
-  const handleChainAbuseReport = async () => {
-    if (!reportAddress.trim() || !reportDescription.trim()) {
-      toast({ title: "Missing fields", description: "Address and description are required.", variant: "destructive" });
-      return;
-    }
-    setIsSubmittingChain(true);
-    try {
-      const res = await fetch("/api/chainabuse/report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          address: reportAddress.trim(),
-          chain: reportChain,
-          description: reportDescription.trim(),
-          category: reportCategory,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast({ title: "Report Failed", description: data.error || "Failed to submit report.", variant: "destructive" });
-      } else {
-        toast({
-          title: data.chainabuseSubmitted ? "Reported to ChainAbuse!" : "Report Saved Internally",
-          description: data.message,
-        });
-        setReportAddress("");
-        setReportDescription("");
-      }
-    } catch {
-      toast({ title: "Error", description: "Network error. Please try again.", variant: "destructive" });
-    } finally {
-      setIsSubmittingChain(false);
-    }
-  };
 
   const getScamTypeColor = (type: string) => {
     const colors: Record<string, string> = {
@@ -252,7 +212,7 @@ export default function ReportScam() {
           </Link>
         </div>
 
-        {/* APOL Detective — GoPlus Scan */}
+        {/* APOL Detective Scanner */}
         <Card className="bg-gradient-to-br from-blue-900/30 to-blue-800/20 border-blue-600/50 mb-10">
           <CardHeader>
             <CardTitle className="text-xl font-semibold text-white flex items-center gap-2">
@@ -260,7 +220,7 @@ export default function ReportScam() {
               Scan CA or Wallet
             </CardTitle>
             <CardDescription className="text-gray-300">
-              GoPlus Security scan — detects honeypots, blacklisted wallets, high taxes, mint risks &amp; more
+              Run a full security scan on any wallet or contract — detects honeypots, blacklisted addresses, high taxes, mint risks &amp; more
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -331,7 +291,7 @@ export default function ReportScam() {
                       >
                         <div className="text-5xl mb-2">✅</div>
                         <h3 className="text-2xl font-black text-green-400 tracking-widest uppercase">APE POLICE Green Badge</h3>
-                        <p className="text-green-300 mt-1 font-semibold">Contract passed all GoPlus security checks</p>
+                        <p className="text-green-300 mt-1 font-semibold">Contract passed all APE POLICE security checks</p>
                       </div>
                     ) : (
                       <div
@@ -422,7 +382,7 @@ export default function ReportScam() {
                         <CheckCircle className="w-6 h-6 flex-shrink-0" />
                         <div>
                           <p className="font-bold text-green-200">All Clear — Wallet Appears Safe</p>
-                          <p className="text-sm text-green-400 mt-0.5">GoPlus found no malicious activity linked to this address.</p>
+                          <p className="text-sm text-green-400 mt-0.5">No malicious activity detected for this address.</p>
                         </div>
                       </div>
                     ) : (
@@ -445,7 +405,7 @@ export default function ReportScam() {
                               {checkResult.isHighRisk ? "High Risk Wallet" : "Suspicious Wallet"}
                             </h3>
                             <p className={`mt-1 font-semibold ${checkResult.isHighRisk ? "text-red-300" : "text-yellow-300"}`}>
-                              {checkResult.totalFlags} GoPlus flag(s) detected — {checkResult.riskLevel}
+                              {checkResult.totalFlags} flag(s) detected — {checkResult.riskLevel}
                             </p>
                           </>
                         )}
@@ -466,7 +426,7 @@ export default function ReportScam() {
                     {/* Wallet flags */}
                     {checkResult.walletFlags && checkResult.walletFlags.length > 0 && (
                       <div className="space-y-1">
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">GoPlus Flags</p>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Security Flags</p>
                         <div className="flex flex-wrap gap-2">
                           {checkResult.walletFlags.map((flag, i) => (
                             <span key={i} className="text-xs px-3 py-1 rounded-full bg-red-900/40 border border-red-500/40 text-red-300 font-semibold" data-testid={`badge-wallet-flag-${i}`}>
@@ -509,74 +469,6 @@ export default function ReportScam() {
                 )}
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        {/* ChainAbuse Report Submission */}
-        <Card className="bg-gradient-to-br from-orange-900/20 to-red-900/20 border-orange-600/40 mb-10">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold text-white flex items-center gap-2">
-              <Send className="w-5 h-5 text-orange-400" />
-              Report Address to ChainAbuse
-            </CardTitle>
-            <CardDescription className="text-gray-300">
-              Submit a flagged blockchain address directly to the ChainAbuse global database
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Select value={reportChain} onValueChange={setReportChain}>
-                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white sm:w-48" data-testid="select-report-chain">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-600">
-                    {chains.map((c) => (
-                      <SelectItem key={c.value} value={c.value} className="text-white hover:bg-slate-700">
-                        {c.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  value={reportAddress}
-                  onChange={(e) => setReportAddress(e.target.value)}
-                  placeholder="Scam wallet / contract address..."
-                  className="bg-slate-800 border-slate-600 text-white placeholder:text-gray-400 flex-1"
-                  data-testid="input-report-address"
-                />
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Select value={reportCategory} onValueChange={setReportCategory}>
-                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white sm:w-48" data-testid="select-report-category">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-600">
-                    <SelectItem value="scam" className="text-white hover:bg-slate-700">Scam</SelectItem>
-                    <SelectItem value="hack" className="text-white hover:bg-slate-700">Hack</SelectItem>
-                    <SelectItem value="rugpull" className="text-white hover:bg-slate-700">Rug Pull</SelectItem>
-                    <SelectItem value="phishing" className="text-white hover:bg-slate-700">Phishing</SelectItem>
-                    <SelectItem value="other" className="text-white hover:bg-slate-700">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Textarea
-                  value={reportDescription}
-                  onChange={(e) => setReportDescription(e.target.value)}
-                  placeholder="Describe the scam — what happened, how much was lost, any details..."
-                  className="bg-slate-800 border-slate-600 text-white placeholder:text-gray-400 min-h-[80px] flex-1"
-                  data-testid="input-report-description"
-                />
-              </div>
-              <Button
-                onClick={handleChainAbuseReport}
-                disabled={isSubmittingChain}
-                className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3"
-                data-testid="button-submit-chainabuse"
-              >
-                {isSubmittingChain ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
-                {isSubmittingChain ? "Submitting to ChainAbuse..." : "Submit to ChainAbuse Database"}
-              </Button>
-            </div>
           </CardContent>
         </Card>
 
