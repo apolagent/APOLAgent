@@ -13,14 +13,12 @@ export default function ChannelSection() {
               APE POLICE Channel
               <span className="block text-2xl md:text-3xl mt-2">Justice in the Jungle</span>
             </h2>
-            <div className="space-y-6 mb-8">
+            <div className="space-y-4 mb-8">
               <p className="text-lg md:text-xl leading-relaxed">
-                Our official channel is where the <span className="text-white font-bold">real work happens</span>. 
-                Community members discuss shady projects, call out frauds, and spotlight trustworthy devs, influencers, and teams.
+                The operational channel. <span className="text-white font-bold">Active threat monitoring</span>, scam alerts, and field reports from the community.
               </p>
               <p className="text-lg md:text-xl leading-relaxed text-white">
-                Every year, we host <span className="text-green-400 font-bold">public voting events</span>, 
-                give awards, and drop giveaways to honor those making crypto better.
+                Annual community awards, <span className="text-green-400 font-bold">public voting</span>, and bounties for outstanding contributors.
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
@@ -47,8 +45,8 @@ export default function ChannelSection() {
             <Card className="bg-gradient-to-br from-slate-800/60 to-slate-900/80 border-slate-600/50 backdrop-blur-sm">
               <CardContent className="p-8">
                 <div className="text-center mb-6">
-                  <h3 className="font-meme text-2xl gradient-text mb-2">🏆 Community Leaderboard</h3>
-                  <p className="text-sm text-gray-400">Top Contributors This Month</p>
+                  <h3 className="font-meme text-2xl gradient-text mb-1">🏆 Community Leaderboard</h3>
+                  <p className="text-xs text-gray-500 uppercase tracking-widest">Top Contributors This Month</p>
                 </div>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between bg-yellow-400/20 p-4 rounded-xl border border-yellow-400/30">

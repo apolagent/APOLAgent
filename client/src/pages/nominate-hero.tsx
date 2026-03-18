@@ -52,15 +52,15 @@ export default function NominateHero() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hero-nominations"] });
       toast({
-        title: "Nomination Submitted",
-        description: "Your hero nomination has been submitted for community review.",
+        title: "Nomination Filed",
+        description: "Pending community vote.",
       });
       form.reset();
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "Failed to submit nomination. Please try again.",
+        title: "Submission Failed",
+        description: "Retry or check your connection.",
         variant: "destructive",
       });
     },
@@ -108,7 +108,7 @@ export default function NominateHero() {
             Nominate a Hero
           </h1>
           <p className="text-xl text-gray-400 mb-8" data-testid="text-page-description">
-            Recognize community members who go above and beyond to protect the jungle
+            Commend officers making crypto safer.
           </p>
           <Link href="/">
             <Button variant="outline" className="text-blue-400 border-blue-400 hover:bg-blue-400 hover:text-slate-900" data-testid="button-back-home">
@@ -126,7 +126,7 @@ export default function NominateHero() {
                 Submit Nomination
               </CardTitle>
               <CardDescription className="text-gray-300">
-                Nominate someone who has made a positive impact in the crypto community
+                Name the candidate. Community votes decide ranking.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -141,7 +141,7 @@ export default function NominateHero() {
                         <FormControl>
                           <Input
                             {...field}
-                            placeholder="Name or handle of the person you're nominating"
+                            placeholder="Name or handle"
                             className="bg-slate-800 border-slate-600 text-white placeholder:text-gray-400"
                             data-testid="input-name"
                           />

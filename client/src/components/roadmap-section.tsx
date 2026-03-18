@@ -96,7 +96,7 @@ export default function RoadmapSection() {
           <h2 className="font-meme text-5xl md:text-6xl gradient-text mb-4">
             The Road to Meme Justice
           </h2>
-          <p className="text-xl text-white">Building the crypto community's watchdog platform</p>
+          <p className="text-xl text-white">Deployment phases</p>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
           {roadmapPhases.map((phase) => {

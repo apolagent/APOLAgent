@@ -201,7 +201,7 @@ export default function ReportScam() {
 
   const handleCheckAddress = async () => {
     if (!checkAddress.trim()) {
-      toast({ title: "Enter an address", description: "Please enter a blockchain address to check.", variant: "destructive" });
+      toast({ title: "Address Required", description: "Enter a wallet or contract address.", variant: "destructive" });
       return;
     }
     setIsChecking(true);
@@ -254,7 +254,7 @@ export default function ReportScam() {
             Report a Scam
           </h1>
           <p className="text-xl text-gray-400 mb-8" data-testid="text-page-description">
-            Help protect the community by reporting suspicious projects and scams
+            Submit evidence. Flag threats. Protect the community.
           </p>
           <Link href="/">
             <Button variant="outline" className="text-blue-400 border-blue-400 hover:bg-blue-400 hover:text-slate-900" data-testid="button-back-home">
@@ -272,7 +272,7 @@ export default function ReportScam() {
               Scan CA or Wallet
             </CardTitle>
             <CardDescription className="text-gray-300">
-              Run a full security scan on any wallet or contract, detects honeypots, blacklisted addresses, high taxes, mint risks &amp; more
+              Full security scan. Flags honeypots, blacklisted addresses, tax traps, and mint abuse.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -343,7 +343,7 @@ export default function ReportScam() {
                       >
                         <div className="text-5xl mb-2">✅</div>
                         <h3 className="text-2xl font-black text-green-400 tracking-widest uppercase">APE POLICE Green Badge</h3>
-                        <p className="text-green-300 mt-1 font-semibold">Contract passed all APE POLICE security checks</p>
+                        <p className="text-green-300 mt-1 font-semibold">Status: Cleared. All checks passed.</p>
                       </div>
                     ) : (
                       <div
@@ -433,8 +433,8 @@ export default function ReportScam() {
                       <div className="flex items-center gap-3 p-4 rounded-xl bg-green-900/30 border border-green-600/40 text-green-300">
                         <CheckCircle className="w-6 h-6 flex-shrink-0" />
                         <div>
-                          <p className="font-bold text-green-200">All Clear, Wallet Appears Safe</p>
-                          <p className="text-sm text-green-400 mt-0.5">No malicious activity detected for this address.</p>
+                          <p className="font-bold text-green-200 tracking-widest uppercase">Status: Clear</p>
+                          <p className="text-sm text-green-400 mt-0.5">No flags on record.</p>
                         </div>
                       </div>
                     ) : (
@@ -449,7 +449,7 @@ export default function ReportScam() {
                         {checkResult.isNewOffender ? (
                           <>
                             <h3 className="text-2xl font-black text-orange-400 tracking-widest uppercase">New Offender Detected</h3>
-                            <p className="text-orange-300 mt-1 font-semibold">Flagged by APE POLICE internal intelligence in the last 24 hours</p>
+                            <p className="text-orange-300 mt-1 font-semibold">Flagged: last 24 hours.</p>
                           </>
                         ) : (
                           <>
@@ -532,7 +532,7 @@ export default function ReportScam() {
                 Submit Community Report
               </CardTitle>
               <CardDescription className="text-gray-300">
-                Provide detailed information about the scam to warn our community
+                Log the threat. All fields marked * are required.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -587,11 +587,11 @@ export default function ReportScam() {
                     name="description"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-white">Detailed Description *</FormLabel>
+                        <FormLabel className="text-white">Incident Report *</FormLabel>
                         <FormControl>
                           <Textarea
                             {...field}
-                            placeholder="Describe the scam in detail: How it works, who's behind it, estimated losses, warning signs, etc."
+                            placeholder="Incident details: methods, actors, losses, warning signs."
                             className="bg-slate-800 border-slate-600 text-white placeholder:text-gray-400 min-h-[120px]"
                             data-testid="input-description"
                           />
@@ -625,7 +625,7 @@ export default function ReportScam() {
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-white flex items-center gap-2">
                       <ImageIcon className="w-4 h-4 text-gray-400" />
-                      Upload Evidence Screenshot (Optional)
+                      Evidence Screenshot
                     </p>
                     <input
                       ref={fileInputRef}
@@ -643,7 +643,7 @@ export default function ReportScam() {
                         data-testid="button-upload-image"
                       >
                         <Upload className="w-7 h-7" />
-                        <span className="text-sm font-medium">Click to upload screenshot</span>
+                        <span className="text-sm font-medium">Attach screenshot</span>
                         <span className="text-xs text-gray-500">JPG, PNG, GIF, WebP · Max 10 MB</span>
                       </button>
                     ) : (

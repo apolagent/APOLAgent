@@ -9,7 +9,7 @@ export default function TokenomicsSection() {
           <h2 className="font-meme text-5xl md:text-6xl gradient-text mb-4">
             Tokenomics That Don't Arrest You
           </h2>
-          <p className="text-xl text-white">Fair, transparent, and community-focused</p>
+          <p className="text-xl text-white">Fair. Transparent. No team allocation.</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-5xl mx-auto">
@@ -71,7 +71,7 @@ export default function TokenomicsSection() {
                 </div>
                 <h3 className="font-bold text-xl text-cyan-200">LP Locked ✅</h3>
               </div>
-              <p className="text-cyan-300">Liquidity permanently secured for community trust</p>
+              <p className="text-cyan-300">Liquidity locked. Permanently.</p>
             </CardContent>
           </Card>
 
@@ -83,7 +83,7 @@ export default function TokenomicsSection() {
                 </div>
                 <h3 className="font-bold text-xl text-slate-200">Team Allocation: 0%</h3>
               </div>
-              <p className="text-slate-300">Pure community ownership with no team tokens</p>
+              <p className="text-slate-300">Zero team allocation. Full community ownership.</p>
             </CardContent>
           </Card>
         </div>

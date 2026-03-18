@@ -12,8 +12,7 @@ export default function JoinSection() {
           </h2>
           <div className="max-w-4xl mx-auto">
             <p className="text-xl md:text-2xl mb-8 leading-relaxed">
-              You don't need a badge, just <span className="text-yellow-400 font-bold">memes and morals</span>. 
-              If you're here to fight scams and celebrate legends, you're one of us.
+              Deploy your memes. Report threats. <span className="text-yellow-400 font-bold">Earn your badge.</span>
             </p>
           </div>
         </div>
@@ -22,7 +21,7 @@ export default function JoinSection() {
           <Button className="w-full bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-6 px-6 rounded-2xl transition-all duration-300 transform hover:scale-105 neon-glow flex flex-col items-center space-y-3 h-auto">
             <Send className="w-8 h-8" />
             <span className="text-lg">Telegram</span>
-            <span className="text-sm opacity-80">Join the Squad 💬</span>
+            <span className="text-sm opacity-80">Enlist 💬</span>
           </Button>
 
           <Button className="w-full bg-gradient-to-br from-gray-800 to-black hover:from-gray-700 hover:to-gray-800 text-white font-bold py-6 px-6 rounded-2xl transition-all duration-300 transform hover:scale-105 neon-glow flex flex-col items-center space-y-3 h-auto">
@@ -30,14 +29,14 @@ export default function JoinSection() {
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
             </svg>
             <span className="text-lg">X</span>
-            <span className="text-sm opacity-80">Follow Updates</span>
+            <span className="text-sm opacity-80">Follow Intel 📡</span>
           </Button>
 
           <Link href="/report-scam" className="w-full">
             <Button className="w-full bg-gradient-to-br from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-6 px-6 rounded-2xl transition-all duration-300 transform hover:scale-105 neon-glow flex flex-col items-center space-y-3 h-auto">
               <Radio className="w-8 h-8" />
               <span className="text-lg">APE Channel</span>
-              <span className="text-sm opacity-80">Report Scams 📡</span>
+              <span className="text-sm opacity-80">File a Report 📋</span>
             </Button>
           </Link>
 

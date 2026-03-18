@@ -262,7 +262,7 @@ export default function AgentScanner() {
 
             <div>
               <label className="text-sm text-slate-300 mb-1.5 block font-medium">
-                <span className="flex items-center gap-1.5"><Brain className="w-4 h-4 text-purple-400" />What does this project claim the agent can do?</span>
+                <span className="flex items-center gap-1.5"><Brain className="w-4 h-4 text-purple-400" />Agent Claims</span>
               </label>
               <Textarea placeholder="e.g. 'Trades memecoins 24/7, monitors wallets for rug pulls, posts on-chain reports every hour…'"
                 value={claimedAbilities} onChange={e => setClaimedAbilities(e.target.value)} rows={2}

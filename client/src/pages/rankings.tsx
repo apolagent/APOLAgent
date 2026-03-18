@@ -41,7 +41,7 @@ export default function Rankings() {
             Community Rankings
           </h1>
           <p className="text-xl text-gray-400 mb-8" data-testid="text-page-description">
-            Top-voted scam reports and community heroes
+            Community intelligence, ranked by vote.
           </p>
           <Link href="/">
             <Button variant="outline" className="text-blue-400 border-blue-400 hover:bg-blue-400 hover:text-slate-900" data-testid="button-back-home">
@@ -98,9 +98,8 @@ export default function Rankings() {
                 <p className="text-gray-400 text-xl">No scam reports yet</p>
                 <p className="text-gray-500 mt-2">
                   <Link href="/report-scam">
-                    <span className="text-blue-400 hover:underline cursor-pointer">Report a scam</span>
-                  </Link>{" "}
-                  to get the leaderboard started!
+                    <span className="text-blue-400 hover:underline cursor-pointer">File the first report.</span>
+                  </Link>
                 </p>
               </div>
             ) : (
@@ -143,9 +142,8 @@ export default function Rankings() {
                 <p className="text-gray-400 text-xl">No hero nominations yet</p>
                 <p className="text-gray-500 mt-2">
                   <Link href="/nominate-hero">
-                    <span className="text-yellow-400 hover:underline cursor-pointer">Nominate a hero</span>
-                  </Link>{" "}
-                  to get the leaderboard started!
+                    <span className="text-yellow-400 hover:underline cursor-pointer">Submit the first nomination.</span>
+                  </Link>
                 </p>
               </div>
             ) : (

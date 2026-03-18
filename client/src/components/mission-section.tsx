@@ -10,12 +10,11 @@ export default function MissionSection() {
             Protect. Meme. Reward.
           </h2>
           <div className="max-w-4xl mx-auto">
-            <p className="text-xl md:text-2xl mb-8 leading-relaxed">
-              <span className="text-yellow-400 font-bold">APE POLICE</span> is more than just a memecoin,
-              it's a crypto watchdog powered by the community. We meme hard and call out harder.
+            <p className="text-xl md:text-2xl mb-6 leading-relaxed">
+              <span className="text-yellow-400 font-bold">APE POLICE</span> is the meme-powered crypto watchdog. Call outs, crackdowns, and community justice.
             </p>
             <p className="text-lg md:text-xl mb-12 text-slate-200 leading-relaxed">
-              From stopping rugpulls to spotlighting legit devs and influencers, we're here to make crypto fun and safer.
+              Stopping rug pulls. Spotlighting honest builders. Protecting the jungle.
             </p>
           </div>
         </div>
@@ -34,10 +33,10 @@ export default function MissionSection() {
             </CardHeader>
             <CardContent>
               <p className="text-lg leading-relaxed mb-4">
-                🪙 <span className="font-bold text-yellow-400">Patrol the blockchain</span> with $APOL memecoin
+                🪙 <span className="font-bold text-yellow-400">Patrol the blockchain</span> with $APOL
               </p>
               <p className="text-slate-200">
-                Our community-driven token serves as the badge of honor for crypto justice enforcers worldwide.
+                $APOL is the badge of honor for every crypto justice enforcer on the chain.
               </p>
             </CardContent>
           </Card>
@@ -55,10 +54,10 @@ export default function MissionSection() {
             </CardHeader>
             <CardContent>
               <p className="text-lg leading-relaxed mb-4">
-                📢 <span className="font-bold text-yellow-400">Run the APE POLICE Channel</span>, a public forum for exposing scams & rewarding real builders
+                📢 <span className="font-bold text-yellow-400">The APE POLICE Channel</span>, open to all officers
               </p>
               <p className="text-slate-200">
-                Where the real work happens - community discussions, scam alerts, and recognition for crypto heroes.
+                Live threat intel, scam alerts, and commendations for top contributors.
               </p>
             </CardContent>
           </Card>
