@@ -208,7 +208,7 @@ export default function AgentScanner() {
               <div className="md:col-span-2">
                 <label className="text-sm text-slate-300 mb-1.5 block font-medium">Wallet Address <span className="text-slate-500 text-xs font-normal">· Liveliness check</span></label>
                 <Input placeholder="0x… or Solana address" value={wallet} onChange={e => setWallet(e.target.value)}
-                  className="bg-slate-800 border-slate-600 text-white placeholder-slate-500 font-mono text-sm" data-testid="input-agent-wallet" />
+                  className="bg-slate-800 border-slate-600 text-white placeholder-slate-500 text-sm" data-testid="input-agent-wallet" />
               </div>
               <div>
                 <label className="text-sm text-slate-300 mb-1.5 block font-medium">Chain</label>

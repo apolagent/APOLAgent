@@ -34,7 +34,7 @@ function WalletCard({ wallet }: { wallet: FlaggedWallet }) {
       <div className="flex items-start justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 min-w-0">
           {isHighRisk && <span className="text-lg flex-shrink-0">🚨</span>}
-          <span className="font-mono text-sm text-gray-200 truncate" data-testid={`text-wallet-address-${wallet.id}`}>
+          <span className="text-sm text-gray-200 truncate" data-testid={`text-wallet-address-${wallet.id}`}>
             {short}
           </span>
         </div>
