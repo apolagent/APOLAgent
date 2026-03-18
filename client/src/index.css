@@ -101,8 +101,8 @@
     @apply font-sans antialiased text-foreground;
     background-color: #000000 !important;
     background-image:
-      linear-gradient(rgba(0,255,0,0.18) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,255,0,0.18) 1px, transparent 1px) !important;
+      linear-gradient(rgba(0,255,0,0.35) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,0,0.35) 1px, transparent 1px) !important;
     background-size: 60px 60px;
     background-attachment: fixed;
   }
