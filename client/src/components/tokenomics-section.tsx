@@ -1,92 +1,109 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Lock, Users, Check } from "lucide-react";
+import { useState } from "react";
+import { Copy, Check, ExternalLink } from "lucide-react";
+
+const CONTRACT_ADDRESS = "TBA";
+const CHAIN = "BSC";
+
+const rows = [
+  {
+    key: "CONTRACT",
+    isCA: true,
+  },
+  {
+    key: "TOTAL SUPPLY",
+    value: "1,000,000,000",
+    tag: "HARD CAPPED",
+    tagColor: "text-slate-400",
+  },
+  {
+    key: "TAX PROTOCOL",
+    value: "0% Buy / 0% Sell",
+    tag: "IMMUTABLE",
+    tagColor: "text-green-400",
+  },
+  {
+    key: "LIQUIDITY",
+    value: "STATUS: BURNED / LOCKED",
+    tag: "Verifiable on-chain",
+    tagColor: "text-blue-400",
+    tagSmall: true,
+  },
+];
 
 export default function TokenomicsSection() {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(CONTRACT_ADDRESS).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <section id="tokenomics" className="py-20 bg-gradient-to-r from-slate-900 to-blue-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+
+        {/* Header */}
+        <div className="text-center mb-12">
           <h2 className="font-meme text-5xl md:text-6xl gradient-text mb-4">
-            Tokenomics That Don't Arrest You
+            Network Specifications
           </h2>
-          <p className="text-xl text-white">Fair. Transparent. No team allocation.</p>
+          <p className="text-slate-400 font-mono text-sm uppercase tracking-widest">$APOL · {CHAIN}</p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-5xl mx-auto">
-          <Card className="bg-gradient-to-br from-slate-700/60 to-slate-800/80 border-slate-500/50 hover:border-slate-400/70 transition-all duration-300 transform hover:scale-105 text-center">
-            <CardHeader>
-              <div className="w-12 h-12 bg-slate-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-white text-xl">🍌</span>
-              </div>
-              <CardTitle className="text-lg text-slate-200">Name</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-slate-300 font-meme">APE POLICE</p>
-            </CardContent>
-          </Card>
+        {/* Data grid */}
+        <div className="bg-slate-900/70 border border-slate-700/60 rounded-xl overflow-hidden">
+          {rows.map((row, i) => (
+            <div
+              key={row.key}
+              className="flex items-center gap-4 px-6 py-4 font-mono text-sm"
+              style={{ borderBottom: i < rows.length - 1 ? "1px solid rgba(255,255,255,0.06)" : undefined }}
+            >
+              {/* Label */}
+              <span className="text-slate-500 text-xs font-semibold uppercase tracking-widest w-36 flex-shrink-0">
+                {row.key}
+              </span>
 
-          <Card className="bg-gradient-to-br from-blue-800/60 to-blue-900/80 border-blue-600/50 hover:border-blue-500/70 transition-all duration-300 transform hover:scale-105 text-center">
-            <CardHeader>
-              <div className="w-12 h-12 bg-blue-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-white text-xl">🚨</span>
-              </div>
-              <CardTitle className="text-lg text-blue-200">Symbol</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-blue-300 font-meme">$APOL</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-teal-800/60 to-teal-900/80 border-teal-600/50 hover:border-teal-500/70 transition-all duration-300 transform hover:scale-105 text-center">
-            <CardHeader>
-              <div className="w-12 h-12 bg-teal-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-white text-xl">🍩</span>
-              </div>
-              <CardTitle className="text-lg text-teal-200">Supply</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-teal-300 font-meme">1,000,000,000</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-indigo-800/60 to-indigo-900/80 border-indigo-600/50 hover:border-indigo-500/70 transition-all duration-300 transform hover:scale-105 text-center">
-            <CardHeader>
-              <div className="w-12 h-12 bg-indigo-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Lock className="w-6 h-6 text-white" />
-              </div>
-              <CardTitle className="text-lg text-indigo-200">Tax</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-indigo-300 font-meme">0%</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto mt-12">
-          <Card className="bg-gradient-to-r from-cyan-800/60 to-cyan-900/80 border-cyan-600/50 text-center">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-center mb-4">
-                <div className="w-8 h-8 bg-cyan-700 rounded-full flex items-center justify-center mr-3">
-                  <Check className="w-5 h-5 text-white" />
+              {/* Value */}
+              {row.isCA ? (
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <span className="text-slate-300 truncate">{CONTRACT_ADDRESS}</span>
+                  <button
+                    onClick={handleCopy}
+                    className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border border-slate-700 text-slate-400 hover:text-white hover:border-slate-500 transition-colors flex-shrink-0"
+                    data-testid="button-copy-ca"
+                  >
+                    {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                    {copied ? "Copied" : "Copy"}
+                  </button>
                 </div>
-                <h3 className="font-bold text-xl text-cyan-200">LP Locked ✅</h3>
-              </div>
-              <p className="text-cyan-300">Liquidity locked. Permanently.</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-r from-slate-800/60 to-slate-900/80 border-slate-600/50 text-center">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-center mb-4">
-                <div className="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center mr-3">
-                  <Users className="w-5 h-5 text-white" />
+              ) : (
+                <div className="flex items-center gap-3 flex-1 flex-wrap">
+                  <span className="text-white font-semibold">{row.value}</span>
+                  {row.tag && (
+                    <span className={`text-xs ${row.tagColor} ${row.tagSmall ? "opacity-70" : "font-bold"}`}>
+                      [{row.tag}]
+                    </span>
+                  )}
                 </div>
-                <h3 className="font-bold text-xl text-slate-200">Team Allocation: 0%</h3>
-              </div>
-              <p className="text-slate-300">Zero team allocation. Full community ownership.</p>
-            </CardContent>
-          </Card>
+              )}
+            </div>
+          ))}
         </div>
+
+        {/* Distribution summary */}
+        <div
+          className="mt-4 bg-slate-900/70 border border-slate-700/60 rounded-xl px-6 py-5 font-mono"
+          style={{ borderLeft: "3px solid rgba(148,163,184,0.3)" }}
+        >
+          <p className="text-xs text-slate-500 uppercase tracking-widest mb-1.5">Distribution</p>
+          <p className="text-slate-300 text-sm">
+            100% Public Circulation.{" "}
+            <span className="text-slate-500">0% Team Reserve.</span>{" "}
+            <span className="text-slate-500">0% Marketing Tax.</span>
+          </p>
+        </div>
+
       </div>
     </section>
   );
