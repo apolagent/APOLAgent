@@ -32,7 +32,7 @@ export default function HeroSection() {
           <img
             src="/ape-police-logo.png"
             alt="APE POLICE official seal"
-            className="w-20 h-20 md:w-24 md:h-24 mx-auto rounded-full border-2 border-yellow-400 neon-glow object-cover"
+            className="w-36 h-36 md:w-48 md:h-48 mx-auto rounded-full border-2 border-yellow-400 neon-glow object-cover"
           />
         </div>
 
