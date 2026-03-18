@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Trophy, AlertTriangle, ShieldCheck, ScanLine, Shield } from "lucide-react";
+import { MessageSquare, Trophy, AlertTriangle, Shield } from "lucide-react";
 import { Link } from "wouter";
 
 export default function ChannelSection() {
@@ -10,37 +10,10 @@ export default function ChannelSection() {
 
           {/* Left column */}
           <div>
-            <p className="text-xs text-slate-500 uppercase tracking-widest mb-4">Intelligence Channel</p>
-            <h2 className="font-meme text-4xl md:text-6xl gradient-text mb-6">
-              APOL Agent: Autonomous Market Integrity
+            <h2 className="font-meme text-4xl md:text-6xl gradient-text mb-3 uppercase">
+              Agent Verification
             </h2>
-            <div className="space-y-4 mb-8">
-              <p className="text-base text-slate-300 leading-relaxed">
-                Ape Police provides a real-time verification layer for the agentic economy. By cross-referencing on-chain execution with autonomous reasoning logs, the APOL Agent eliminates market asymmetry and exposes developer LARPs before they impact the retail holder.
-              </p>
-            </div>
-
-            {/* Feature cards */}
-            <div className="space-y-3 mb-8">
-              <div className="bg-slate-900/70 border border-slate-700/60 rounded-xl px-5 py-4 flex gap-4 items-start">
-                <div className="w-9 h-9 bg-slate-800 border border-slate-700 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <ShieldCheck className="w-5 h-5 text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Risk Mitigation</p>
-                  <p className="text-slate-300 text-sm leading-relaxed">Cross-references wallet history and contract patterns against known threat signatures.</p>
-                </div>
-              </div>
-              <div className="bg-slate-900/70 border border-slate-700/60 rounded-xl px-5 py-4 flex gap-4 items-start">
-                <div className="w-9 h-9 bg-slate-800 border border-slate-700 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <ScanLine className="w-5 h-5 text-green-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Algorithmic Verification</p>
-                  <p className="text-slate-300 text-sm leading-relaxed">Scores agent identities against the Cognition Index — detecting LARPs and Sybil clusters in real time.</p>
-                </div>
-              </div>
-            </div>
+            <p className="text-xs text-slate-500 tracking-widest mb-10">[SEC:2026-COMPLIANT-SCANNER]</p>
 
             {/* Action buttons */}
             <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
