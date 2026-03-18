@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import {
-  ArrowLeft, Bot, Zap, FileText, AlertTriangle, CheckCircle,
-  XCircle, Loader2, ChevronRight, Search, Brain, Clock, HelpCircle,
-  Activity, Eye,
+  ArrowLeft, Bot, FileText, AlertTriangle, CheckCircle,
+  XCircle, Loader2, ChevronRight, Search, Brain, HelpCircle, Info,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,11 +28,6 @@ type AgentResult = {
 
 type StatusColor = "green" | "red" | "yellow" | "grey";
 
-function dot(color: StatusColor) {
-  const cls = { green: "bg-green-400", red: "bg-red-500", yellow: "bg-yellow-400", grey: "bg-slate-500" }[color];
-  return <span className={`inline-block w-2 h-2 rounded-full ${cls} flex-shrink-0`} />;
-}
-
 function StatusBadge({ status, label }: { status: StatusColor; label: string }) {
   const cfg: Record<StatusColor, string> = {
     green: "bg-green-900/40 border-green-600/50 text-green-300",
@@ -41,9 +35,12 @@ function StatusBadge({ status, label }: { status: StatusColor; label: string }) 
     yellow: "bg-yellow-900/40 border-yellow-600/50 text-yellow-300",
     grey: "bg-slate-800 border-slate-600 text-slate-400",
   };
+  const dot: Record<StatusColor, string> = {
+    green: "bg-green-400", red: "bg-red-500", yellow: "bg-yellow-400", grey: "bg-slate-500",
+  };
   return (
     <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${cfg[status]}`}>
-      {dot(status)}
+      <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${dot[status]}`} />
       {label.toUpperCase()}
     </span>
   );
@@ -65,6 +62,39 @@ function oneLineSummary(r: AgentResult): string {
   return `Verdict based on ${parts.slice(0, 2).join(" and ")}.`;
 }
 
+// Derive the 3 Evidence Filing items from result
+function getEvidenceFiling(r: AgentResult | null, formState: { wallet: string; logsUrl: string; socialLink: string }) {
+  if (!r) {
+    // Pre-scan: reflect form readiness
+    return [
+      {
+        emoji: "🕒", label: "Liveliness",
+        status: formState.wallet.trim() ? "green" as StatusColor : "grey" as StatusColor,
+        tag: formState.wallet.trim() ? "Active" : "Passive",
+      },
+      {
+        emoji: "🧠", label: "Reasoning",
+        status: formState.logsUrl.trim() ? "green" as StatusColor : "yellow" as StatusColor,
+        tag: formState.logsUrl.trim() ? "Verified" : "Unlinked",
+      },
+      {
+        emoji: "👥", label: "Sybil Check",
+        status: formState.socialLink.trim() ? "green" as StatusColor : "grey" as StatusColor,
+        tag: formState.socialLink.trim() ? "Clear" : "Pending",
+      },
+    ];
+  }
+  // Post-scan: use actual results
+  const liveStatus: StatusColor = !r.speedTest.scored ? "grey" : r.speedTest.score >= 12 ? "green" : "red";
+  const reasoningStatus: StatusColor = r.logsTest.status === "verified" ? "green" : r.logsTest.status === "mismatch" ? "red" : "yellow";
+  const sybilStatus: StatusColor = r.socialTest.status === "clear" ? "green" : r.socialTest.status === "suspicious" ? "red" : "grey";
+  return [
+    { emoji: "🕒", label: "Liveliness", status: liveStatus, tag: liveStatus === "green" ? "Active" : "Passive" },
+    { emoji: "🧠", label: "Reasoning", status: reasoningStatus, tag: reasoningStatus === "green" ? "Verified" : "Unlinked" },
+    { emoji: "👥", label: "Sybil Check", status: sybilStatus, tag: sybilStatus === "green" ? "Clear" : sybilStatus === "red" ? "Suspicious" : "Unverified" },
+  ];
+}
+
 export default function AgentScanner() {
   const [agentName, setAgentName] = useState("");
   const [socialLink, setSocialLink] = useState("");
@@ -75,6 +105,7 @@ export default function AgentScanner() {
   const [result, setResult] = useState<AgentResult | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [showSysInfo, setShowSysInfo] = useState(false);
 
   const handleScan = async () => {
     if (!agentName.trim()) { setScanError("Agent name is required."); return; }
@@ -113,56 +144,7 @@ export default function AgentScanner() {
     "Inconclusive": { color: "text-slate-400", border: "border-slate-700", icon: <HelpCircle className="w-5 h-5 text-slate-400" /> },
   }[v] ?? { color: "text-slate-400", border: "border-slate-700", icon: null });
 
-  // Pre-scan readiness grid (based on form state)
-  const preScanRows = [
-    { icon: <Zap className="w-3.5 h-3.5 text-yellow-400" />, label: "Speed Test", status: wallet.trim() ? "green" as StatusColor : "red" as StatusColor, tag: wallet.trim() ? "Wallet Provided" : "No Wallet", detail: wallet.trim() ? wallet.slice(0, 12) + "…" : "Required for on-chain analysis" },
-    { icon: <FileText className="w-3.5 h-3.5 text-blue-400" />, label: "Reasoning", status: logsUrl.trim() ? "green" as StatusColor : "yellow" as StatusColor, tag: logsUrl.trim() ? "Logs URL Provided" : "Missing", detail: logsUrl.trim() ? logsUrl.slice(0, 28) + "…" : "Optional but improves accuracy" },
-    { icon: <Bot className="w-3.5 h-3.5 text-purple-400" />, label: "Social Integrity", status: socialLink.trim() ? "green" as StatusColor : "yellow" as StatusColor, tag: socialLink.trim() ? "Link Provided" : "Not Provided", detail: socialLink.trim() ? socialLink : "Optional X or Telegram link" },
-  ];
-
-  // Post-scan results rows (all 5 tests)
-  const postScanRows = (r: AgentResult) => [
-    {
-      icon: <Zap className="w-3.5 h-3.5 text-yellow-400" />,
-      label: "Speed",
-      status: !r.speedTest.scored ? "grey" as StatusColor : r.speedTest.score >= 25 ? "green" as StatusColor : r.speedTest.score >= 12 ? "yellow" as StatusColor : "red" as StatusColor,
-      tag: !r.speedTest.scored ? "Inconclusive" : r.speedTest.label,
-      detail: r.speedTest.scored ? r.speedTest.detail : "No wallet data",
-      chips: r.speedTest.timingPattern?.slice(0, 3),
-    },
-    {
-      icon: <Activity className="w-3.5 h-3.5 text-cyan-400" />,
-      label: "Traceability",
-      status: !r.traceabilityTest.scored ? "grey" as StatusColor : r.traceabilityTest.score >= 15 ? "green" as StatusColor : r.traceabilityTest.score >= 8 ? "yellow" as StatusColor : "red" as StatusColor,
-      tag: !r.traceabilityTest.scored ? "Inconclusive" : r.traceabilityTest.label,
-      detail: r.traceabilityTest.scored ? r.traceabilityTest.detail : "No wallet provided",
-    },
-    {
-      icon: <Eye className="w-3.5 h-3.5 text-orange-400" />,
-      label: "Context Match",
-      status: !r.contextTest.scored ? "grey" as StatusColor : r.contextTest.score >= 15 ? "green" as StatusColor : r.contextTest.score >= 8 ? "yellow" as StatusColor : "red" as StatusColor,
-      tag: !r.contextTest.scored ? "Inconclusive" : r.contextTest.label,
-      detail: r.contextTest.scored ? r.contextTest.detail : "No claims provided",
-    },
-    {
-      icon: <FileText className="w-3.5 h-3.5 text-blue-400" />,
-      label: "Reasoning Logs",
-      status: r.logsTest.status === "verified" ? "green" as StatusColor : r.logsTest.status === "mismatch" ? "red" as StatusColor : "grey" as StatusColor,
-      tag: r.logsTest.status === "verified" ? "Verified" : r.logsTest.status === "mismatch" ? "Mismatch" : "No Logs",
-      detail: r.logsTest.detail,
-      chips: r.logsTest.logs?.slice(0, 2),
-    },
-    {
-      icon: <Bot className="w-3.5 h-3.5 text-purple-400" />,
-      label: "Social Integrity",
-      status: r.socialTest.status === "clear" ? "green" as StatusColor : r.socialTest.status === "suspicious" ? "red" as StatusColor : "grey" as StatusColor,
-      tag: r.socialTest.status === "clear" ? "Legacy" : r.socialTest.status === "suspicious" ? "Sybil Alert" : "Unverified",
-      detail: r.socialTest.followers !== undefined
-        ? `${r.socialTest.followers.toLocaleString()} followers${r.socialTest.accountAgeDays !== undefined ? ` · ${r.socialTest.accountAgeDays}d old` : ""}`
-        : r.socialTest.detail,
-    },
-  ];
-
+  const evidence = getEvidenceFiling(result, { wallet, logsUrl, socialLink });
   const vm = result ? verdictMeta(result.verdict) : null;
 
   return (
@@ -184,8 +166,8 @@ export default function AgentScanner() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-10 space-y-6">
-        {/* Hero */}
-        <div className="text-center space-y-3">
+        {/* Hero — no scoring legend */}
+        <div className="text-center space-y-2">
           <div className="inline-flex items-center gap-2 bg-blue-900/40 border border-blue-600/40 rounded-full px-4 py-1.5 text-blue-300 text-sm font-semibold">
             <Bot className="w-4 h-4" /> Scan Agent Utility
           </div>
@@ -193,11 +175,6 @@ export default function AgentScanner() {
           <p className="text-slate-400 text-sm max-w-xl mx-auto">
             The Patrol only deals in hard evidence. No data = no verdict.
           </p>
-          <div className="flex flex-wrap justify-center gap-4 text-xs text-slate-600 pt-1">
-            <span className="flex items-center gap-1.5">{dot("red")} 0–30% Digital Puppet</span>
-            <span className="flex items-center gap-1.5">{dot("yellow")} 31–70% Semi-Autonomous</span>
-            <span className="flex items-center gap-1.5">{dot("green")} 71–100% Fully Autonomous</span>
-          </div>
         </div>
 
         {/* Form */}
@@ -216,7 +193,7 @@ export default function AgentScanner() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="text-sm text-slate-300 mb-1.5 block font-medium">X or Telegram Link <span className="text-slate-500 text-xs font-normal">· Social Integrity check</span></label>
+                <label className="text-sm text-slate-300 mb-1.5 block font-medium">X or Telegram Link <span className="text-slate-500 text-xs font-normal">· Social check</span></label>
                 <Input placeholder="https://x.com/AgentHandle" value={socialLink} onChange={e => setSocialLink(e.target.value)}
                   className="bg-slate-800 border-slate-600 text-white placeholder-slate-500" data-testid="input-social-link" />
               </div>
@@ -229,7 +206,7 @@ export default function AgentScanner() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="md:col-span-2">
-                <label className="text-sm text-slate-300 mb-1.5 block font-medium">Wallet Address <span className="text-slate-500 text-xs font-normal">· Speed + Traceability tests</span></label>
+                <label className="text-sm text-slate-300 mb-1.5 block font-medium">Wallet Address <span className="text-slate-500 text-xs font-normal">· Liveliness check</span></label>
                 <Input placeholder="0x… or Solana address" value={wallet} onChange={e => setWallet(e.target.value)}
                   className="bg-slate-800 border-slate-600 text-white placeholder-slate-500 font-mono text-sm" data-testid="input-agent-wallet" />
               </div>
@@ -281,17 +258,16 @@ export default function AgentScanner() {
           </CardContent>
         </Card>
 
-        {/* Pre-scan readiness table */}
+        {/* Evidence Filing — pre-scan (form state) */}
         {!result && (
           <div>
-            <p className="text-xs text-slate-600 uppercase tracking-widest font-semibold mb-2 px-1">Evidence Locker</p>
-            <div className="rounded-xl overflow-hidden border border-slate-700/60 bg-slate-900 divide-y divide-slate-800">
-              {preScanRows.map((row, i) => (
-                <div key={i} className="grid grid-cols-[28px_1fr_auto] sm:grid-cols-[28px_120px_1fr_auto] items-center gap-3 px-4 py-3">
-                  <span className="text-slate-500">{row.icon}</span>
-                  <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider hidden sm:block">{row.label}</span>
-                  <span className="text-slate-500 text-xs truncate hidden sm:block">{row.detail}</span>
-                  <StatusBadge status={row.status} label={row.tag} />
+            <p className="text-xs text-slate-600 uppercase tracking-widest font-semibold mb-3 px-1">Evidence Filing</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {evidence.map((item, i) => (
+                <div key={i} className="bg-slate-900 border border-slate-700/60 rounded-xl p-4 flex flex-col items-center gap-2 text-center">
+                  <span className="text-3xl">{item.emoji}</span>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{item.label}</p>
+                  <StatusBadge status={item.status} label={item.tag} />
                 </div>
               ))}
             </div>
@@ -330,40 +306,17 @@ export default function AgentScanner() {
               </div>
             </div>
 
-            {/* Post-scan results table — all 5 tests */}
+            {/* Evidence Filing — post-scan results */}
             <div>
-              <p className="text-xs text-slate-600 uppercase tracking-widest font-semibold mb-2 px-1">Evidence Locker</p>
-              <div className="rounded-xl overflow-hidden border border-slate-700/60 bg-slate-900">
-                <div className="grid grid-cols-3 bg-slate-800/60 text-slate-500 text-xs uppercase tracking-wider px-4 py-2.5 font-semibold">
-                  <span>Test</span>
-                  <span>Status</span>
-                  <span className="hidden sm:block">Detail</span>
-                </div>
-                <div className="divide-y divide-slate-800">
-                  {postScanRows(result).map((row, i) => (
-                    <div key={i} className="grid grid-cols-3 items-start gap-3 px-4 py-3">
-                      <div className="flex items-center gap-2 text-slate-300 text-sm font-medium">
-                        {row.icon}
-                        <span>{row.label}</span>
-                      </div>
-                      <div>
-                        <StatusBadge status={row.status} label={row.tag} />
-                      </div>
-                      <div className="hidden sm:block space-y-1">
-                        <span className="text-slate-500 text-xs">{row.detail}</span>
-                        {row.chips && row.chips.length > 0 && (
-                          <div className="flex flex-wrap gap-1 pt-0.5">
-                            {row.chips.map((c, j) => (
-                              <span key={j} className="text-xs font-mono bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                <Clock className="w-2.5 h-2.5 text-slate-600" />{c}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              <p className="text-xs text-slate-600 uppercase tracking-widest font-semibold mb-3 px-1">Evidence Filing</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {evidence.map((item, i) => (
+                  <div key={i} className="bg-slate-900 border border-slate-700/60 rounded-xl p-5 flex flex-col items-center gap-2 text-center">
+                    <span className="text-3xl">{item.emoji}</span>
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{item.label}</p>
+                    <StatusBadge status={item.status} label={item.tag} />
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -395,6 +348,27 @@ export default function AgentScanner() {
             </div>
           </div>
         )}
+
+        {/* System Info — collapsed by default */}
+        <div className="pt-4 border-t border-slate-800/60 text-center">
+          <button
+            onClick={() => setShowSysInfo(v => !v)}
+            className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-400 transition-colors"
+            data-testid="button-system-info"
+          >
+            <Info className="w-3.5 h-3.5" />
+            System Info
+          </button>
+          {showSysInfo && (
+            <div className="mt-3 text-left bg-slate-900/60 border border-slate-800 rounded-xl px-5 py-4 text-xs text-slate-500 space-y-1.5 max-w-lg mx-auto">
+              <p><span className="text-slate-400 font-semibold">Scoring scale:</span> 0–30% = Digital Puppet · 31–70% = Semi-Autonomous · 71–100% = Fully Autonomous</p>
+              <p><span className="text-slate-400 font-semibold">Liveliness</span> — on-chain transaction timing analysis. Requires a wallet address.</p>
+              <p><span className="text-slate-400 font-semibold">Reasoning</span> — log endpoint verification. Requires a public logs URL.</p>
+              <p><span className="text-slate-400 font-semibold">Sybil Check</span> — social signal analysis via X/Telegram syndication data.</p>
+              <p className="text-slate-600 pt-1">Results are probabilistic indicators, not legal determinations. APE POLICE provides community intelligence only.</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
