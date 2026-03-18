@@ -289,7 +289,7 @@ export default function AgentScanner() {
           </CardContent>
         </Card>
 
-        {/* Evidence Locker — live pre-scan preview */}
+        {/* Evidence Locker, live pre-scan preview */}
         {!result && (
           <div>
             <p className="text-xs text-slate-600 uppercase tracking-widest font-semibold mb-2 px-1">Evidence Locker</p>
@@ -301,7 +301,7 @@ export default function AgentScanner() {
         {result && (
           <div id="larp-result" className="space-y-4">
 
-            {/* Verdict card — score + label + one sentence only */}
+            {/* Verdict card, score + label + one sentence only */}
             <div className={`bg-slate-900 border-2 rounded-xl p-6 flex flex-col md:flex-row items-center gap-6 ${vm?.border}`}>
               <div className="flex flex-col items-center gap-1 min-w-[110px]">
                 {result.cognitionScore !== null ? (
@@ -315,7 +315,7 @@ export default function AgentScanner() {
                     </div>
                   </>
                 ) : (
-                  <span className="font-orbitron text-5xl font-black text-slate-600" data-testid="text-cognition-score">—</span>
+                  <span className="font-orbitron text-5xl font-black text-slate-600" data-testid="text-cognition-score">N/A</span>
                 )}
               </div>
               <div className="flex-1 text-center md:text-left space-y-1.5">
@@ -329,7 +329,7 @@ export default function AgentScanner() {
               </div>
             </div>
 
-            {/* Evidence Locker — post-scan */}
+            {/* Evidence Locker, post-scan */}
             <div>
               <p className="text-xs text-slate-600 uppercase tracking-widest font-semibold mb-2 px-1">Evidence Locker</p>
               <EvidenceLocker cols={postScanCols(result)} />

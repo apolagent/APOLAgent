@@ -40,7 +40,7 @@ function WalletCard({ wallet }: { wallet: FlaggedWallet }) {
         </div>
         <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${colors.badge}`}>
           {wallet.riskLevel}
-          {isHighRisk && " — Serial Rugger"}
+          {isHighRisk && ", Serial Rugger"}
         </span>
       </div>
 

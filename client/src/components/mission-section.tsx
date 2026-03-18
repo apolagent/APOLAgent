@@ -55,7 +55,7 @@ export default function MissionSection() {
             </CardHeader>
             <CardContent>
               <p className="text-lg leading-relaxed mb-4">
-                📢 <span className="font-bold text-yellow-400">Run the APE POLICE Channel</span> — a public forum for exposing scams & rewarding real builders
+                📢 <span className="font-bold text-yellow-400">Run the APE POLICE Channel</span>, a public forum for exposing scams & rewarding real builders
               </p>
               <p className="text-slate-200">
                 Where the real work happens - community discussions, scam alerts, and recognition for crypto heroes.

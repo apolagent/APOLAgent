@@ -9,7 +9,7 @@ type Message = {
 const KB: { patterns: RegExp[]; answer: string }[] = [
   {
     patterns: [/hello|hi|hey|sup|yo|gm/i],
-    answer: "👋 GM, officer! I'm APOL Agent — your guide to the APE POLICE jungle. Ask me anything about the site, $APOL token, or how to fight crypto scams!",
+    answer: "👋 GM, officer! I'm APOL Agent, your guide to the APE POLICE jungle. Ask me anything about the site, $APOL token, or how to fight crypto scams!",
   },
   {
     patterns: [/what is ape police|what('s| is) this site|about/i],
@@ -45,7 +45,7 @@ const KB: { patterns: RegExp[]; answer: string }[] = [
   },
   {
     patterns: [/roadmap|plan|future|phase/i],
-    answer: "🗺️ The APE POLICE roadmap has multiple phases — from launching the token and community tools to expanding the watchdog platform and awarding crypto heroes. Scroll to the Roadmap section on the homepage to see all phases!",
+    answer: "🗺️ The APE POLICE roadmap has multiple phases, from launching the token and community tools to expanding the watchdog platform and awarding crypto heroes. Scroll to the Roadmap section on the homepage to see all phases!",
   },
   {
     patterns: [/buy.*apol|\$apol.*buy|where.*buy|how.*buy/i],
@@ -53,11 +53,11 @@ const KB: { patterns: RegExp[]; answer: string }[] = [
   },
   {
     patterns: [/safe|trust|legit|real/i],
-    answer: "✅ APE POLICE is community-driven and transparent. We don't give financial advice — just viral justice and jungle protection. Always DYOR before investing in anything!",
+    answer: "✅ APE POLICE is community-driven and transparent. We don't give financial advice, just viral justice and jungle protection. Always DYOR before investing in anything!",
   },
   {
     patterns: [/rug|rugpull|scam.*type|type.*scam/i],
-    answer: "⚠️ Common crypto scam types we track:\n• Rug Pulls — dev abandons + dumps tokens\n• Fake Tokens — impersonating real projects\n• Ponzi Schemes — paying old investors with new money\n• Phishing — fake sites stealing your wallet\n• Fake Airdrops — requiring you to send crypto first\n\nReport any of these on the Report a Scam page!",
+    answer: "⚠️ Common crypto scam types we track:\n• Rug Pulls, dev abandons + dumps tokens\n• Fake Tokens, impersonating real projects\n• Ponzi Schemes, paying old investors with new money\n• Phishing, fake sites stealing your wallet\n• Fake Airdrops, requiring you to send crypto first\n\nReport any of these on the Report a Scam page!",
   },
   {
     patterns: [/dyor|research|how.*safe/i],
@@ -69,7 +69,7 @@ const KB: { patterns: RegExp[]; answer: string }[] = [
   },
   {
     patterns: [/thanks|thank you|thx|ty|appreciate/i],
-    answer: "🫡 Anytime, officer! Stay safe in the crypto jungle. If you spot a scam, report it — together we protect the community. 🦍🚔",
+    answer: "🫡 Anytime, officer! Stay safe in the crypto jungle. If you spot a scam, report it, together we protect the community. 🦍🚔",
   },
   {
     patterns: [/bye|goodbye|cya|later/i],
@@ -110,7 +110,7 @@ const QUICK_QUESTIONS = [
 export default function ApolAgent() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { from: "agent", text: "👋 GM, officer! I'm **APOL Agent** — your APE POLICE guide. Ask me anything about the site, $APOL token, or how to fight crypto scams!" },
+    { from: "agent", text: "👋 GM, officer! I'm **APOL Agent**, your APE POLICE guide. Ask me anything about the site, $APOL token, or how to fight crypto scams!" },
   ]);
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -234,7 +234,7 @@ export default function ApolAgent() {
               </div>
             ))}
 
-            {/* Quick questions — show only at start */}
+            {/* Quick questions, show only at start */}
             {messages.length === 1 && (
               <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "4px" }}>
                 {QUICK_QUESTIONS.map((q) => (

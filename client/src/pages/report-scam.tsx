@@ -137,7 +137,7 @@ export default function ReportScam() {
       ? (result.greenBadge ? "passed all security checks ✅" : `red flags: ${result.redFlags?.join(", ")}`)
       : (result.walletFlags?.length ? `flagged for: ${result.walletFlags.join(", ")}` : "no external flags");
     return encodeURIComponent(
-      `🚨 APOL SECURITY ALERT 🚨\n\n${type} ${short} — ${risk}\nAPOL scan: ${issues}\n\nScanned by @ApePolice — #APOL #CryptoSafety #DYOR`
+      `🚨 APOL SECURITY ALERT 🚨\n\n${type} ${short}, ${risk}\nAPOL scan: ${issues}\n\nScanned by @ApePolice, #APOL #CryptoSafety #DYOR`
     );
   };
 
@@ -272,7 +272,7 @@ export default function ReportScam() {
               Scan CA or Wallet
             </CardTitle>
             <CardDescription className="text-gray-300">
-              Run a full security scan on any wallet or contract — detects honeypots, blacklisted addresses, high taxes, mint risks &amp; more
+              Run a full security scan on any wallet or contract, detects honeypots, blacklisted addresses, high taxes, mint risks &amp; more
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -358,7 +358,7 @@ export default function ReportScam() {
                           {checkResult.isHighRisk ? "Contract Danger Detected" : "Security Warnings Found"}
                         </h3>
                         <p className={`mt-1 font-semibold ${checkResult.isHighRisk ? "text-red-300" : "text-yellow-300"}`}>
-                          {checkResult.redFlags?.length} risk flag(s) — {checkResult.riskLevel}
+                          {checkResult.redFlags?.length} risk flag(s), {checkResult.riskLevel}
                         </p>
                       </div>
                     )}
@@ -433,7 +433,7 @@ export default function ReportScam() {
                       <div className="flex items-center gap-3 p-4 rounded-xl bg-green-900/30 border border-green-600/40 text-green-300">
                         <CheckCircle className="w-6 h-6 flex-shrink-0" />
                         <div>
-                          <p className="font-bold text-green-200">All Clear — Wallet Appears Safe</p>
+                          <p className="font-bold text-green-200">All Clear, Wallet Appears Safe</p>
                           <p className="text-sm text-green-400 mt-0.5">No malicious activity detected for this address.</p>
                         </div>
                       </div>
@@ -457,7 +457,7 @@ export default function ReportScam() {
                               {checkResult.isHighRisk ? "High Risk Wallet" : "Suspicious Wallet"}
                             </h3>
                             <p className={`mt-1 font-semibold ${checkResult.isHighRisk ? "text-red-300" : "text-yellow-300"}`}>
-                              {checkResult.totalFlags} flag(s) detected — {checkResult.riskLevel}
+                              {checkResult.totalFlags} flag(s) detected, {checkResult.riskLevel}
                             </p>
                           </>
                         )}
@@ -500,7 +500,7 @@ export default function ReportScam() {
                       </div>
                     </div>
 
-                    {/* Share to X — only if flagged */}
+                    {/* Share to X, only if flagged */}
                     {(checkResult.riskLevel !== "Clean" || checkResult.isNewOffender) && (
                       <a
                         data-testid="button-share-x"

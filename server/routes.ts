@@ -124,7 +124,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ error: "address, chain, and description are required" });
     }
 
-    // Attempt external report submission — gracefully fall back to internal DB on any failure
+    // Attempt external report submission, gracefully fall back to internal DB on any failure
     let chainabuseOk = false;
     if (CHAINABUSE_API_KEY) {
       try {
@@ -147,7 +147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Always save to internal database
     try {
       await storage.createScamReport({
-        title: `[${chain.toUpperCase()}] ${address.slice(0, 10)}… — ${(category || "scam").replace(/_/g, " ")}`,
+        title: `[${chain.toUpperCase()}] ${address.slice(0, 10)}…, ${(category || "scam").replace(/_/g, " ")}`,
         description: `${description}\n\n[Chain: ${chain}] [Address: ${address}]`,
         reportedBy: 1,
         scamType: category || "Other",
@@ -177,18 +177,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   function buildWalletVerdict(flags: string[], riskLevel: string, internalFlag: boolean): string {
     if (flags.length === 0 && !internalFlag) {
       return pickRandom([
-        `Citizen, this wallet appears clean in our security scan. No malicious activity detected. Stay vigilant out there — APE POLICE are always watching. 🦍`,
+        `Citizen, this wallet appears clean in our security scan. No malicious activity detected. Stay vigilant out there, APE POLICE are always watching. 🦍`,
         `All clear on this one, Citizen. Our scan shows no blacklist flags, no sanctions, no criminal activity. Proceed with standard caution. 🦍`,
         `Nothing here, Citizen. Clean as a whistle. Our security scan shows no malicious patterns for this address. 🦍`,
-        `Wallet cleared, Citizen. No flags, no sanctions, no phishing history. I've seen a thousand scammers — this one doesn't match any known patterns. 🦍`,
-        `No charges, no record, no flags. This wallet is clean for now, Citizen. Don't go getting sloppy — always do your homework before you ape in. 🦍`,
+        `Wallet cleared, Citizen. No flags, no sanctions, no phishing history. I've seen a thousand scammers, this one doesn't match any known patterns. 🦍`,
+        `No charges, no record, no flags. This wallet is clean for now, Citizen. Don't go getting sloppy, always do your homework before you ape in. 🦍`,
       ]);
     }
     if (internalFlag && flags.length === 0) {
       return pickRandom([
         `Fresh off the crime scene, Citizen. Our external scan shows clean but APE POLICE internal intelligence flagged this address in the last 24 hours. Treat as High Risk. 🚨`,
         `New to our system but already on our radar. Internal reports link this wallet to suspicious activity in the last 24 hours. 🚨`,
-        `Our external scan shows nothing yet — but our community flagged this address recently. New criminals don't have records until they do, Citizen. 🚨`,
+        `Our external scan shows nothing yet, but our community flagged this address recently. New criminals don't have records until they do, Citizen. 🚨`,
         `Brand new threat detected. No external scan history, but APE POLICE internal sources lit up for this wallet. Stay far away. 🚨`,
         `First offense, Citizen. No external record yet, but our internal intelligence says otherwise. Consider this address hostile. 🚨`,
       ]);
@@ -200,14 +200,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         `Warrant issued, Citizen. APE POLICE has flagged this address for: ${flagList}. This is a KNOWN THREAT. Back away and do not engage. 🚨`,
         `RED ALERT, Citizen. Criminal record confirmed: ${flagList}. I've arrested scammers like this before. Run. 🚨`,
         `I've been on the force a long time, Citizen. This wallet? Pure criminal. Flagged for ${flagList}. Suspect goes straight to the hall of shame. 🚨`,
-        `Citizen, our database and security scan both agree — this address is DANGEROUS. Charges: ${flagList}. Do NOT touch this wallet. 🚨`,
+        `Citizen, our database and security scan both agree, this address is DANGEROUS. Charges: ${flagList}. Do NOT touch this wallet. 🚨`,
       ]);
     }
     return pickRandom([
-      `Citizen, this wallet has flags on record: ${flagList}. Approach with caution — this is an active investigation. 🔍`,
+      `Citizen, this wallet has flags on record: ${flagList}. Approach with caution, this is an active investigation. 🔍`,
       `Hold it right there, Citizen. APE POLICE flagged this address for: ${flagList}. I'd keep my distance if I were you. 🔍`,
       `Suspicious activity logged, Citizen. Flags detected: ${flagList}. We're watching this one closely. Don't get caught in the crossfire. 🔍`,
-      `This address is on our watchlist, Citizen — flagged for ${flagList}. Tread carefully. You've been officially warned. 🔍`,
+      `This address is on our watchlist, Citizen, flagged for ${flagList}. Tread carefully. You've been officially warned. 🔍`,
       `Our records don't look great for this wallet, Citizen. Flags: ${flagList}. Don't say I didn't warn you. 🔍`,
     ]);
   }
@@ -218,9 +218,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return pickRandom([
         `Citizen, I ran a full security scan on ${token}. Open source, no honeypot, taxes in check, no mint function. This one looks legit. Always DYOR before aping in. ✅`,
         `${token} passes all APE POLICE security checks. No honeypot, no hidden taxes, no unlimited minting. Green badge earned, Citizen. ✅`,
-        `All systems go on ${token}, Citizen. Our scan shows clean on every metric I track. Liquidity, taxes, mint — all pass. ✅`,
+        `All systems go on ${token}, Citizen. Our scan shows clean on every metric I track. Liquidity, taxes, mint, all pass. ✅`,
         `Citizen, ${token} has earned the APE POLICE Green Badge. Verified open source, safe tax structure, no malicious functions detected. ✅`,
-        `I've checked ${token} top to bottom. No traps. No honeypot. No rug mechanics. This one checks out, Citizen — but stay alert. ✅`,
+        `I've checked ${token} top to bottom. No traps. No honeypot. No rug mechanics. This one checks out, Citizen, but stay alert. ✅`,
       ]);
     }
     const issues = redFlags.join("; ");
@@ -228,14 +228,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return pickRandom([
         `Citizen, ${token} is a TRAP. APE POLICE flagged: ${issues}. Do NOT buy this token. This has rug written all over it. 🚨`,
         `Stop right there, Citizen. ${token} failed critical security checks: ${issues}. Walk away. This is a known rug pattern. 🚨`,
-        `RED ALERT on ${token}. My scan shows: ${issues}. I've seen this a thousand times — stay far away. 🚨`,
+        `RED ALERT on ${token}. My scan shows: ${issues}. I've seen this a thousand times, stay far away. 🚨`,
         `Warrant issued for ${token}. Security violations: ${issues}. Do not interact with this contract under any circumstances. 🚨`,
         `Citizen, ${token} has multiple critical red flags: ${issues}. Your funds will not survive this trade. I'm ordering you to stand down. 🚨`,
       ]);
     }
     return pickRandom([
       `Citizen, ${token} raised some flags during our scan: ${issues}. Proceed with caution and verify before trading. 🔍`,
-      `Hold up, Citizen. ${token} has warnings: ${issues}. Not a confirmed rug — but tread carefully. 🔍`,
+      `Hold up, Citizen. ${token} has warnings: ${issues}. Not a confirmed rug, but tread carefully. 🔍`,
       `${token} is on our watchlist, Citizen. Issues detected: ${issues}. I'd do extra research on this one before touching it. 🔍`,
       `Our scan on ${token} returned warnings: ${issues}. Could be nothing. Could be everything. Stay sharp, Citizen. 🔍`,
       `Citizen, ${token} didn't fully pass our checks. Flags: ${issues}. Consider yourself officially warned before you ape in. 🔍`,
@@ -279,7 +279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const slippageModifiable = tokenData.slippage_modifiable === "1" || tokenData.slippage_modifiable === 1;
 
         const redFlags: string[] = [];
-        if (isHoneypot) redFlags.push("Honeypot — cannot sell");
+        if (isHoneypot) redFlags.push("Honeypot, cannot sell");
         if (buyTax > 10) redFlags.push(`High buy tax: ${buyTax.toFixed(1)}%`);
         if (sellTax > 10) redFlags.push(`High sell tax: ${sellTax.toFixed(1)}%`);
         if (isMintable) redFlags.push("Owner can mint unlimited tokens");
@@ -390,8 +390,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   function buildAgentVerdict(agentName: string, score: number | null, verdict: string): string {
     if (verdict === "Inconclusive") {
       return pickRandom([
-        `Citizen, I cannot issue a verdict on "${agentName}" — insufficient hard evidence submitted. No wallet, no verifiable logs, no on-chain footprint. The Patrol only deals in facts. Bring me something real. 🔍`,
-        `Inconclusive, Citizen. "${agentName}" has provided no verifiable data for analysis. Real agents leave traces — wallets, logs, on-chain records. Come back with evidence. 📋`,
+        `Citizen, I cannot issue a verdict on "${agentName}", insufficient hard evidence submitted. No wallet, no verifiable logs, no on-chain footprint. The Patrol only deals in facts. Bring me something real. 🔍`,
+        `Inconclusive, Citizen. "${agentName}" has provided no verifiable data for analysis. Real agents leave traces, wallets, logs, on-chain records. Come back with evidence. 📋`,
         `Citizen, "${agentName}" cannot be classified. No on-chain address, no verifiable logs, nothing to analyze. I don't guess. Supply a wallet or logs URL and I'll give you a real verdict. 🦍`,
         `No verdict possible, Citizen. "${agentName}" is a name without a footprint. Until there is a wallet address, a logs endpoint, or a social link I can verify, this agent is not real to me. Evidence first. 🔐`,
         `Citizen, "${agentName}" remains unclassified. The APE POLICE Patrol requires hard evidence before issuing a Cognition Score. I will not fabricate certainty where none exists. 📊`,
@@ -399,27 +399,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     if (verdict === "Digital Puppet") {
       return pickRandom([
-        `Citizen, I've run a full behavioral analysis on "${agentName}". Cognition Score: ${score}%. DIGITAL PUPPET — a human hiding behind an AI label. No autonomous footprint, no verifiable on-chain execution. Don't let this project fool you. 🤖❌`,
-        `${score}% Cognition — that's a LARP, Citizen. "${agentName}" shows zero signs of genuine autonomous operation. Human timing, missing traces, unverifiable claims. Pure puppet show. 🎭`,
+        `Citizen, I've run a full behavioral analysis on "${agentName}". Cognition Score: ${score}%. DIGITAL PUPPET, a human hiding behind an AI label. No autonomous footprint, no verifiable on-chain execution. Don't let this project fool you. 🤖❌`,
+        `${score}% Cognition, that's a LARP, Citizen. "${agentName}" shows zero signs of genuine autonomous operation. Human timing, missing traces, unverifiable claims. Pure puppet show. 🎭`,
         `Citizen, "${agentName}" fails APE POLICE autonomous verification at ${score}%. This is a person pretending to be an AI to hype their project. Classic LARP behavior. Walk away. 🚨`,
-        `RED FLAG, Citizen. "${agentName}" scores only ${score}% on my Cognition Scale. Digital Puppet confirmed. The timing is human, the trace is missing, and the claims are hot air. This is not an AI agent — it's a marketing stunt. 🤡`,
+        `RED FLAG, Citizen. "${agentName}" scores only ${score}% on my Cognition Scale. Digital Puppet confirmed. The timing is human, the trace is missing, and the claims are hot air. This is not an AI agent, it's a marketing stunt. 🤡`,
         `Citizen, at ${score}%, "${agentName}" is a Digital Puppet. No autonomous execution, suspicious activity windows, and zero verifiable reasoning logs. LARP classification is final. 📋❌`,
       ]);
     }
     if (verdict === "Semi-Autonomous") {
       return pickRandom([
-        `Citizen, "${agentName}" scores ${score}% — Semi-Autonomous classification. This agent shows SOME signs of automation, but human approval or oversight is clearly present. Not a pure LARP, but not fully autonomous either. Demand more on-chain proof before trusting it with your funds. 🔍`,
-        `${score}% Cognition Score, Citizen. "${agentName}" is a gray zone. Mixed patterns — some automated behavior, some human fingerprints. Proceed with caution and ask for reasoning logs. 🧐`,
+        `Citizen, "${agentName}" scores ${score}%, Semi-Autonomous classification. This agent shows SOME signs of automation, but human approval or oversight is clearly present. Not a pure LARP, but not fully autonomous either. Demand more on-chain proof before trusting it with your funds. 🔍`,
+        `${score}% Cognition Score, Citizen. "${agentName}" is a gray zone. Mixed patterns, some automated behavior, some human fingerprints. Proceed with caution and ask for reasoning logs. 🧐`,
         `Citizen, "${agentName}" passes some of my tests but not all. ${score}% = Semi-Autonomous. The agent appears real in parts, but human co-piloting is likely. Verify before trusting. 🔍`,
-        `"${agentName}" — ${score}% Cognition. Semi-Autonomous, Citizen. Some on-chain traces check out but timing and traceability aren't fully consistent with pure AI operation. Stay alert. 🦍🔍`,
+        `"${agentName}", ${score}% Cognition. Semi-Autonomous, Citizen. Some on-chain traces check out but timing and traceability aren't fully consistent with pure AI operation. Stay alert. 🦍🔍`,
         `Citizen, my analysis of "${agentName}" yields ${score}%. Semi-Autonomous. Neither confirmed LARP nor confirmed AI. The agent may be legitimate but requires a human co-pilot. Do your due diligence. 📊`,
       ]);
     }
     return pickRandom([
-      `Citizen, "${agentName}" achieves ${score}% on the Cognition Scale — FULLY AUTONOMOUS confirmed. On-chain patterns, timing spread, and claim verification all check out. This looks like a genuine AI agent. APE POLICE credibility stamp — always DYOR though. 🦍✅`,
-      `${score}% Cognition — the real deal, Citizen. "${agentName}" shows consistent 24/7 on-chain execution, public traceability, and claims backed by verifiable wallet activity. This agent checks out. 🤖✅`,
+      `Citizen, "${agentName}" achieves ${score}% on the Cognition Scale, FULLY AUTONOMOUS confirmed. On-chain patterns, timing spread, and claim verification all check out. This looks like a genuine AI agent. APE POLICE credibility stamp, always DYOR though. 🦍✅`,
+      `${score}% Cognition, the real deal, Citizen. "${agentName}" shows consistent 24/7 on-chain execution, public traceability, and claims backed by verifiable wallet activity. This agent checks out. 🤖✅`,
       `Citizen, I've cleared "${agentName}" at ${score}%. Fully Autonomous classification. Round-the-clock activity, verifiable on-chain evidence, and strong traceability. This is what a real AI agent looks like. 🦍`,
-      `Full clearance for "${agentName}", Citizen. ${score}% Cognition — Fully Autonomous. Distributed timing, contract execution, and claim verification all pass. APE POLICE approved. 🔐✅`,
+      `Full clearance for "${agentName}", Citizen. ${score}% Cognition, Fully Autonomous. Distributed timing, contract execution, and claim verification all pass. APE POLICE approved. 🔐✅`,
       `Citizen, "${agentName}" passed every test at ${score}%. Fully Autonomous designation confirmed. If more agents were this transparent and traceable, this space would be a lot safer. APE POLICE respect. 🦍✅`,
     ]);
   }
@@ -435,11 +435,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       new Date(ts * 1000).toISOString().slice(0, 16).replace("T", " ") + " UTC"
     );
     let score = 0; let label = ""; let detail = "";
-    if (uniqueHours >= 12) { score = 38; label = "24/7 Automated"; detail = `Transactions span ${uniqueHours} unique UTC hours — true round-the-clock automation pattern.`; }
-    else if (uniqueHours >= 8) { score = 30; label = "Mostly Automated"; detail = `Activity spans ${uniqueHours} UTC hours — broad window consistent with automation.`; }
-    else if (uniqueHours >= 4) { score = 18; label = "Mixed Pattern"; detail = `${uniqueHours} unique active hours — semi-automated or time-zone restricted.`; }
-    else { score = 8; label = "Narrow Window"; detail = `Only ${uniqueHours} unique hour(s) — extremely concentrated timing, suggesting manual operation.`; }
-    if (bizRatio > 0.85) { score = Math.max(5, score - 18); label = "Human Hours ⚠️"; detail += ` ⚠️ ${Math.round(bizRatio * 100)}% of activity falls in business hours (8am–6pm UTC) — HIGH LARP RISK.`; }
+    if (uniqueHours >= 12) { score = 38; label = "24/7 Automated"; detail = `Transactions span ${uniqueHours} unique UTC hours, true round-the-clock automation pattern.`; }
+    else if (uniqueHours >= 8) { score = 30; label = "Mostly Automated"; detail = `Activity spans ${uniqueHours} UTC hours, broad window consistent with automation.`; }
+    else if (uniqueHours >= 4) { score = 18; label = "Mixed Pattern"; detail = `${uniqueHours} unique active hours, semi-automated or time-zone restricted.`; }
+    else { score = 8; label = "Narrow Window"; detail = `Only ${uniqueHours} unique hour(s), extremely concentrated timing, suggesting manual operation.`; }
+    if (bizRatio > 0.85) { score = Math.max(5, score - 18); label = "Human Hours ⚠️"; detail += ` ⚠️ ${Math.round(bizRatio * 100)}% of activity falls in business hours (8am–6pm UTC), HIGH LARP RISK.`; }
     else if (bizRatio > 0.65) { score = Math.max(8, score - 8); detail += ` Activity skewed toward business hours.`; }
     return { score, label, detail, timingPattern };
   }
@@ -531,9 +531,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } catch { /* BigInt not supported */ }
         }
         if (followers >= 10000 && accountAgeDays !== undefined && accountAgeDays <= 7)
-          return { status: "suspicious", detail: `@${handle}: ${followers.toLocaleString()} followers, account is only ${ageLabel}. This is a Sybil/Bot pattern — follower counts this high on a new account are virtually impossible organically. 🚨`, followers, accountAgeDays };
+          return { status: "suspicious", detail: `@${handle}: ${followers.toLocaleString()} followers, account is only ${ageLabel}. This is a Sybil/Bot pattern, follower counts this high on a new account are virtually impossible organically. 🚨`, followers, accountAgeDays };
         if (followers >= 10000 && accountAgeDays === undefined)
-          return { status: "suspicious", detail: `@${handle}: ${followers.toLocaleString()} followers. Account age could not be determined from the Twitter API — treat with caution if this account is recent.`, followers };
+          return { status: "suspicious", detail: `@${handle}: ${followers.toLocaleString()} followers. Account age could not be determined from the Twitter API, treat with caution if this account is recent.`, followers };
         return { status: "clear", detail: `@${handle}: ${followers.toLocaleString()} followers, ${ageLabel}. No Sybil pattern detected from available data.`, followers, accountAgeDays };
       } catch {
         return { status: "inconclusive", detail: `Could not fetch X profile data for the provided link. Twitter may be rate-limiting this request.` };
@@ -558,7 +558,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return { status: "inconclusive", detail: "Could not reach Telegram to verify the channel." };
       }
     }
-    return { status: "inconclusive", detail: "Link is not an X or Telegram URL — social integrity check skipped." };
+    return { status: "inconclusive", detail: "Link is not an X or Telegram URL, social integrity check skipped." };
   }
 
   app.post("/api/agent/analyze", async (req, res) => {
@@ -606,7 +606,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tsList = await fetchEvmTimestamps(explorerApis[chain], w);
         if (!tsList) { speedLabel = "No Transactions"; speedDetail = `No transactions found on ${chain.charAt(0).toUpperCase() + chain.slice(1)} for this address, or the block explorer is temporarily unavailable.`; }
       } else {
-        speedLabel = "Chain Unsupported"; speedDetail = `Direct transaction scanning is not available for ${chain} — wallet security analysis still performed.`;
+        speedLabel = "Chain Unsupported"; speedDetail = `Direct transaction scanning is not available for ${chain}, wallet security analysis still performed.`;
       }
 
       if (tsList && tsList.length > 0) {
@@ -616,7 +616,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         speedScored = true;
       }
     } else {
-      speedLabel = "Inconclusive — Missing Evidence";
+      speedLabel = "Inconclusive, Missing Evidence";
       speedDetail = "No wallet address provided. The Patrol cannot assess transaction timing without an on-chain address.";
     }
 
@@ -630,15 +630,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (isContract) { traceScore = 28; traceLabel = "Strong Trace"; traceDetail = `Smart contract at ${w.slice(0,10)}… + social presence. Strong autonomous footprint.`; }
         else { traceScore = 20; traceLabel = "Moderate Trace"; traceDetail = `EOA wallet at ${w.slice(0,10)}… + social presence confirmed.`; }
       } else {
-        if (isContract) { traceScore = 18; traceLabel = "Contract Found"; traceDetail = `Smart contract at ${w.slice(0,10)}… — programmatic execution possible.`; }
-        else { traceScore = 10; traceLabel = "Wallet Only"; traceDetail = `EOA wallet at ${w.slice(0,10)}… — basic trace. No social link cross-reference.`; }
+        if (isContract) { traceScore = 18; traceLabel = "Contract Found"; traceDetail = `Smart contract at ${w.slice(0,10)}…, programmatic execution possible.`; }
+        else { traceScore = 10; traceLabel = "Wallet Only"; traceDetail = `EOA wallet at ${w.slice(0,10)}…, basic trace. No social link cross-reference.`; }
       }
       if (hasSecurityFlags) { traceScore = Math.max(2, traceScore - 10); traceDetail += " ⚠️ Security flags on this wallet."; traceLabel += " ⚠️"; }
     } else if (sl) {
       traceScored = true; traceScore = 8; traceLabel = "Social Only";
       traceDetail = "Social link provided but no on-chain wallet to verify autonomous execution.";
     } else {
-      traceLabel = "Inconclusive — Missing Evidence";
+      traceLabel = "Inconclusive, Missing Evidence";
       traceDetail = "No wallet or social link. The Patrol cannot establish a trace without verifiable identifiers.";
     }
 
@@ -652,23 +652,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hasOnchain = ["deploy", "contract", "bridge", "stake", "yield", "farm", "mint"].some(k => c.includes(k));
       contextScored = true;
       if (!w) {
-        contextScore = 10; contextLabel = "Unverifiable — No Wallet";
-        contextDetail = `Claims: "${claims.slice(0, 90)}" — No wallet provided. Cannot verify on-chain. Always demand a verifiable address.`;
+        contextScore = 10; contextLabel = "Unverifiable, No Wallet";
+        contextDetail = `Claims: "${claims.slice(0, 90)}", No wallet provided. Cannot verify on-chain. Always demand a verifiable address.`;
       } else if (isContract && hasOnchain) {
         contextScore = 28; contextLabel = "Claim Verified ✓";
-        contextDetail = `Claims on-chain execution — wallet IS a smart contract, consistent with the claimed capabilities.`;
+        contextDetail = `Claims on-chain execution, wallet IS a smart contract, consistent with the claimed capabilities.`;
       } else if (hasTrade && onchainTimestamps.length > 0) {
         contextScore = 22; contextLabel = "Evidence Found";
-        contextDetail = `Claims trading/swapping — active on-chain wallet detected, consistent with automated execution.`;
+        contextDetail = `Claims trading/swapping, active on-chain wallet detected, consistent with automated execution.`;
       } else if (onchainTimestamps.length > 0) {
         contextScore = 15; contextLabel = "Partial Match";
-        contextDetail = `Claims: "${claims.slice(0, 80)}" — On-chain activity found but ability-specific proof is limited.`;
+        contextDetail = `Claims: "${claims.slice(0, 80)}", On-chain activity found but ability-specific proof is limited.`;
       } else {
         contextScore = 8; contextLabel = "No Evidence";
-        contextDetail = `Claims: "${claims.slice(0, 80)}" — Wallet is inactive. Claims cannot be verified on-chain.`;
+        contextDetail = `Claims: "${claims.slice(0, 80)}", Wallet is inactive. Claims cannot be verified on-chain.`;
       }
     } else {
-      contextLabel = "Inconclusive — No Claims";
+      contextLabel = "Inconclusive, No Claims";
       contextDetail = "No claimed abilities provided. Real agents have documented, verifiable capabilities.";
     }
 
