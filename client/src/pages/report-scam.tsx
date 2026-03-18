@@ -357,9 +357,11 @@ export default function ReportScam() {
                         <h3 className={`text-2xl font-black tracking-widest uppercase ${checkResult.isHighRisk ? "text-red-400" : "text-yellow-400"}`}>
                           {checkResult.isHighRisk ? "Contract Danger Detected" : "Security Warnings Found"}
                         </h3>
-                        <p className={`mt-1 font-semibold ${checkResult.isHighRisk ? "text-red-300" : "text-yellow-300"}`}>
-                          {checkResult.redFlags?.length} risk flag(s), {checkResult.riskLevel}
-                        </p>
+                        <div className="mt-2 flex justify-center">
+                          <span className={`text-xs font-black px-3 py-1 rounded-full uppercase tracking-widest border ${checkResult.isHighRisk ? "bg-red-500/20 text-red-300 border-red-500/40" : "bg-yellow-500/20 text-yellow-300 border-yellow-500/40"}`}>
+                            {checkResult.riskLevel}
+                          </span>
+                        </div>
                       </div>
                     )}
 
@@ -385,14 +387,13 @@ export default function ReportScam() {
                       })}
                     </div>
 
-                    {/* Red flag list */}
+                    {/* Red flag chips */}
                     {checkResult.redFlags && checkResult.redFlags.length > 0 && (
-                      <div className="space-y-1">
+                      <div className="flex flex-wrap gap-2">
                         {checkResult.redFlags.map((flag, i) => (
-                          <div key={i} className="flex items-center gap-2 text-sm text-red-300 px-1" data-testid={`div-red-flag-${i}`}>
-                            <XCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
-                            <span>{flag}</span>
-                          </div>
+                          <span key={i} className="text-xs px-3 py-1 rounded-full bg-red-900/40 border border-red-500/40 text-red-300 font-semibold" data-testid={`div-red-flag-${i}`}>
+                            🚩 {flag}
+                          </span>
                         ))}
                       </div>
                     )}
@@ -456,22 +457,13 @@ export default function ReportScam() {
                             <h3 className={`text-2xl font-black tracking-widest uppercase ${checkResult.isHighRisk ? "text-red-400" : "text-yellow-400"}`}>
                               {checkResult.isHighRisk ? "High Risk Wallet" : "Suspicious Wallet"}
                             </h3>
-                            <p className={`mt-1 font-semibold ${checkResult.isHighRisk ? "text-red-300" : "text-yellow-300"}`}>
-                              {checkResult.totalFlags} flag(s) detected, {checkResult.riskLevel}
-                            </p>
+                            <div className="mt-2 flex justify-center">
+                              <span className={`text-xs font-black px-3 py-1 rounded-full uppercase tracking-widest border ${checkResult.isHighRisk ? "bg-red-500/20 text-red-300 border-red-500/40" : "bg-yellow-500/20 text-yellow-300 border-yellow-500/40"}`}>
+                                {checkResult.riskLevel}
+                              </span>
+                            </div>
                           </>
                         )}
-                      </div>
-                    )}
-
-                    {/* Risk badge */}
-                    {checkResult.riskLevel && checkResult.riskLevel !== "Clean" && (
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-black px-3 py-1 rounded-full uppercase tracking-widest ${
-                          checkResult.isHighRisk ? "bg-red-500/20 text-red-400 border border-red-500/40" : "bg-yellow-500/20 text-yellow-400 border border-yellow-500/40"
-                        }`}>
-                          {checkResult.riskLevel}
-                        </span>
                       </div>
                     )}
 

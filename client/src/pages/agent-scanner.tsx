@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import {
   ArrowLeft, Bot, Zap, FileText, AlertTriangle, CheckCircle,
   XCircle, Loader2, ChevronRight, Search, Brain, Clock, HelpCircle,
+  Activity, Eye,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,41 +27,25 @@ type AgentResult = {
   socialTest: SocialTestResult;
 };
 
-function dot(color: "green" | "red" | "yellow" | "grey") {
+type StatusColor = "green" | "red" | "yellow" | "grey";
+
+function dot(color: StatusColor) {
   const cls = { green: "bg-green-400", red: "bg-red-500", yellow: "bg-yellow-400", grey: "bg-slate-500" }[color];
   return <span className={`inline-block w-2 h-2 rounded-full ${cls} flex-shrink-0`} />;
 }
 
-type LockerCol = { icon: React.ReactNode; label: string; status: "green" | "red" | "yellow" | "grey"; tag: string; lines?: string[] };
-
-function EvidenceLocker({ cols }: { cols: LockerCol[] }) {
+function StatusBadge({ status, label }: { status: StatusColor; label: string }) {
+  const cfg: Record<StatusColor, string> = {
+    green: "bg-green-900/40 border-green-600/50 text-green-300",
+    red: "bg-red-900/40 border-red-600/50 text-red-300",
+    yellow: "bg-yellow-900/40 border-yellow-600/50 text-yellow-300",
+    grey: "bg-slate-800 border-slate-600 text-slate-400",
+  };
   return (
-    <div className="grid grid-cols-3 gap-px bg-slate-700/40 rounded-xl overflow-hidden border border-slate-700/60">
-      {cols.map((col, i) => (
-        <div key={i} className="bg-slate-900 p-4 space-y-2">
-          <div className="flex items-center gap-1.5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-            {col.icon}
-            {col.label}
-          </div>
-          <div className="flex items-center gap-2">
-            {dot(col.status)}
-            <span className={`text-sm font-bold ${col.status === "green" ? "text-green-300" : col.status === "red" ? "text-red-400" : col.status === "yellow" ? "text-yellow-300" : "text-slate-400"}`}>
-              {col.tag}
-            </span>
-          </div>
-          {col.lines && col.lines.length > 0 && (
-            <div className="space-y-0.5 pt-1">
-              {col.lines.map((l, j) => (
-                <div key={j} className="flex items-center gap-1">
-                  <Clock className="w-2.5 h-2.5 text-slate-600 flex-shrink-0" />
-                  <span className="text-xs text-slate-500 font-mono">{l}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
+    <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${cfg[status]}`}>
+      {dot(status)}
+      {label.toUpperCase()}
+    </span>
   );
 }
 
@@ -128,46 +113,53 @@ export default function AgentScanner() {
     "Inconclusive": { color: "text-slate-400", border: "border-slate-700", icon: <HelpCircle className="w-5 h-5 text-slate-400" /> },
   }[v] ?? { color: "text-slate-400", border: "border-slate-700", icon: null });
 
-  // Pre-scan Evidence Locker (based on form state)
-  const preScanCols: LockerCol[] = [
-    {
-      icon: <Zap className="w-3 h-3" />, label: "Speed Test",
-      status: wallet.trim() ? "green" : "red",
-      tag: wallet.trim() ? "Ready" : "No Wallet",
-    },
-    {
-      icon: <FileText className="w-3 h-3" />, label: "Reasoning",
-      status: logsUrl.trim() ? "green" : "yellow",
-      tag: logsUrl.trim() ? "Ready" : "Missing",
-    },
-    {
-      icon: <Bot className="w-3 h-3" />, label: "Social Integrity",
-      status: socialLink.trim() ? "green" : "yellow",
-      tag: socialLink.trim() ? "Ready" : "Not Provided",
-    },
+  // Pre-scan readiness grid (based on form state)
+  const preScanRows = [
+    { icon: <Zap className="w-3.5 h-3.5 text-yellow-400" />, label: "Speed Test", status: wallet.trim() ? "green" as StatusColor : "red" as StatusColor, tag: wallet.trim() ? "Wallet Provided" : "No Wallet", detail: wallet.trim() ? wallet.slice(0, 12) + "…" : "Required for on-chain analysis" },
+    { icon: <FileText className="w-3.5 h-3.5 text-blue-400" />, label: "Reasoning", status: logsUrl.trim() ? "green" as StatusColor : "yellow" as StatusColor, tag: logsUrl.trim() ? "Logs URL Provided" : "Missing", detail: logsUrl.trim() ? logsUrl.slice(0, 28) + "…" : "Optional but improves accuracy" },
+    { icon: <Bot className="w-3.5 h-3.5 text-purple-400" />, label: "Social Integrity", status: socialLink.trim() ? "green" as StatusColor : "yellow" as StatusColor, tag: socialLink.trim() ? "Link Provided" : "Not Provided", detail: socialLink.trim() ? socialLink : "Optional X or Telegram link" },
   ];
 
-  // Post-scan Evidence Locker (based on result)
-  const postScanCols = (r: AgentResult): LockerCol[] => [
+  // Post-scan results rows (all 5 tests)
+  const postScanRows = (r: AgentResult) => [
     {
-      icon: <Zap className="w-3 h-3" />, label: "Speed Test",
-      status: !r.speedTest.scored ? "red" : r.speedTest.score >= 25 ? "green" : r.speedTest.score >= 12 ? "yellow" : "red",
+      icon: <Zap className="w-3.5 h-3.5 text-yellow-400" />,
+      label: "Speed",
+      status: !r.speedTest.scored ? "grey" as StatusColor : r.speedTest.score >= 25 ? "green" as StatusColor : r.speedTest.score >= 12 ? "yellow" as StatusColor : "red" as StatusColor,
       tag: !r.speedTest.scored ? "Inconclusive" : r.speedTest.label,
-      lines: r.speedTest.timingPattern?.slice(0, 3),
+      detail: r.speedTest.scored ? r.speedTest.detail : "No wallet data",
+      chips: r.speedTest.timingPattern?.slice(0, 3),
     },
     {
-      icon: <FileText className="w-3 h-3" />, label: "Reasoning",
-      status: r.logsTest.status === "verified" ? "green" : r.logsTest.status === "mismatch" ? "red" : "yellow",
-      tag: r.logsTest.status === "verified" ? "Verified" : r.logsTest.status === "mismatch" ? "Mismatch" : "Missing",
-      lines: r.logsTest.logs?.slice(0, 2),
+      icon: <Activity className="w-3.5 h-3.5 text-cyan-400" />,
+      label: "Traceability",
+      status: !r.traceabilityTest.scored ? "grey" as StatusColor : r.traceabilityTest.score >= 15 ? "green" as StatusColor : r.traceabilityTest.score >= 8 ? "yellow" as StatusColor : "red" as StatusColor,
+      tag: !r.traceabilityTest.scored ? "Inconclusive" : r.traceabilityTest.label,
+      detail: r.traceabilityTest.scored ? r.traceabilityTest.detail : "No wallet provided",
     },
     {
-      icon: <Bot className="w-3 h-3" />, label: "Social Integrity",
-      status: r.socialTest.status === "clear" ? "green" : r.socialTest.status === "suspicious" ? "red" : "grey",
+      icon: <Eye className="w-3.5 h-3.5 text-orange-400" />,
+      label: "Context Match",
+      status: !r.contextTest.scored ? "grey" as StatusColor : r.contextTest.score >= 15 ? "green" as StatusColor : r.contextTest.score >= 8 ? "yellow" as StatusColor : "red" as StatusColor,
+      tag: !r.contextTest.scored ? "Inconclusive" : r.contextTest.label,
+      detail: r.contextTest.scored ? r.contextTest.detail : "No claims provided",
+    },
+    {
+      icon: <FileText className="w-3.5 h-3.5 text-blue-400" />,
+      label: "Reasoning Logs",
+      status: r.logsTest.status === "verified" ? "green" as StatusColor : r.logsTest.status === "mismatch" ? "red" as StatusColor : "grey" as StatusColor,
+      tag: r.logsTest.status === "verified" ? "Verified" : r.logsTest.status === "mismatch" ? "Mismatch" : "No Logs",
+      detail: r.logsTest.detail,
+      chips: r.logsTest.logs?.slice(0, 2),
+    },
+    {
+      icon: <Bot className="w-3.5 h-3.5 text-purple-400" />,
+      label: "Social Integrity",
+      status: r.socialTest.status === "clear" ? "green" as StatusColor : r.socialTest.status === "suspicious" ? "red" as StatusColor : "grey" as StatusColor,
       tag: r.socialTest.status === "clear" ? "Legacy" : r.socialTest.status === "suspicious" ? "Sybil Alert" : "Unverified",
-      lines: r.socialTest.followers !== undefined
-        ? [`${r.socialTest.followers.toLocaleString()} followers${r.socialTest.accountAgeDays !== undefined ? ` · ~${r.socialTest.accountAgeDays}d old` : ""}`]
-        : undefined,
+      detail: r.socialTest.followers !== undefined
+        ? `${r.socialTest.followers.toLocaleString()} followers${r.socialTest.accountAgeDays !== undefined ? ` · ${r.socialTest.accountAgeDays}d old` : ""}`
+        : r.socialTest.detail,
     },
   ];
 
@@ -289,11 +281,20 @@ export default function AgentScanner() {
           </CardContent>
         </Card>
 
-        {/* Evidence Locker, live pre-scan preview */}
+        {/* Pre-scan readiness table */}
         {!result && (
           <div>
             <p className="text-xs text-slate-600 uppercase tracking-widest font-semibold mb-2 px-1">Evidence Locker</p>
-            <EvidenceLocker cols={preScanCols} />
+            <div className="rounded-xl overflow-hidden border border-slate-700/60 bg-slate-900 divide-y divide-slate-800">
+              {preScanRows.map((row, i) => (
+                <div key={i} className="grid grid-cols-[28px_1fr_auto] sm:grid-cols-[28px_120px_1fr_auto] items-center gap-3 px-4 py-3">
+                  <span className="text-slate-500">{row.icon}</span>
+                  <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider hidden sm:block">{row.label}</span>
+                  <span className="text-slate-500 text-xs truncate hidden sm:block">{row.detail}</span>
+                  <StatusBadge status={row.status} label={row.tag} />
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -301,16 +302,16 @@ export default function AgentScanner() {
         {result && (
           <div id="larp-result" className="space-y-4">
 
-            {/* Verdict card, score + label + one sentence only */}
+            {/* Verdict card */}
             <div className={`bg-slate-900 border-2 rounded-xl p-6 flex flex-col md:flex-row items-center gap-6 ${vm?.border}`}>
-              <div className="flex flex-col items-center gap-1 min-w-[110px]">
+              <div className="flex flex-col items-center gap-2 min-w-[110px]">
                 {result.cognitionScore !== null ? (
                   <>
                     <span className={`font-orbitron text-6xl font-black ${scoreColor(result.cognitionScore)}`} data-testid="text-cognition-score">
                       {result.cognitionScore}%
                     </span>
-                    <div className="w-20 bg-slate-800 rounded-full h-1.5 mt-1">
-                      <div className={`h-1.5 rounded-full ${scoreColor(result.cognitionScore).replace("text-", "bg-")}`}
+                    <div className="w-24 bg-slate-800 rounded-full h-2">
+                      <div className={`h-2 rounded-full transition-all ${scoreColor(result.cognitionScore).replace("text-", "bg-")}`}
                         style={{ width: `${result.cognitionScore}%` }} />
                     </div>
                   </>
@@ -318,7 +319,7 @@ export default function AgentScanner() {
                   <span className="font-orbitron text-5xl font-black text-slate-600" data-testid="text-cognition-score">N/A</span>
                 )}
               </div>
-              <div className="flex-1 text-center md:text-left space-y-1.5">
+              <div className="flex-1 text-center md:text-left space-y-2">
                 <div className="flex items-center justify-center md:justify-start gap-2">
                   {vm?.icon}
                   <span className={`font-orbitron text-2xl font-black ${vm?.color}`} data-testid="text-verdict">
@@ -329,10 +330,41 @@ export default function AgentScanner() {
               </div>
             </div>
 
-            {/* Evidence Locker, post-scan */}
+            {/* Post-scan results table — all 5 tests */}
             <div>
               <p className="text-xs text-slate-600 uppercase tracking-widest font-semibold mb-2 px-1">Evidence Locker</p>
-              <EvidenceLocker cols={postScanCols(result)} />
+              <div className="rounded-xl overflow-hidden border border-slate-700/60 bg-slate-900">
+                <div className="grid grid-cols-3 bg-slate-800/60 text-slate-500 text-xs uppercase tracking-wider px-4 py-2.5 font-semibold">
+                  <span>Test</span>
+                  <span>Status</span>
+                  <span className="hidden sm:block">Detail</span>
+                </div>
+                <div className="divide-y divide-slate-800">
+                  {postScanRows(result).map((row, i) => (
+                    <div key={i} className="grid grid-cols-3 items-start gap-3 px-4 py-3">
+                      <div className="flex items-center gap-2 text-slate-300 text-sm font-medium">
+                        {row.icon}
+                        <span>{row.label}</span>
+                      </div>
+                      <div>
+                        <StatusBadge status={row.status} label={row.tag} />
+                      </div>
+                      <div className="hidden sm:block space-y-1">
+                        <span className="text-slate-500 text-xs">{row.detail}</span>
+                        {row.chips && row.chips.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-0.5">
+                            {row.chips.map((c, j) => (
+                              <span key={j} className="text-xs font-mono bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                <Clock className="w-2.5 h-2.5 text-slate-600" />{c}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* Officer verdict */}
