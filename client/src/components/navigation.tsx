@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Bot } from "lucide-react";
 
 export default function Navigation() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -38,17 +39,26 @@ export default function Navigation() {
             <span className="font-meme text-xl gradient-text">APE POLICE</span>
           </div>
 
-          <div className="hidden md:flex space-x-6">
+          <div className="hidden md:flex items-center space-x-5">
             {['mission', 'tokenomics', 'channel', 'roadmap', 'join'].map(id => (
               <button
                 key={id}
                 onClick={() => scrollToSection(id)}
-                className="text-white hover:text-yellow-400 transition-colors capitalize"
+                className="text-white hover:text-yellow-400 transition-colors capitalize text-sm"
                 data-testid={`link-nav-${id}`}
               >
                 {id === 'join' ? 'Join Squad' : id.charAt(0).toUpperCase() + id.slice(1)}
               </button>
             ))}
+            <Link href="/agent-scanner">
+              <span
+                className="flex items-center gap-1 text-blue-300 hover:text-blue-200 transition-colors text-sm font-semibold border border-blue-600/40 bg-blue-900/30 rounded-full px-3 py-1 cursor-pointer"
+                data-testid="link-nav-agent-scanner"
+              >
+                <Bot className="w-3.5 h-3.5" />
+                Scan Agent
+              </span>
+            </Link>
           </div>
 
           <Button
@@ -82,6 +92,12 @@ export default function Navigation() {
                 {id === 'join' ? 'Join Squad' : id.charAt(0).toUpperCase() + id.slice(1)}
               </button>
             ))}
+            <Link href="/agent-scanner" onClick={() => setIsMobileMenuOpen(false)}>
+              <span className="flex items-center gap-2 py-2 text-blue-300 hover:text-blue-200 transition-colors cursor-pointer">
+                <Bot className="w-4 h-4" />
+                Scan Agent (LARP Detector)
+              </span>
+            </Link>
             <Button className="w-full mt-4 bg-red-600 hover:bg-red-500 text-white font-bold">
               Buy $APOL 🚨
             </Button>

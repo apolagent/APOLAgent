@@ -387,6 +387,176 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Agent-LARP Detector ───────────────────────────────────────────────────
+
+  function buildAgentVerdict(agentName: string, score: number, verdict: string): string {
+    if (verdict === "Digital Puppet") {
+      return pickRandom([
+        `Citizen, I've run a full behavioral analysis on "${agentName}". Cognition Score: ${score}%. DIGITAL PUPPET — a human hiding behind an AI label. No autonomous footprint, no verifiable on-chain execution. Don't let this project fool you. 🤖❌`,
+        `${score}% Cognition — that's a LARP, Citizen. "${agentName}" shows zero signs of genuine autonomous operation. Human timing, missing traces, unverifiable claims. Pure puppet show. 🎭`,
+        `Citizen, "${agentName}" fails APE POLICE autonomous verification at ${score}%. This is a person pretending to be an AI to hype their project. Classic LARP behavior. Walk away. 🚨`,
+        `RED FLAG, Citizen. "${agentName}" scores only ${score}% on my Cognition Scale. Digital Puppet confirmed. The timing is human, the trace is missing, and the claims are hot air. This is not an AI agent — it's a marketing stunt. 🤡`,
+        `Citizen, at ${score}%, "${agentName}" is a Digital Puppet. No autonomous execution, suspicious activity windows, and zero verifiable reasoning logs. LARP classification is final. 📋❌`,
+      ]);
+    }
+    if (verdict === "Semi-Autonomous") {
+      return pickRandom([
+        `Citizen, "${agentName}" scores ${score}% — Semi-Autonomous classification. This agent shows SOME signs of automation, but human approval or oversight is clearly present. Not a pure LARP, but not fully autonomous either. Demand more on-chain proof before trusting it with your funds. 🔍`,
+        `${score}% Cognition Score, Citizen. "${agentName}" is a gray zone. Mixed patterns — some automated behavior, some human fingerprints. Proceed with caution and ask for reasoning logs. 🧐`,
+        `Citizen, "${agentName}" passes some of my tests but not all. ${score}% = Semi-Autonomous. The agent appears real in parts, but human co-piloting is likely. Verify before trusting. 🔍`,
+        `"${agentName}" — ${score}% Cognition. Semi-Autonomous, Citizen. Some on-chain traces check out but timing and traceability aren't fully consistent with pure AI operation. Stay alert. 🦍🔍`,
+        `Citizen, my analysis of "${agentName}" yields ${score}%. Semi-Autonomous. Neither confirmed LARP nor confirmed AI. The agent may be legitimate but requires a human co-pilot. Do your due diligence. 📊`,
+      ]);
+    }
+    return pickRandom([
+      `Citizen, "${agentName}" achieves ${score}% on the Cognition Scale — FULLY AUTONOMOUS confirmed. On-chain patterns, timing spread, and claim verification all check out. This looks like a genuine AI agent. APE POLICE credibility stamp — always DYOR though. 🦍✅`,
+      `${score}% Cognition — the real deal, Citizen. "${agentName}" shows consistent 24/7 on-chain execution, public traceability, and claims backed by verifiable wallet activity. This agent checks out. 🤖✅`,
+      `Citizen, I've cleared "${agentName}" at ${score}%. Fully Autonomous classification. Round-the-clock activity, verifiable on-chain evidence, and strong traceability. This is what a real AI agent looks like. 🦍`,
+      `Full clearance for "${agentName}", Citizen. ${score}% Cognition — Fully Autonomous. Distributed timing, contract execution, and claim verification all pass. APE POLICE approved. 🔐✅`,
+      `Citizen, "${agentName}" passed every test at ${score}%. Fully Autonomous designation confirmed. If more agents were this transparent and traceable, this space would be a lot safer. APE POLICE respect. 🦍✅`,
+    ]);
+  }
+
+  app.post("/api/agent/analyze", async (req, res) => {
+    const { agentName, socialLink, wallet, chain = "ethereum", claimedAbilities } = req.body;
+    if (!agentName?.trim()) return res.status(400).json({ error: "Agent name is required" });
+
+    let speedScore = 15; let speedLabel = "No Data";
+    let speedDetail = "No wallet provided — speed test cannot be performed.";
+    const timingPattern: string[] = [];
+
+    let traceScore = 2; let traceLabel = "No Footprint";
+    let traceDetail = "No wallet or social link — real agents leave verifiable traces.";
+    let isContract = false; let txTotal = 0; let hasSecurityFlags = false;
+
+    let contextScore = 5; let contextLabel = "No Claims";
+    let contextDetail = "No claimed abilities provided. Real agents have documented, verifiable capabilities.";
+
+    if (wallet?.trim()) {
+      const chainId = GOPLUS_CHAIN[chain] || "1";
+
+      // GoPlus security + contract check
+      try {
+        const gpRes = await fetch(`${GOPLUS_BASE}/address_security/${encodeURIComponent(wallet.trim())}`);
+        const gpData = await gpRes.json() as any;
+        const gp = gpData.result || {};
+        hasSecurityFlags = Object.values(gp).some(v => v === "1" || v === 1);
+
+        if (chainId !== "solana" && chainId !== "tron") {
+          const tokenRes = await fetch(`${GOPLUS_BASE}/token_security/${chainId}?contract_addresses=${encodeURIComponent(wallet.trim())}`);
+          const tokenData = await tokenRes.json() as any;
+          const key = Object.keys(tokenData.result || {})[0];
+          isContract = !!key;
+        }
+      } catch { /* non-fatal */ }
+
+      // Etherscan-family TX timing analysis
+      const explorerApis: Record<string, string> = {
+        ethereum: "https://api.etherscan.io/api",
+        bsc: "https://api.bscscan.com/api",
+        polygon: "https://api.polygonscan.com/api",
+      };
+      const explorerUrl = explorerApis[chain];
+      if (explorerUrl) {
+        try {
+          const txRes = await fetch(
+            `${explorerUrl}?module=account&action=txlist&address=${wallet.trim()}&sort=desc&offset=10&page=1`
+          );
+          const txData = await txRes.json() as any;
+          if (txData.status === "1" && Array.isArray(txData.result) && txData.result.length > 0) {
+            const txs = txData.result.slice(0, 10);
+            txTotal = txs.length;
+            const hours = txs.map((tx: any) => new Date(parseInt(tx.timeStamp) * 1000).getUTCHours());
+            const uniqueHours = new Set(hours).size;
+            const bizRatio = hours.filter((h: number) => h >= 8 && h <= 18).length / hours.length;
+            txs.forEach((tx: any) => {
+              const d = new Date(parseInt(tx.timeStamp) * 1000);
+              timingPattern.push(d.toISOString().slice(0, 16).replace("T", " ") + " UTC");
+            });
+
+            if (uniqueHours >= 12) {
+              speedScore = 38; speedLabel = "24/7 Automated";
+              speedDetail = `Transactions spread across ${uniqueHours} different UTC hours — true round-the-clock automation pattern.`;
+            } else if (uniqueHours >= 8) {
+              speedScore = 30; speedLabel = "Mostly Automated";
+              speedDetail = `Activity spans ${uniqueHours} UTC hours — broad window consistent with automation.`;
+            } else if (uniqueHours >= 4) {
+              speedScore = 18; speedLabel = "Mixed Pattern";
+              speedDetail = `${uniqueHours} unique active hours — could be semi-automated or time-zone restricted.`;
+            } else {
+              speedScore = 8; speedLabel = "Narrow Window";
+              speedDetail = `Only ${uniqueHours} unique hour(s) — extremely concentrated timing, suggesting manual or scheduled operation.`;
+            }
+            if (bizRatio > 0.85) {
+              speedScore = Math.max(5, speedScore - 18); speedLabel = "Human Hours ⚠️";
+              speedDetail += ` ⚠️ ${Math.round(bizRatio * 100)}% of activity falls in business hours (8am–6pm UTC) — HIGH LARP RISK.`;
+            } else if (bizRatio > 0.65) {
+              speedScore = Math.max(8, speedScore - 8);
+              speedDetail += ` Activity slightly skewed toward business hours.`;
+            }
+          } else {
+            speedScore = 8; speedLabel = "No Transactions";
+            speedDetail = "No on-chain transactions found. Wallet appears inactive — agents should be busy.";
+          }
+        } catch {
+          speedScore = 12; speedLabel = "Unavailable";
+          speedDetail = "Could not retrieve transaction data — timing test inconclusive.";
+        }
+      } else {
+        speedDetail = `Transaction timing analysis not supported for ${chain} via this scanner.`;
+      }
+
+      // Traceability
+      if (socialLink?.trim()) {
+        if (isContract) { traceScore = 28; traceLabel = "Strong Trace"; traceDetail = `Smart contract at ${wallet.slice(0,10)}… + social presence at ${socialLink}. Strong autonomous footprint.`; }
+        else { traceScore = 20; traceLabel = "Moderate Trace"; traceDetail = `EOA wallet at ${wallet.slice(0,10)}… + social presence confirmed. Solid traceability.`; }
+      } else {
+        if (isContract) { traceScore = 18; traceLabel = "Contract Found"; traceDetail = `Smart contract at ${wallet.slice(0,10)}… — contract execution is evidence of automation. No social link.`; }
+        else { traceScore = 10; traceLabel = "Wallet Only"; traceDetail = `EOA wallet at ${wallet.slice(0,10)}… found — basic trace only. No social link to cross-reference.`; }
+      }
+      if (hasSecurityFlags) { traceScore = Math.max(2, traceScore - 10); traceDetail += " ⚠️ Security flags detected on this wallet."; }
+
+    } else if (socialLink?.trim()) {
+      traceScore = 10; traceLabel = "Social Only";
+      traceDetail = `Social presence at ${socialLink} noted — but no on-chain wallet to verify autonomous execution.`;
+    }
+
+    // Context / Claims
+    if (claimedAbilities?.trim()) {
+      const c = claimedAbilities.toLowerCase();
+      const hasTrade = ["trade", "swap", "arbitrage", "dex", "buy", "sell", "liquidity"].some(k => c.includes(k));
+      const hasOnchain = ["deploy", "contract", "bridge", "stake", "yield", "farm", "mint"].some(k => c.includes(k));
+
+      if (!wallet?.trim()) {
+        contextScore = 12; contextLabel = "Unverifiable";
+        contextDetail = `Claims: "${claimedAbilities.slice(0, 90)}" — No wallet provided to verify these on-chain. Always demand a verifiable address.`;
+      } else if (isContract && hasOnchain) {
+        contextScore = 28; contextLabel = "Claim Verified ✓";
+        contextDetail = `Claims on-chain execution — wallet IS a smart contract, consistent with the claimed capabilities.`;
+      } else if (hasTrade && txTotal > 0) {
+        contextScore = 22; contextLabel = "Evidence Found";
+        contextDetail = `Claims trading/swapping — active on-chain wallet detected, consistent with automated execution.`;
+      } else if (txTotal > 0) {
+        contextScore = 15; contextLabel = "Partial Match";
+        contextDetail = `Claims: "${claimedAbilities.slice(0, 80)}" — Some on-chain activity found, ability-specific proof is limited.`;
+      } else {
+        contextScore = 8; contextLabel = "No Evidence";
+        contextDetail = `Claims: "${claimedAbilities.slice(0, 80)}" — Wallet is inactive. Claims cannot be verified on-chain. LARP risk elevated.`;
+      }
+    }
+
+    const cognitionScore = Math.min(100, Math.max(0, speedScore + traceScore + contextScore));
+    const verdict = cognitionScore <= 30 ? "Digital Puppet" : cognitionScore <= 70 ? "Semi-Autonomous" : "Fully Autonomous";
+    const apolVerdict = buildAgentVerdict(agentName.trim(), cognitionScore, verdict);
+
+    res.json({
+      agentName: agentName.trim(), socialLink, wallet, claimedAbilities, cognitionScore, verdict, apolVerdict,
+      speedTest: { score: speedScore, maxScore: 40, label: speedLabel, detail: speedDetail, timingPattern: timingPattern.slice(0, 5) },
+      traceabilityTest: { score: traceScore, maxScore: 30, label: traceLabel, detail: traceDetail, isContract, txTotal },
+      contextTest: { score: contextScore, maxScore: 30, label: contextLabel, detail: contextDetail },
+    });
+  });
+
   app.get("/api/detective/flagged", async (req, res) => {
     try {
       const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
