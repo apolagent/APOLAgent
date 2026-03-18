@@ -5,39 +5,42 @@ import { Check, Clock } from "lucide-react";
 const roadmapPhases = [
   {
     phase: 1,
-    title: "Meme Patrol",
+    title: "Watchdog Launch",
     status: "completed",
     progress: 100,
     color: "slate",
     items: [
-      { text: "Launch", completed: true },
-      { text: "DEX listing", completed: true },
-      { text: "Meme Raid Squads", completed: true }
-    ]
+      { text: "Token launch & DEX listing", completed: true },
+      { text: "Scam report submission portal", completed: true },
+      { text: "Community voting on reports", completed: true },
+      { text: "Hero nominations & leaderboard", completed: true },
+    ],
   },
   {
     phase: 2,
-    title: "Enforcement",
-    status: "in-progress",
-    progress: 75,
+    title: "On-Chain Intel",
+    status: "completed",
+    progress: 100,
     color: "blue",
     items: [
-      { text: "NFT Collection", completed: false },
-      { text: "Meme Contests", completed: false },
-      { text: "Merch Drop", completed: false }
-    ]
+      { text: "APOL Detective — wallet scanner (GoPlus)", completed: true },
+      { text: "Multi-chain support (ETH, BSC, Base, Solana…)", completed: true },
+      { text: "Agent-LARP Detector — Cognition Score", completed: true },
+      { text: "Evidence image upload on reports", completed: true },
+    ],
   },
   {
     phase: 3,
-    title: "Recognition",
-    status: "upcoming",
-    progress: 25,
+    title: "Intelligence Upgrade",
+    status: "in-progress",
+    progress: 35,
     color: "teal",
     items: [
-      { text: "Channel Awards Voting", completed: false },
-      { text: "Verified Influencer Recognition", completed: false },
-      { text: "$APOL-funded Giveaways", completed: false }
-    ]
+      { text: "APOL Agent AI chatbot (live)", completed: true },
+      { text: "Scam address registry (ChainAbuse feed)", completed: false },
+      { text: "Report bounty rewards in $APOL", completed: false },
+      { text: "Token-gated Verified Citizen tier", completed: false },
+    ],
   },
   {
     phase: 4,
@@ -46,21 +49,21 @@ const roadmapPhases = [
     progress: 0,
     color: "indigo",
     items: [
-      { text: "DAO Voting", completed: false },
-      { text: "Meme Game", completed: false },
-      { text: "Tier 1 CEX Listings", completed: false }
-    ]
-  }
+      { text: "DAO-governed scam flagging votes", completed: false },
+      { text: "Browser extension: real-time wallet warnings", completed: false },
+      { text: "Tier 1 CEX listings", completed: false },
+      { text: "APE POLICE NFT Badges for top reporters", completed: false },
+    ],
+  },
 ];
 
-const colorMap: Record<string, { bg: string; border: string; hoverBorder: string; circle: string; text: string; progress: string }> = {
+const colorMap: Record<string, { bg: string; border: string; hoverBorder: string; circle: string; text: string }> = {
   slate: {
     bg: "from-slate-600/20 to-slate-800/20",
     border: "border-slate-500/30",
     hoverBorder: "hover:border-slate-500/60",
     circle: "bg-slate-600",
     text: "text-slate-400",
-    progress: "bg-slate-500",
   },
   blue: {
     bg: "from-blue-600/20 to-blue-800/20",
@@ -68,7 +71,6 @@ const colorMap: Record<string, { bg: string; border: string; hoverBorder: string
     hoverBorder: "hover:border-blue-500/60",
     circle: "bg-blue-600",
     text: "text-blue-400",
-    progress: "bg-blue-500",
   },
   teal: {
     bg: "from-teal-600/20 to-teal-800/20",
@@ -76,7 +78,6 @@ const colorMap: Record<string, { bg: string; border: string; hoverBorder: string
     hoverBorder: "hover:border-teal-500/60",
     circle: "bg-teal-600",
     text: "text-teal-400",
-    progress: "bg-teal-500",
   },
   indigo: {
     bg: "from-indigo-600/20 to-indigo-800/20",
@@ -84,7 +85,6 @@ const colorMap: Record<string, { bg: string; border: string; hoverBorder: string
     hoverBorder: "hover:border-indigo-500/60",
     circle: "bg-indigo-600",
     text: "text-indigo-400",
-    progress: "bg-indigo-500",
   },
 };
 
@@ -96,7 +96,7 @@ export default function RoadmapSection() {
           <h2 className="font-meme text-5xl md:text-6xl gradient-text mb-4">
             The Road to Meme Justice
           </h2>
-          <p className="text-xl text-white">Our mission phases for crypto protection</p>
+          <p className="text-xl text-white">Building the crypto community's watchdog platform</p>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
           {roadmapPhases.map((phase) => {
@@ -127,9 +127,9 @@ export default function RoadmapSection() {
                     {phase.items.map((item, index) => (
                       <li key={index} className="flex items-center text-white">
                         {item.completed ? (
-                          <Check className={`w-4 h-4 ${c.text} mr-2`} />
+                          <Check className={`w-4 h-4 ${c.text} mr-2 flex-shrink-0`} />
                         ) : (
-                          <Clock className="w-4 h-4 text-gray-400 mr-2" />
+                          <Clock className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
                         )}
                         {item.text}
                       </li>
