@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Copy, Check, ExternalLink } from "lucide-react";
 
 const CONTRACT_ADDRESS = "TBA";
-const CHAIN = "BSC";
+const CHAIN = "Base";
 
 const rows = [
   {
