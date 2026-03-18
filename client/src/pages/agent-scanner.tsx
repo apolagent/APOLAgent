@@ -361,25 +361,23 @@ export default function AgentScanner() {
           </button>
           {showSysInfo && (
             <div className="mt-3 text-left bg-slate-900/60 border border-slate-800 rounded-xl px-5 py-4 max-w-lg mx-auto">
-              <div className="divide-y divide-slate-800 text-xs">
-                <div className="flex justify-between items-center gap-4 py-2">
-                  <span className="text-slate-500 font-semibold uppercase tracking-wider">Liveliness</span>
-                  <span className="text-slate-400 text-right">On-chain tx timing vs. human business hours</span>
-                </div>
-                <div className="flex justify-between items-center gap-4 py-2">
-                  <span className="text-slate-500 font-semibold uppercase tracking-wider">Reasoning</span>
-                  <span className="text-slate-400 text-right">Log endpoint vs. on-chain execution timestamps</span>
-                </div>
-                <div className="flex justify-between items-center gap-4 py-2">
-                  <span className="text-slate-500 font-semibold uppercase tracking-wider">Sybil</span>
-                  <span className="text-slate-400 text-right">Follower age + engagement ratio</span>
-                </div>
-                <div className="flex justify-between items-center gap-4 py-2">
-                  <span className="text-slate-500 font-semibold uppercase tracking-wider">Score</span>
-                  <span className="text-slate-400 text-right">
-                    <span className="text-red-400">0–30%</span> puppet &nbsp;
-                    <span className="text-yellow-400">31–70%</span> semi &nbsp;
-                    <span className="text-green-400">71–100%</span> autonomous
+              <div className="text-xs">
+                {[
+                  { label: "LATENCY", value: "On-chain tx timing vs. human business hours" },
+                  { label: "REASONING", value: "Log endpoint vs. on-chain execution timestamps" },
+                  { label: "SOCIAL INTEGRITY", value: "Follower age + engagement ratio" },
+                ].map((row, i) => (
+                  <div key={i} className="flex items-center gap-4 py-2.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+                    <span className="text-slate-500 font-semibold uppercase tracking-wider whitespace-nowrap w-36 flex-shrink-0">{row.label}</span>
+                    <span className="text-slate-400 text-right ml-auto">{row.value}</span>
+                  </div>
+                ))}
+                <div className="flex items-center gap-4 py-2.5">
+                  <span className="text-slate-500 font-semibold uppercase tracking-wider whitespace-nowrap w-36 flex-shrink-0">SCORE</span>
+                  <span className="text-right ml-auto">
+                    <span className="text-red-400">0–30%</span><span className="text-slate-600"> LOW &nbsp;</span>
+                    <span className="text-yellow-400">31–70%</span><span className="text-slate-600"> MID &nbsp;</span>
+                    <span className="text-green-400">71–100%</span><span className="text-slate-600"> HIGH</span>
                   </span>
                 </div>
               </div>
