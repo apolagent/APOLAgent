@@ -1,6 +1,11 @@
+import { useState } from "react";
 import { Send, Coins } from "lucide-react";
 
+const G = "#00ff00";
+
 export default function HeroSection() {
+  const [primaryHover, setPrimaryHover] = useState(false);
+
   return (
     <section
       className="relative min-h-screen flex items-center justify-center overflow-hidden"
@@ -27,7 +32,8 @@ export default function HeroSection() {
 
         {/* Sub-header */}
         <p
-          className="text-sm md:text-base text-slate-400 max-w-2xl mx-auto leading-relaxed mb-12 uppercase tracking-wide"
+          className="text-sm md:text-base max-w-2xl mx-auto leading-relaxed mb-12 uppercase tracking-wide"
+          style={{ color: "rgba(255,255,255,0.45)" }}
           data-testid="text-description"
         >
           Securing the Base ecosystem through real-time forensic analysis of autonomous agents and developer logic.
@@ -35,8 +41,12 @@ export default function HeroSection() {
 
         {/* Buttons */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 flex-wrap">
+
+          {/* PRIMARY — ACCESS TERMINAL */}
           <button
             data-testid="button-join-patrol"
+            onMouseEnter={() => setPrimaryHover(true)}
+            onMouseLeave={() => setPrimaryHover(false)}
             style={{
               display: "flex",
               alignItems: "center",
@@ -44,12 +54,12 @@ export default function HeroSection() {
               height: "42px",
               width: "100%",
               maxWidth: "240px",
-              backgroundColor: "#3b82f6",
-              color: "#ffffff",
+              backgroundColor: primaryHover ? G : "#000000",
+              color: primaryHover ? "#000000" : G,
               fontSize: "13px",
               fontWeight: 800,
               borderRadius: "0",
-              border: "none",
+              border: `1px solid ${G}`,
               cursor: "pointer",
               padding: "0 16px",
               gap: "8px",
@@ -57,12 +67,14 @@ export default function HeroSection() {
               textTransform: "uppercase",
               fontFamily: "'JetBrains Mono', monospace",
               boxSizing: "border-box",
+              transition: "background-color 0.15s ease, color 0.15s ease",
             }}
           >
             <Send size={16} />
             Access Terminal
           </button>
 
+          {/* SECONDARY — ACQUIRE ACCESS KEY */}
           <button
             data-testid="button-buy-apol"
             style={{
@@ -90,8 +102,8 @@ export default function HeroSection() {
             <Coins size={16} />
             Acquire Access Key
           </button>
-        </div>
 
+        </div>
       </div>
     </section>
   );

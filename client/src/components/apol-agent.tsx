@@ -210,12 +210,13 @@ export default function ApolAgent() {
                 </span>
                 <div style={{
                   padding: "7px 10px",
-                  background: m.from === "agent" ? "rgba(0,255,0,0.05)" : "rgba(255,255,255,0.05)",
-                  border: m.from === "agent" ? "1px solid rgba(0,255,0,0.15)" : "1px solid rgba(255,255,255,0.1)",
+                  background: "transparent",
+                  border: m.from === "agent" ? `1px solid ${G}` : "1px solid rgba(255,255,255,0.25)",
                   color: m.from === "agent" ? G : "#ffffff",
                   fontSize: "12px",
                   lineHeight: "1.6",
                   whiteSpace: "pre-wrap",
+                  fontFamily: "'JetBrains Mono', monospace",
                 }}>
                   {m.text}
                 </div>
@@ -286,7 +287,7 @@ export default function ApolAgent() {
               data-testid="button-apol-agent-send"
               style={{
                 background: "transparent",
-                border: `1px solid ${G}`,
+                border: "1px solid #ffffff",
                 borderRadius: "0",
                 width: "30px",
                 height: "30px",
@@ -297,7 +298,7 @@ export default function ApolAgent() {
                 flexShrink: 0,
               }}
             >
-              <Send size={13} color={G} />
+              <Send size={13} color="#ffffff" />
             </button>
           </div>
         </div>
