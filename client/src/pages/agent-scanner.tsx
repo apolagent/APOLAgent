@@ -360,12 +360,23 @@ export default function AgentScanner() {
             System Info
           </button>
           {showSysInfo && (
-            <div className="mt-3 text-left bg-slate-900/60 border border-slate-800 rounded-xl px-5 py-4 text-xs text-slate-500 space-y-1.5 max-w-lg mx-auto">
-              <p><span className="text-slate-400 font-semibold">Scoring scale:</span> 0–30% = Digital Puppet · 31–70% = Semi-Autonomous · 71–100% = Fully Autonomous</p>
-              <p><span className="text-slate-400 font-semibold">Liveliness</span> — on-chain transaction timing analysis. Requires a wallet address.</p>
-              <p><span className="text-slate-400 font-semibold">Reasoning</span> — log endpoint verification. Requires a public logs URL.</p>
-              <p><span className="text-slate-400 font-semibold">Sybil Check</span> — social signal analysis via X/Telegram syndication data.</p>
-              <p className="text-slate-600 pt-1">Results are probabilistic indicators, not legal determinations. APE POLICE provides community intelligence only.</p>
+            <div className="mt-3 text-left bg-slate-900/60 border border-slate-800 rounded-xl px-5 py-4 font-mono max-w-lg mx-auto space-y-3">
+              {/* Scoring legend */}
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                <span className="text-red-400">● 0–30% :: DIGITAL PUPPET</span>
+                <span className="text-yellow-400">● 31–70% :: SEMI-AUTONOMOUS</span>
+                <span className="text-green-400">● 71–100% :: FULLY AUTONOMOUS</span>
+              </div>
+              {/* Status-key descriptions */}
+              <div className="space-y-1.5 text-xs text-slate-400">
+                <p><span className="text-slate-300">[LIVELINESS]</span> :: Latency check for 24/7 autonomous activity vs. human-standard schedules.</p>
+                <p><span className="text-slate-300">[REASONING]</span> :: Cross-reference of internal agent logs against real-time on-chain execution.</p>
+                <p><span className="text-slate-300">[SYBIL-SCAN]</span> :: Forensic analysis of follower-to-engagement ratios and account age.</p>
+              </div>
+              {/* Disclaimer */}
+              <div className="border-t border-slate-700 pt-2.5 text-xs text-slate-600 uppercase tracking-wide leading-relaxed">
+                LIMITATION: REPORT IS BASED ON ACCESSIBLE PUBLIC DATA AT TIME OF SCAN. JURISDICTION: COMMUNITY INTEL ONLY.
+              </div>
             </div>
           )}
         </div>
