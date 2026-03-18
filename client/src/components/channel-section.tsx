@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { MessageSquare, Trophy, Shield, AlertTriangle } from "lucide-react";
+import { MessageSquare, Trophy, AlertTriangle, ShieldCheck, ScanLine, Shield } from "lucide-react";
 import { Link } from "wouter";
 
 export default function ChannelSection() {
@@ -8,19 +7,42 @@ export default function ChannelSection() {
     <section id="channel" className="py-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
+
+          {/* Left column */}
           <div>
-            <h2 className="font-meme text-4xl md:text-6xl gradient-text mb-8">
-              APE POLICE Channel
-              <span className="block text-2xl md:text-3xl mt-2">Justice in the Jungle</span>
+            <p className="text-xs text-slate-500 uppercase tracking-widest mb-4">Intelligence Channel</p>
+            <h2 className="font-meme text-4xl md:text-6xl gradient-text mb-6">
+              APOL Agent: Autonomous Market Integrity
             </h2>
             <div className="space-y-4 mb-8">
-              <p className="text-lg md:text-xl leading-relaxed">
-                The operational channel. <span className="text-white font-bold">Active threat monitoring</span>, scam alerts, and field reports from the community.
-              </p>
-              <p className="text-lg md:text-xl leading-relaxed text-white">
-                Annual community awards, <span className="text-green-400 font-bold">public voting</span>, and bounties for outstanding contributors.
+              <p className="text-base text-slate-300 leading-relaxed">
+                Ape Police provides a real-time verification layer for the agentic economy. By cross-referencing on-chain execution with autonomous reasoning logs, the APOL Agent eliminates market asymmetry and exposes developer LARPs before they impact the retail holder.
               </p>
             </div>
+
+            {/* Feature cards */}
+            <div className="space-y-3 mb-8">
+              <div className="bg-slate-900/70 border border-slate-700/60 rounded-xl px-5 py-4 flex gap-4 items-start">
+                <div className="w-9 h-9 bg-slate-800 border border-slate-700 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <ShieldCheck className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Risk Mitigation</p>
+                  <p className="text-slate-300 text-sm leading-relaxed">Cross-references wallet history and contract patterns against known threat signatures.</p>
+                </div>
+              </div>
+              <div className="bg-slate-900/70 border border-slate-700/60 rounded-xl px-5 py-4 flex gap-4 items-start">
+                <div className="w-9 h-9 bg-slate-800 border border-slate-700 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <ScanLine className="w-5 h-5 text-green-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Algorithmic Verification</p>
+                  <p className="text-slate-300 text-sm leading-relaxed">Scores agent identities against the Cognition Index — detecting LARPs and Sybil clusters in real time.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Action buttons */}
             <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
               <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 neon-glow flex items-center justify-center space-x-2">
                 <MessageSquare className="w-5 h-5" />
@@ -41,63 +63,59 @@ export default function ChannelSection() {
             </div>
           </div>
 
-          <div className="relative">
-            <Card className="bg-gradient-to-br from-slate-800/60 to-slate-900/80 border-slate-600/50 backdrop-blur-sm">
-              <CardContent className="p-8">
-                <div className="text-center mb-6">
-                  <h3 className="font-meme text-2xl gradient-text mb-1">🏆 Community Leaderboard</h3>
-                  <p className="text-xs text-gray-500 uppercase tracking-widest">Top Contributors This Month</p>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between bg-yellow-400/20 p-4 rounded-xl border border-yellow-400/30">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center">
-                        <span className="text-slate-900 font-bold">1</span>
-                      </div>
-                      <span className="font-semibold text-white">CryptoDetective</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Shield className="w-4 h-4 text-yellow-400" />
-                      <span className="text-sm text-white">247 Reports</span>
-                    </div>
+          {/* Right column — leaderboard */}
+          <div className="bg-slate-900/70 border border-slate-700/60 rounded-xl p-8">
+            <div className="text-center mb-6">
+              <h3 className="font-meme text-2xl gradient-text mb-1">Community Leaderboard</h3>
+              <p className="text-xs text-slate-500 uppercase tracking-widest">Top Contributors This Month</p>
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between bg-yellow-400/10 p-4 rounded-xl border border-yellow-400/30">
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center">
+                    <span className="text-slate-900 font-bold text-sm">1</span>
                   </div>
-
-                  <div className="flex items-center justify-between bg-gray-700/20 p-4 rounded-xl border border-gray-600/30">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center">
-                        <span className="text-slate-900 font-bold">2</span>
-                      </div>
-                      <span className="font-semibold text-white">ScamBuster</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Shield className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm text-white">189 Reports</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between bg-orange-600/20 p-4 rounded-xl border border-orange-600/30">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center">
-                        <span className="text-white font-bold">3</span>
-                      </div>
-                      <span className="font-semibold text-white">ApeTective</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Shield className="w-4 h-4 text-orange-600" />
-                      <span className="text-sm text-white">156 Reports</span>
-                    </div>
-                  </div>
+                  <span className="font-semibold text-white">CryptoDetective</span>
                 </div>
-                <div className="text-center mt-6">
-                  <Link href="/rankings">
-                    <button className="text-blue-400 hover:text-blue-300 font-semibold text-sm transition-colors">
-                      View Full Rankings →
-                    </button>
-                  </Link>
+                <div className="flex items-center space-x-2">
+                  <Shield className="w-4 h-4 text-yellow-400" />
+                  <span className="text-sm text-white">247 Reports</span>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="flex items-center justify-between bg-slate-700/20 p-4 rounded-xl border border-slate-600/30">
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-slate-400 rounded-full flex items-center justify-center">
+                    <span className="text-slate-900 font-bold text-sm">2</span>
+                  </div>
+                  <span className="font-semibold text-white">ScamBuster</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Shield className="w-4 h-4 text-slate-400" />
+                  <span className="text-sm text-white">189 Reports</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between bg-orange-600/10 p-4 rounded-xl border border-orange-600/30">
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center">
+                    <span className="text-white font-bold text-sm">3</span>
+                  </div>
+                  <span className="font-semibold text-white">ApeTective</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Shield className="w-4 h-4 text-orange-500" />
+                  <span className="text-sm text-white">156 Reports</span>
+                </div>
+              </div>
+            </div>
+            <div className="text-center mt-6">
+              <Link href="/rankings">
+                <button className="text-blue-400 hover:text-blue-300 font-semibold text-sm transition-colors">
+                  View Full Rankings →
+                </button>
+              </Link>
+            </div>
           </div>
+
         </div>
       </div>
     </section>
