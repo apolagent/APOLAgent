@@ -9,7 +9,7 @@ export default function Footer() {
             <img
               src="/ape-police-logo.png"
               alt="APE POLICE"
-              className="w-12 h-12 object-cover rounded-full border-4 border-yellow-400 neon-glow"
+              className="w-14 h-14 object-cover rounded-full border border-yellow-400 neon-glow"
             />
           </div>
 
