@@ -24,8 +24,8 @@ const roadmapPhases = [
     color: "blue",
     items: [
       { text: "APOL Detective, on-chain wallet scanner", completed: true },
-      { text: "Multi-chain support (ETH, BSC, Base, Solana…)", completed: true },
-      { text: "Agent-LARP Detector, Cognition Score", completed: true },
+      { text: "Multi-chain support (ETH, BSC, Base, Solana)", completed: true },
+      { text: "Agent-LARP Detector, Cognition Score", completed: true, highlight: true },
       { text: "Evidence image upload on reports", completed: true },
     ],
   },
@@ -36,8 +36,8 @@ const roadmapPhases = [
     progress: 35,
     color: "teal",
     items: [
-      { text: "APOL Agent AI chatbot (live)", completed: true },
-      { text: "Scam address registry & public threat feed", completed: false },
+      { text: "Predictive Threat Engine", completed: true },
+      { text: "Real-Time Intelligence Wire", completed: false },
       { text: "Report bounty rewards in $APOL", completed: false },
       { text: "Token-gated Verified Citizen tier", completed: false },
     ],
@@ -51,8 +51,8 @@ const roadmapPhases = [
     items: [
       { text: "DAO-governed scam flagging votes", completed: false },
       { text: "Browser extension: real-time wallet warnings", completed: false },
-      { text: "Tier 1 CEX listings", completed: false },
-      { text: "APE POLICE NFT Badges for top reporters", completed: false },
+      { text: "Institutional API Access", completed: false },
+      { text: "Automated Legal Framework (March 2026 MOU)", completed: false },
     ],
   },
 ];
@@ -93,14 +93,15 @@ export default function RoadmapSection() {
     <section id="roadmap" className="py-20 bg-gradient-to-r from-blue-900 to-slate-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
-          <h2 className="font-meme text-5xl md:text-6xl gradient-text mb-4">
-            The Road to Meme Justice
+          <h2 className="font-orbitron text-3xl md:text-4xl text-white tracking-widest mb-4 uppercase">
+            Operational Milestones
           </h2>
-          <p className="text-xl text-white">Deployment phases</p>
+          <p className="text-sm text-slate-400 font-mono uppercase tracking-widest">Deployment phases</p>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
           {roadmapPhases.map((phase) => {
             const c = colorMap[phase.color];
+            const isPhaseOne = phase.phase === 1;
             return (
               <Card
                 key={phase.phase}
@@ -109,29 +110,34 @@ export default function RoadmapSection() {
                 <CardHeader>
                   <div className="text-center mb-6">
                     <div className={`w-16 h-16 ${c.circle} rounded-full flex items-center justify-center mx-auto mb-4 ${phase.status === "completed" ? "neon-glow" : ""}`}>
-                      <span className="text-white font-meme text-xl">{phase.phase}</span>
+                      <span className="text-white font-orbitron text-xl font-bold">{phase.phase}</span>
                     </div>
-                    <CardTitle className="font-meme text-2xl text-white mb-2 font-normal">
+                    <CardTitle className="font-mono text-base text-white mb-2 font-semibold uppercase tracking-wider">
                       {phase.title}
                     </CardTitle>
                     <div className="w-full bg-gray-700 rounded-full h-2 mb-1">
                       <Progress value={phase.progress} className="h-2" />
                     </div>
-                    <span className={`text-xs ${c.text} font-semibold uppercase`}>
+                    <span className={`text-xs font-mono ${c.text} uppercase tracking-widest`}>
                       {phase.status.replace("-", " ")}
                     </span>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <ul className="space-y-2 text-sm">
+                  <ul className="space-y-2.5 text-xs font-mono">
                     {phase.items.map((item, index) => (
-                      <li key={index} className="flex items-center text-white">
+                      <li key={index} className="flex items-start gap-2">
                         {item.completed ? (
-                          <Check className={`w-4 h-4 ${c.text} mr-2 flex-shrink-0`} />
+                          <Check className={`w-3.5 h-3.5 mt-0.5 ${c.text} flex-shrink-0`} />
                         ) : (
-                          <Clock className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
+                          <Clock className="w-3.5 h-3.5 mt-0.5 text-gray-500 flex-shrink-0" />
                         )}
-                        {item.text}
+                        <span className={(item as any).highlight ? "text-green-400 font-semibold" : "text-slate-300"}>
+                          {item.text}
+                          {isPhaseOne && (
+                            <span className="ml-1.5 text-slate-500 text-xs">[COMPLETED]</span>
+                          )}
+                        </span>
                       </li>
                     ))}
                   </ul>
