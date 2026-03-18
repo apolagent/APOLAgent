@@ -360,23 +360,32 @@ export default function AgentScanner() {
             System Info
           </button>
           {showSysInfo && (
-            <div className="mt-3 text-left bg-slate-900/60 border border-slate-800 rounded-xl px-5 py-4 font-mono max-w-lg mx-auto space-y-3">
-              {/* Scoring legend */}
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                <span className="text-red-400">● 0–30% :: DIGITAL PUPPET</span>
-                <span className="text-yellow-400">● 31–70% :: SEMI-AUTONOMOUS</span>
-                <span className="text-green-400">● 71–100% :: FULLY AUTONOMOUS</span>
+            <div className="mt-3 text-left bg-slate-900/60 border border-slate-800 rounded-xl px-5 py-4 max-w-lg mx-auto">
+              <div className="divide-y divide-slate-800 text-xs">
+                <div className="flex justify-between items-center gap-4 py-2">
+                  <span className="text-slate-500 font-semibold uppercase tracking-wider">Liveliness</span>
+                  <span className="text-slate-400 text-right">On-chain tx timing vs. human business hours</span>
+                </div>
+                <div className="flex justify-between items-center gap-4 py-2">
+                  <span className="text-slate-500 font-semibold uppercase tracking-wider">Reasoning</span>
+                  <span className="text-slate-400 text-right">Log endpoint vs. on-chain execution timestamps</span>
+                </div>
+                <div className="flex justify-between items-center gap-4 py-2">
+                  <span className="text-slate-500 font-semibold uppercase tracking-wider">Sybil</span>
+                  <span className="text-slate-400 text-right">Follower age + engagement ratio</span>
+                </div>
+                <div className="flex justify-between items-center gap-4 py-2">
+                  <span className="text-slate-500 font-semibold uppercase tracking-wider">Score</span>
+                  <span className="text-slate-400 text-right">
+                    <span className="text-red-400">0–30%</span> puppet &nbsp;
+                    <span className="text-yellow-400">31–70%</span> semi &nbsp;
+                    <span className="text-green-400">71–100%</span> autonomous
+                  </span>
+                </div>
               </div>
-              {/* Status-key descriptions */}
-              <div className="space-y-1.5 text-xs text-slate-400">
-                <p><span className="text-slate-300">[LIVELINESS]</span> :: Latency check for 24/7 autonomous activity vs. human-standard schedules.</p>
-                <p><span className="text-slate-300">[REASONING]</span> :: Cross-reference of internal agent logs against real-time on-chain execution.</p>
-                <p><span className="text-slate-300">[SYBIL-SCAN]</span> :: Forensic analysis of follower-to-engagement ratios and account age.</p>
-              </div>
-              {/* Disclaimer */}
-              <div className="border-t border-slate-700 pt-2.5 text-xs text-slate-600 uppercase tracking-wide leading-relaxed">
-                LIMITATION: REPORT IS BASED ON ACCESSIBLE PUBLIC DATA AT TIME OF SCAN. JURISDICTION: COMMUNITY INTEL ONLY.
-              </div>
+              <p className="text-xs text-slate-600 mt-3 pt-3 border-t border-slate-800">
+                Public data only. Results are community intelligence, not a legal determination.
+              </p>
             </div>
           )}
         </div>
