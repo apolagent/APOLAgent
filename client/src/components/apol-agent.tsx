@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { MessageCircle, X, Send, Bot } from "lucide-react";
+import { X, Send, Terminal } from "lucide-react";
 
 type Message = {
   from: "user" | "agent";
@@ -9,95 +9,82 @@ type Message = {
 const KB: { patterns: RegExp[]; answer: string }[] = [
   {
     patterns: [/hello|hi|hey|sup|yo|gm/i],
-    answer: "👋 GM, officer! I'm APOL Agent, your guide to the APE POLICE jungle. Ask me anything about the site, $APOL token, or how to fight crypto scams!",
+    answer: "APOL Agent online. Query received. Ask anything about $APOL, scam reporting, or agent verification.",
   },
   {
     patterns: [/what is ape police|what('s| is) this site|about/i],
-    answer: "🦍 APE POLICE is a community-powered crypto watchdog. We expose scams, celebrate honest builders, and protect the jungle with memes and morals. Powered by the $APOL token.",
+    answer: "APE POLICE is a community-operated on-chain watchdog. Functions: scam exposure, builder verification, community intelligence. Powered by the $APOL token on Base.",
   },
   {
     patterns: [/\$apol|apol token|tokenomics|supply|tax/i],
-    answer: "🪙 $APOL is the APE POLICE meme token. Total supply: 1,000,000,000. Buy/sell tax: 0%. It's the badge of honor for crypto justice enforcers. Check the Tokenomics section on the homepage for full details!",
+    answer: "$APOL :: Total Supply: 1,000,000,000 [HARD CAPPED] :: Buy/Sell Tax: 0% [IMMUTABLE] :: Chain: Base :: Liquidity: BURNED/LOCKED. See Network Specifications section for full data.",
   },
   {
     patterns: [/report.*(scam|fraud|rug)|scam report|how.*report/i],
-    answer: "🚨 To report a scam:\n1. Click **Report a Scam** in the navigation or channel section\n2. Use **Check Address** to scan any wallet with the APE POLICE Detective Service\n3. Use **Report Address** to flag it in our database\n4. Submit a **Community Report** to warn the APE POLICE community directly",
+    answer: "THREAT REPORTING PROTOCOL:\n[01] Navigate to Report a Scam\n[02] Run wallet scan via APE POLICE Detective Service\n[03] Flag address in community database\n[04] Submit community report with evidence",
   },
   {
     patterns: [/check.*address|address.*check|blacklist|detective/i],
-    answer: "🔍 The address checker is on the Report a Scam page. Enter any blockchain wallet or contract address, select the chain (ETH, BTC, SOL, Base, etc.) and hit Check. The APE POLICE Detective Service scans it for known risks and flags.",
+    answer: "DETECTIVE SERVICE :: Enter any wallet or contract address on the Report a Scam page. Select chain (ETH, BTC, SOL, Base). Execute scan. Risk flags returned from GoPlus threat database.",
   },
   {
     patterns: [/nominate|hero|good.*dev|honest/i],
-    answer: "🏆 Know an honest dev, influencer, or project making crypto better? Nominate them as a hero! Go to **Nominate a Hero** in the nav. The community votes on nominations and top heroes appear on the leaderboard.",
+    answer: "HERO NOMINATION :: Identify verified builders contributing to ecosystem integrity. Submit nomination via Nominate a Hero. Community voting determines leaderboard placement.",
   },
   {
     patterns: [/leaderboard|ranking|top.*report|most.*report/i],
-    answer: "📊 The Rankings page shows the top scam reports and hero nominations voted on by the community. The more upvotes a report gets, the higher it ranks. Check it out in the navigation!",
+    answer: "RANKINGS :: Community-ranked scam reports and hero nominations sorted by upvote count. Access via Rankings page in navigation.",
   },
   {
     patterns: [/vote|upvote|community.*vote/i],
-    answer: "👍 You can upvote any scam report or hero nomination on their respective pages. The most-voted entries rise to the top of the leaderboard. It's community justice in action!",
+    answer: "VOTING :: Upvote scam reports or hero nominations on their respective pages. High-vote entries surface to leaderboard. Consensus-based threat validation.",
   },
   {
     patterns: [/join|community|telegram|channel/i],
-    answer: "🔗 Join the APE POLICE channel to be part of the community! Look for the **Join the Channel** button in the channel section on the homepage. We discuss shady projects, call out frauds, and spotlight trusted builders.",
+    answer: "FIELD COMMS :: Join the APE POLICE channel via the Communications & Access section. Active threat monitoring, scam alerts, and contributor recognition.",
   },
   {
     patterns: [/roadmap|plan|future|phase/i],
-    answer: "🗺️ The APE POLICE roadmap has multiple phases, from launching the token and community tools to expanding the watchdog platform and awarding crypto heroes. Scroll to the Roadmap section on the homepage to see all phases!",
+    answer: "OPERATIONAL MILESTONES :: Phase 1 [COMPLETED] — token + tools. Phase 2 — Agent-LARP Detector [ACTIVE]. Phase 3 — Predictive Threat Engine. Phase 4 — Institutional API Access. See Roadmap section.",
   },
   {
     patterns: [/buy.*apol|\$apol.*buy|where.*buy|how.*buy/i],
-    answer: "💰 Click the **Buy $APOL** button on the homepage to get your $APOL tokens. Always DYOR (Do Your Own Research) and never invest more than you can afford to lose!",
+    answer: "NETWORK ACCESS :: Click Acquire Access Key on the homepage to obtain $APOL. Execute own research before committing capital.",
   },
   {
     patterns: [/safe|trust|legit|real/i],
-    answer: "✅ APE POLICE is community-driven and transparent. We don't give financial advice, just viral justice and jungle protection. Always DYOR before investing in anything!",
+    answer: "APOL operates as a community intelligence layer. No financial advice issued. All data sourced from public on-chain streams. User assumes full trading responsibility.",
   },
   {
     patterns: [/rug|rugpull|scam.*type|type.*scam/i],
-    answer: "⚠️ Common crypto scam types we track:\n• Rug Pulls, dev abandons + dumps tokens\n• Fake Tokens, impersonating real projects\n• Ponzi Schemes, paying old investors with new money\n• Phishing, fake sites stealing your wallet\n• Fake Airdrops, requiring you to send crypto first\n\nReport any of these on the Report a Scam page!",
+    answer: "KNOWN THREAT VECTORS:\n[01] Rug Pull — dev abandons + dumps\n[02] Fake Token — project impersonation\n[03] Ponzi — old investors paid by new\n[04] Phishing — wallet credential theft\n[05] Fake Airdrop — pre-payment required\n\nReport confirmed threats via Report a Scam.",
   },
   {
     patterns: [/dyor|research|how.*safe/i],
-    answer: "🔬 DYOR = Do Your Own Research! Before investing:\n• Check the contract on a blockchain explorer\n• Scan the address with APE POLICE Detective Service\n• Verify the team's identity\n• Look for audit reports\n• Never send crypto to receive crypto",
+    answer: "PRE-INVESTMENT CHECKLIST:\n[01] Verify contract on block explorer\n[02] Run APE POLICE Detective scan\n[03] Confirm team identity\n[04] Check audit status\n[05] Never send crypto to receive crypto",
   },
   {
     patterns: [/help|what can you do|features|how.*work/i],
-    answer: "🤖 I can help with:\n• What APE POLICE is about\n• How to report scams\n• Scanning addresses with the Detective Service\n• Nominating heroes\n• $APOL tokenomics\n• Leaderboard & voting\n• Crypto safety tips\n\nJust ask me anything!",
+    answer: "APOL AGENT CAPABILITIES:\n[01] Site and feature navigation\n[02] Scam reporting protocol\n[03] Address scan guidance\n[04] $APOL token data\n[05] Hero nomination flow\n[06] Leaderboard and voting\n[07] Operational threat intel",
   },
   {
     patterns: [/thanks|thank you|thx|ty|appreciate/i],
-    answer: "🫡 Anytime, officer! Stay safe in the crypto jungle. If you spot a scam, report it, together we protect the community. 🦍🚔",
+    answer: "Acknowledged. Stay vigilant. If you identify a threat, report it. APOL network depends on community intelligence.",
   },
   {
     patterns: [/bye|goodbye|cya|later/i],
-    answer: "👋 Stay safe out there, officer! APE POLICE is always watching. 🦍🔐",
+    answer: "Session closed. APOL Agent standing by.",
   },
 ];
 
-const FALLBACK = "🤔 I'm not sure about that one. Try asking about:\n• Reporting scams\n• Checking addresses\n• $APOL tokenomics\n• Nominating heroes\n• The leaderboard\n\nOr type **help** to see everything I can do!";
+const FALLBACK = "Query unrecognized. Try: scam reporting / address checking / $APOL data / hero nomination / leaderboard. Type 'help' for full capability list.";
 
 function getAnswer(input: string): string {
   const trimmed = input.trim();
   for (const entry of KB) {
-    if (entry.patterns.some((p) => p.test(trimmed))) {
-      return entry.answer;
-    }
+    if (entry.patterns.some((p) => p.test(trimmed))) return entry.answer;
   }
   return FALLBACK;
-}
-
-function formatText(text: string) {
-  return text.split("\n").map((line, i) => (
-    <span key={i}>
-      {line.split(/\*\*(.+?)\*\*/g).map((part, j) =>
-        j % 2 === 1 ? <strong key={j}>{part}</strong> : part
-      )}
-      {i < text.split("\n").length - 1 && <br />}
-    </span>
-  ));
 }
 
 const QUICK_QUESTIONS = [
@@ -107,10 +94,14 @@ const QUICK_QUESTIONS = [
   "How do I nominate a hero?",
 ];
 
+const G = "#00ff00";
+const BG = "rgba(0,0,0,0.95)";
+const BORDER = "1px solid rgba(0,255,0,0.25)";
+
 export default function ApolAgent() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { from: "agent", text: "👋 GM, officer! I'm **APOL Agent**, your APE POLICE guide. Ask me anything about the site, $APOL token, or how to fight crypto scams!" },
+    { from: "agent", text: "APOL AGENT :: SYSTEM ONLINE\nIntelligence layer active. Submit query to begin." },
   ]);
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -122,15 +113,17 @@ export default function ApolAgent() {
   const send = (text?: string) => {
     const msg = (text || input).trim();
     if (!msg) return;
-    const userMsg: Message = { from: "user", text: msg };
-    const agentMsg: Message = { from: "agent", text: getAnswer(msg) };
-    setMessages((prev) => [...prev, userMsg, agentMsg]);
+    setMessages((prev) => [
+      ...prev,
+      { from: "user", text: msg },
+      { from: "agent", text: getAnswer(msg) },
+    ]);
     setInput("");
   };
 
   return (
     <>
-      {/* Floating button */}
+      {/* Toggle button */}
       <button
         onClick={() => setOpen((o) => !o)}
         data-testid="button-apol-agent-toggle"
@@ -139,19 +132,19 @@ export default function ApolAgent() {
           bottom: "24px",
           right: "24px",
           zIndex: 9999,
-          width: "56px",
-          height: "56px",
-          borderRadius: "50%",
-          background: "linear-gradient(135deg, #3b82f6, #22c55e)",
-          border: "none",
+          width: "48px",
+          height: "48px",
+          borderRadius: "0",
+          background: "#000",
+          border: `1px solid ${G}`,
           cursor: "pointer",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          boxShadow: "0 4px 24px rgba(59,130,246,0.5)",
+          boxShadow: `0 0 12px rgba(0,255,0,0.3)`,
         }}
       >
-        {open ? <X size={24} color="#fff" /> : <MessageCircle size={24} color="#fff" />}
+        {open ? <X size={18} color={G} /> : <Terminal size={18} color={G} />}
       </button>
 
       {/* Chat window */}
@@ -160,142 +153,143 @@ export default function ApolAgent() {
           data-testid="div-apol-agent-window"
           style={{
             position: "fixed",
-            bottom: "90px",
+            bottom: "84px",
             right: "24px",
             zIndex: 9998,
-            width: "340px",
+            width: "360px",
             maxWidth: "calc(100vw - 32px)",
             maxHeight: "520px",
             display: "flex",
             flexDirection: "column",
-            borderRadius: "16px",
+            borderRadius: "0",
             overflow: "hidden",
-            boxShadow: "0 8px 40px rgba(0,0,0,0.5)",
-            border: "1px solid rgba(59,130,246,0.3)",
-            background: "#0f172a",
+            border: BORDER,
+            background: BG,
+            boxShadow: "0 0 40px rgba(0,255,0,0.1)",
           }}
         >
-          {/* Header */}
+          {/* Header bar */}
           <div style={{
-            background: "linear-gradient(135deg, #1e3a5f, #1a3a2a)",
-            padding: "12px 16px",
+            background: "rgba(0,255,0,0.05)",
+            padding: "10px 14px",
             display: "flex",
             alignItems: "center",
-            gap: "10px",
-            borderBottom: "1px solid rgba(59,130,246,0.2)",
+            justifyContent: "space-between",
+            borderBottom: BORDER,
           }}>
-            <div style={{
-              width: "36px",
-              height: "36px",
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #3b82f6, #22c55e)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}>
-              <Bot size={20} color="#fff" />
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Terminal size={14} color={G} />
+              <span style={{ color: G, fontSize: "11px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                APOL Agent
+              </span>
             </div>
-            <div>
-              <div style={{ color: "#fff", fontWeight: 700, fontSize: "15px", lineHeight: 1.2 }}>APOL Agent</div>
-              <div style={{ color: "#22c55e", fontSize: "11px", display: "flex", alignItems: "center", gap: "4px" }}>
-                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
-                Online
-              </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+              <span style={{ width: "6px", height: "6px", background: G, display: "inline-block", borderRadius: "50%" }} />
+              <span style={{ color: G, fontSize: "10px", letterSpacing: "0.1em" }}>ONLINE</span>
             </div>
           </div>
 
-          {/* Messages */}
+          {/* Message log */}
           <div style={{
             flex: 1,
             overflowY: "auto",
-            padding: "12px",
+            padding: "10px 12px",
             display: "flex",
             flexDirection: "column",
-            gap: "10px",
+            gap: "6px",
           }}>
             {messages.map((m, i) => (
-              <div key={i} style={{
-                display: "flex",
-                justifyContent: m.from === "user" ? "flex-end" : "flex-start",
-              }}>
-                <div style={{
-                  maxWidth: "80%",
-                  padding: "9px 12px",
-                  borderRadius: m.from === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
-                  background: m.from === "user" ? "linear-gradient(135deg, #3b82f6, #2563eb)" : "#1e293b",
-                  color: "#fff",
-                  fontSize: "13px",
-                  lineHeight: "1.5",
-                  border: m.from === "agent" ? "1px solid rgba(59,130,246,0.2)" : "none",
+              <div key={i} style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+                <span style={{
+                  fontSize: "9px",
+                  letterSpacing: "0.1em",
+                  color: m.from === "agent" ? "rgba(0,255,0,0.5)" : "rgba(255,255,255,0.35)",
+                  textTransform: "uppercase",
                 }}>
-                  {formatText(m.text)}
+                  {m.from === "agent" ? "[APOL-AGENT]" : "[USER]"}
+                </span>
+                <div style={{
+                  padding: "7px 10px",
+                  background: m.from === "agent" ? "rgba(0,255,0,0.05)" : "rgba(255,255,255,0.05)",
+                  border: m.from === "agent" ? "1px solid rgba(0,255,0,0.15)" : "1px solid rgba(255,255,255,0.1)",
+                  color: m.from === "agent" ? G : "#ffffff",
+                  fontSize: "12px",
+                  lineHeight: "1.6",
+                  whiteSpace: "pre-wrap",
+                }}>
+                  {m.text}
                 </div>
               </div>
             ))}
 
-            {/* Quick questions, show only at start */}
+            {/* Quick queries — only at start */}
             {messages.length === 1 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "4px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "6px" }}>
+                <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.4)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                  SUGGESTED QUERIES
+                </span>
                 {QUICK_QUESTIONS.map((q) => (
                   <button
                     key={q}
                     onClick={() => send(q)}
                     data-testid={`button-quick-${q.replace(/\s+/g, "-").toLowerCase()}`}
                     style={{
-                      background: "rgba(59,130,246,0.1)",
-                      border: "1px solid rgba(59,130,246,0.3)",
-                      borderRadius: "8px",
-                      color: "#93c5fd",
-                      fontSize: "12px",
-                      padding: "6px 10px",
+                      background: "transparent",
+                      border: "1px solid rgba(0,255,0,0.2)",
+                      color: "rgba(0,255,0,0.7)",
+                      fontSize: "11px",
+                      padding: "5px 8px",
                       cursor: "pointer",
                       textAlign: "left",
+                      borderRadius: "0",
+                      letterSpacing: "0.03em",
                     }}
                   >
-                    {q}
+                    &gt; {q}
                   </button>
                 ))}
               </div>
             )}
-
             <div ref={bottomRef} />
           </div>
 
-          {/* Input */}
+          {/* Input row */}
           <div style={{
-            padding: "10px 12px",
-            borderTop: "1px solid rgba(59,130,246,0.2)",
+            padding: "8px 10px",
+            borderTop: BORDER,
             display: "flex",
-            gap: "8px",
-            background: "#0f172a",
+            gap: "6px",
+            alignItems: "center",
+            background: "rgba(0,255,0,0.03)",
           }}>
+            <span style={{ color: G, fontSize: "13px", flexShrink: 0 }}>&gt;</span>
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && send()}
-              placeholder="Ask APOL Agent..."
+              placeholder="enter query..."
               data-testid="input-apol-agent"
               style={{
                 flex: 1,
-                background: "#1e293b",
-                border: "1px solid rgba(59,130,246,0.3)",
-                borderRadius: "8px",
-                padding: "8px 12px",
-                color: "#fff",
-                fontSize: "13px",
+                background: "transparent",
+                border: "none",
+                borderBottom: "1px solid rgba(0,255,0,0.2)",
+                padding: "4px 0",
+                color: "#ffffff",
+                fontSize: "12px",
                 outline: "none",
+                caretColor: G,
               }}
             />
             <button
               onClick={() => send()}
               data-testid="button-apol-agent-send"
               style={{
-                background: "linear-gradient(135deg, #3b82f6, #22c55e)",
-                border: "none",
-                borderRadius: "8px",
-                width: "36px",
-                height: "36px",
+                background: "transparent",
+                border: `1px solid ${G}`,
+                borderRadius: "0",
+                width: "30px",
+                height: "30px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -303,7 +297,7 @@ export default function ApolAgent() {
                 flexShrink: 0,
               }}
             >
-              <Send size={16} color="#fff" />
+              <Send size={13} color={G} />
             </button>
           </div>
         </div>
