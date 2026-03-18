@@ -23,7 +23,7 @@ const roadmapPhases = [
     progress: 100,
     color: "blue",
     items: [
-      { text: "APOL Detective — wallet scanner (GoPlus)", completed: true },
+      { text: "APOL Detective — on-chain wallet scanner", completed: true },
       { text: "Multi-chain support (ETH, BSC, Base, Solana…)", completed: true },
       { text: "Agent-LARP Detector — Cognition Score", completed: true },
       { text: "Evidence image upload on reports", completed: true },
@@ -37,7 +37,7 @@ const roadmapPhases = [
     color: "teal",
     items: [
       { text: "APOL Agent AI chatbot (live)", completed: true },
-      { text: "Scam address registry (ChainAbuse feed)", completed: false },
+      { text: "Scam address registry & public threat feed", completed: false },
       { text: "Report bounty rewards in $APOL", completed: false },
       { text: "Token-gated Verified Citizen tier", completed: false },
     ],

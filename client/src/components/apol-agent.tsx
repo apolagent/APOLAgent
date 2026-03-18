@@ -21,11 +21,11 @@ const KB: { patterns: RegExp[]; answer: string }[] = [
   },
   {
     patterns: [/report.*(scam|fraud|rug)|scam report|how.*report/i],
-    answer: "🚨 To report a scam:\n1. Click **Report a Scam** in the navigation or channel section\n2. Use **Check Address** to look up a wallet on ChainAbuse\n3. Use **Report Address** to flag it on the global ChainAbuse database\n4. Submit a **Community Report** to warn the APE POLICE community directly",
+    answer: "🚨 To report a scam:\n1. Click **Report a Scam** in the navigation or channel section\n2. Use **Check Address** to scan any wallet with the APE POLICE Detective Service\n3. Use **Report Address** to flag it in our database\n4. Submit a **Community Report** to warn the APE POLICE community directly",
   },
   {
-    patterns: [/chainabuse|check.*address|address.*check|blacklist/i],
-    answer: "🔍 The ChainAbuse checker is on the Report a Scam page. Enter any blockchain wallet or contract address, select the chain (ETH, BTC, SOL, Base, etc.) and hit Check. It searches the global ChainAbuse database for reports.",
+    patterns: [/check.*address|address.*check|blacklist|detective/i],
+    answer: "🔍 The address checker is on the Report a Scam page. Enter any blockchain wallet or contract address, select the chain (ETH, BTC, SOL, Base, etc.) and hit Check. The APE POLICE Detective Service scans it for known risks and flags.",
   },
   {
     patterns: [/nominate|hero|good.*dev|honest/i],
@@ -61,11 +61,11 @@ const KB: { patterns: RegExp[]; answer: string }[] = [
   },
   {
     patterns: [/dyor|research|how.*safe/i],
-    answer: "🔬 DYOR = Do Your Own Research! Before investing:\n• Check the contract on a blockchain explorer\n• Look up the address on ChainAbuse (our checker!)\n• Verify the team's identity\n• Look for audit reports\n• Never send crypto to receive crypto",
+    answer: "🔬 DYOR = Do Your Own Research! Before investing:\n• Check the contract on a blockchain explorer\n• Scan the address with APE POLICE Detective Service\n• Verify the team's identity\n• Look for audit reports\n• Never send crypto to receive crypto",
   },
   {
     patterns: [/help|what can you do|features|how.*work/i],
-    answer: "🤖 I can help with:\n• What APE POLICE is about\n• How to report scams\n• Checking addresses on ChainAbuse\n• Nominating heroes\n• $APOL tokenomics\n• Leaderboard & voting\n• Crypto safety tips\n\nJust ask me anything!",
+    answer: "🤖 I can help with:\n• What APE POLICE is about\n• How to report scams\n• Scanning addresses with the Detective Service\n• Nominating heroes\n• $APOL tokenomics\n• Leaderboard & voting\n• Crypto safety tips\n\nJust ask me anything!",
   },
   {
     patterns: [/thanks|thank you|thx|ty|appreciate/i],

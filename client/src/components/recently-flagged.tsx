@@ -62,13 +62,11 @@ function WalletCard({ wallet }: { wallet: FlaggedWallet }) {
           <span>{new Date(wallet.flaggedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
         </div>
         <a
-          href={`https://www.chainabuse.com/address/${wallet.address}`}
-          target="_blank"
-          rel="noopener noreferrer"
+          href={`/detective?address=${wallet.address}&chain=${wallet.chain}`}
           className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-          data-testid={`link-chainabuse-${wallet.id}`}
+          data-testid={`link-detective-${wallet.id}`}
         >
-          View on ChainAbuse <ExternalLink className="w-3 h-3" />
+          View Intel <ExternalLink className="w-3 h-3" />
         </a>
       </div>
     </div>
@@ -144,7 +142,7 @@ export default function RecentlyFlagged() {
       </div>
 
       <p className="mt-4 text-center text-xs text-gray-600">
-        Powered by APE POLICE Detective Service · Data sourced from ChainAbuse
+        Powered by APE POLICE Detective Service
       </p>
     </section>
   );

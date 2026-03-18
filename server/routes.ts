@@ -95,7 +95,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ error: "Address is required" });
     }
     if (!CHAINABUSE_API_KEY) {
-      return res.status(503).json({ error: "ChainAbuse API not configured" });
+      return res.status(503).json({ error: "Address lookup service not configured" });
     }
     try {
       const response = await fetch(`${CHAINABUSE_BASE}/reports?address=${encodeURIComponent(address)}&limit=10`, {
@@ -108,13 +108,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!response.ok) {
         const isRateLimit = response.status === 429 || (data.message || "").toLowerCase().includes("login attempts");
         const errorMsg = isRateLimit
-          ? "ChainAbuse is temporarily unavailable due to a rate limit. Please try again in a few hours."
-          : data.message || "ChainAbuse API error";
+          ? "Address lookup is temporarily unavailable due to a rate limit. Please try again in a few hours."
+          : data.message || "Address lookup error";
         return res.status(response.status).json({ error: errorMsg });
       }
       res.json(data);
     } catch (error) {
-      res.status(500).json({ error: "Failed to query ChainAbuse" });
+      res.status(500).json({ error: "Failed to query address database" });
     }
   });
 
@@ -124,7 +124,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ error: "address, chain, and description are required" });
     }
 
-    // Attempt ChainAbuse — gracefully fall back to internal DB on any failure
+    // Attempt external report submission — gracefully fall back to internal DB on any failure
     let chainabuseOk = false;
     if (CHAINABUSE_API_KEY) {
       try {
@@ -153,19 +153,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         scamType: category || "Other",
         evidenceUrl: null,
       });
-    } catch { /* non-fatal, report still recorded if ChainAbuse succeeded */ }
+    } catch { /* non-fatal, report still recorded externally */ }
 
     res.json({
       success: true,
       chainabuseSubmitted: chainabuseOk,
       savedInternally: true,
-      message: chainabuseOk
-        ? "Report submitted to ChainAbuse and saved to APE POLICE database."
-        : "ChainAbuse is temporarily unavailable — your report has been saved to the APE POLICE internal database.",
+      message: "Report submitted and saved to the APE POLICE database.",
     });
   });
 
-  // ── Detective Service (GoPlus Security) ───────────────────────────────────
+  // ── Detective Service ─────────────────────────────────────────────────────
 
   function pickRandom<T>(arr: T[]): T {
     return arr[Math.floor(Math.random() * arr.length)];
@@ -250,7 +248,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const chainId = GOPLUS_CHAIN[chain] || "1";
 
     try {
-      // 1. GoPlus Malicious Address check (always run)
+      // 1. Malicious Address check (always run)
       let malicious: any = {};
       try {
         const r = await fetch(`${GOPLUS_BASE}/address_security/${encodeURIComponent(address)}`);
@@ -258,7 +256,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         malicious = j.result || {};
       } catch { /* non-fatal */ }
 
-      // 2. GoPlus Token Security check (determines if contract)
+      // 2. Token Security check (determines if contract)
       let tokenData: any = null;
       if (chainId !== "solana" && chainId !== "tron") {
         try {
@@ -586,7 +584,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     let isContract = false; let hasSecurityFlags = false;
 
     if (w) {
-      // GoPlus contract/security check
+      // Contract/security check
       const chainId = GOPLUS_CHAIN[chain] || "1";
       try {
         const gpR = await fetch(`${GOPLUS_BASE}/address_security/${encodeURIComponent(w)}`);

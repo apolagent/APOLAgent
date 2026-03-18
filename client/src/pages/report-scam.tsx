@@ -42,7 +42,7 @@ const chains = [
   { value: "other", label: "Other" },
 ];
 
-type GoPlusResult = {
+type DetectiveResult = {
   address?: string;
   chain?: string;
   addressType?: "wallet" | "contract";
@@ -72,7 +72,7 @@ export default function ReportScam() {
 
   const [checkAddress, setCheckAddress] = useState("");
   const [checkChain, setCheckChain] = useState("ethereum");
-  const [checkResult, setCheckResult] = useState<GoPlusResult | null>(null);
+  const [checkResult, setCheckResult] = useState<DetectiveResult | null>(null);
   const [checkError, setCheckError] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(false);
 
@@ -126,7 +126,7 @@ export default function ReportScam() {
     e.target.value = "";
   };
 
-  const buildTweetText = (result: GoPlusResult) => {
+  const buildTweetText = (result: DetectiveResult) => {
     const addr = result.address || checkAddress;
     const short = addr.slice(0, 8) + "…" + addr.slice(-4);
     const type = result.addressType === "contract"
