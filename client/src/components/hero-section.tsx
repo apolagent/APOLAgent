@@ -34,9 +34,6 @@ export default function HeroSection() {
             alt="APE POLICE official seal"
             className="w-20 h-20 md:w-24 md:h-24 mx-auto rounded-full border-2 border-yellow-400 neon-glow object-cover"
           />
-          <p className="text-xs text-slate-500 uppercase tracking-widest mt-2">
-            Official Seal · $APOL
-          </p>
         </div>
 
         {/* Main headline */}
