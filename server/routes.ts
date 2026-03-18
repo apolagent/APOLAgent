@@ -389,7 +389,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ── Agent-LARP Detector ───────────────────────────────────────────────────
 
-  function buildAgentVerdict(agentName: string, score: number, verdict: string): string {
+  function buildAgentVerdict(agentName: string, score: number | null, verdict: string): string {
+    if (verdict === "Inconclusive") {
+      return pickRandom([
+        `Citizen, I cannot issue a verdict on "${agentName}" — insufficient hard evidence submitted. No wallet, no verifiable logs, no on-chain footprint. The Patrol only deals in facts. Bring me something real. 🔍`,
+        `Inconclusive, Citizen. "${agentName}" has provided no verifiable data for analysis. Real agents leave traces — wallets, logs, on-chain records. Come back with evidence. 📋`,
+        `Citizen, "${agentName}" cannot be classified. No on-chain address, no verifiable logs, nothing to analyze. I don't guess. Supply a wallet or logs URL and I'll give you a real verdict. 🦍`,
+        `No verdict possible, Citizen. "${agentName}" is a name without a footprint. Until there is a wallet address, a logs endpoint, or a social link I can verify, this agent is not real to me. Evidence first. 🔐`,
+        `Citizen, "${agentName}" remains unclassified. The APE POLICE Patrol requires hard evidence before issuing a Cognition Score. I will not fabricate certainty where none exists. 📊`,
+      ]);
+    }
     if (verdict === "Digital Puppet") {
       return pickRandom([
         `Citizen, I've run a full behavioral analysis on "${agentName}". Cognition Score: ${score}%. DIGITAL PUPPET — a human hiding behind an AI label. No autonomous footprint, no verifiable on-chain execution. Don't let this project fool you. 🤖❌`,
@@ -417,143 +426,299 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ]);
   }
 
+  // ── helpers for agent analyze ─────────────────────────────────────────────
+
+  function scoreTimingFromTimestamps(tsSec: number[]): { score: number; label: string; detail: string; timingPattern: string[] } {
+    const entries = tsSec.slice(0, 10);
+    const hours = entries.map(ts => new Date(ts * 1000).getUTCHours());
+    const uniqueHours = new Set(hours).size;
+    const bizRatio = hours.filter(h => h >= 8 && h <= 18).length / hours.length;
+    const timingPattern = entries.map(ts =>
+      new Date(ts * 1000).toISOString().slice(0, 16).replace("T", " ") + " UTC"
+    );
+    let score = 0; let label = ""; let detail = "";
+    if (uniqueHours >= 12) { score = 38; label = "24/7 Automated"; detail = `Transactions span ${uniqueHours} unique UTC hours — true round-the-clock automation pattern.`; }
+    else if (uniqueHours >= 8) { score = 30; label = "Mostly Automated"; detail = `Activity spans ${uniqueHours} UTC hours — broad window consistent with automation.`; }
+    else if (uniqueHours >= 4) { score = 18; label = "Mixed Pattern"; detail = `${uniqueHours} unique active hours — semi-automated or time-zone restricted.`; }
+    else { score = 8; label = "Narrow Window"; detail = `Only ${uniqueHours} unique hour(s) — extremely concentrated timing, suggesting manual operation.`; }
+    if (bizRatio > 0.85) { score = Math.max(5, score - 18); label = "Human Hours ⚠️"; detail += ` ⚠️ ${Math.round(bizRatio * 100)}% of activity falls in business hours (8am–6pm UTC) — HIGH LARP RISK.`; }
+    else if (bizRatio > 0.65) { score = Math.max(8, score - 8); detail += ` Activity skewed toward business hours.`; }
+    return { score, label, detail, timingPattern };
+  }
+
+  async function fetchEvmTimestamps(explorerUrl: string, address: string): Promise<number[] | null> {
+    try {
+      const r = await fetch(`${explorerUrl}?module=account&action=txlist&address=${address}&sort=desc&offset=10&page=1`, { signal: AbortSignal.timeout(7000) });
+      const d = await r.json() as any;
+      if (d.status === "1" && Array.isArray(d.result) && d.result.length > 0)
+        return d.result.slice(0, 10).map((tx: any) => parseInt(tx.timeStamp));
+    } catch { /* timeout / network */ }
+    return null;
+  }
+
+  async function fetchSolanaTimestamps(address: string): Promise<number[] | null> {
+    try {
+      const r = await fetch("https://api.mainnet-beta.solana.com", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getSignaturesForAddress", params: [address, { limit: 10 }] }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const d = await r.json() as any;
+      if (Array.isArray(d.result) && d.result.length > 0) {
+        const ts = d.result.filter((s: any) => s.blockTime).map((s: any) => s.blockTime as number);
+        return ts.length > 0 ? ts : null;
+      }
+    } catch { /* non-fatal */ }
+    return null;
+  }
+
+  async function fetchLogsAndVerify(logsUrl: string, onchainTimestamps: number[]): Promise<{
+    status: "verified" | "mismatch" | "inconclusive"; detail: string; logs: string[];
+  }> {
+    try {
+      const r = await fetch(logsUrl, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(6000) });
+      const raw = await r.json() as any;
+      const entries: any[] = Array.isArray(raw) ? raw.slice(0, 3) : (Array.isArray(raw?.logs) ? raw.logs.slice(0, 3) : (Array.isArray(raw?.data) ? raw.data.slice(0, 3) : []));
+      if (entries.length === 0) return { status: "inconclusive", detail: "Logs endpoint responded but returned no parseable log entries.", logs: [] };
+
+      const tsFields = ["timestamp", "time", "created_at", "blockTime", "ts", "datetime", "date", "createdAt"];
+      const logTs: number[] = [];
+      const logLabels: string[] = [];
+      for (const e of entries) {
+        const raw = tsFields.map(f => e[f]).find(v => v != null);
+        if (raw != null) {
+          const ms = typeof raw === "number" ? (raw > 1e12 ? raw : raw * 1000) : new Date(raw).getTime();
+          if (!isNaN(ms)) { logTs.push(Math.floor(ms / 1000)); logLabels.push(new Date(ms).toISOString().slice(0, 16).replace("T", " ") + " UTC"); }
+        }
+      }
+      if (logTs.length === 0) return { status: "inconclusive", detail: "Logs found but no recognisable timestamp fields (timestamp/time/created_at/blockTime/ts).", logs: [] };
+
+      const WINDOW = 300; // 5 min tolerance
+      const matched = logTs.filter(lt => onchainTimestamps.some(ot => Math.abs(lt - ot) <= WINDOW));
+      if (matched.length > 0)
+        return { status: "verified", detail: `${matched.length}/${logTs.length} log timestamps match on-chain activity within ±5 minutes. Reasoning is publicly verifiable.`, logs: logLabels };
+      return { status: "mismatch", detail: `Log timestamps do NOT align with on-chain transactions (±5 min window). Either the agent is logging off-chain activity only, or the logs are fabricated.`, logs: logLabels };
+    } catch (e: any) {
+      return { status: "inconclusive", detail: `Could not reach logs endpoint: ${e?.message || "network error"}.`, logs: [] };
+    }
+  }
+
+  async function checkSocialIntegrity(socialLink: string): Promise<{
+    status: "clear" | "suspicious" | "inconclusive"; detail: string; followers?: number; accountAgeDays?: number;
+  }> {
+    const isX = /x\.com|twitter\.com/.test(socialLink);
+    const isTg = /t\.me|telegram\.me/.test(socialLink);
+
+    if (isX) {
+      const handleMatch = socialLink.match(/(?:x|twitter)\.com\/([A-Za-z0-9_]+)/);
+      const handle = handleMatch?.[1];
+      if (!handle) return { status: "inconclusive", detail: "Could not parse X handle from the provided URL." };
+      try {
+        const r = await fetch(`https://cdn.syndication.twimg.com/widgets/followbutton/info.json?screen_names=${handle}`, { signal: AbortSignal.timeout(5000) });
+        const d = await r.json() as any;
+        const user = Array.isArray(d) ? d[0] : null;
+        if (!user) return { status: "inconclusive", detail: `X account @${handle} not found or data unavailable.` };
+        const followers: number = user.followers_count ?? 0;
+        // Approximate account creation via snowflake ID
+        let accountAgeDays: number | undefined;
+        let ageLabel = "Creation date unverifiable";
+        if (user.id) {
+          const TWITTER_EPOCH = 1288834974657n;
+          try {
+            const createdMs = Number((BigInt(user.id) >> 22n) + TWITTER_EPOCH);
+            const ageMs = Date.now() - createdMs;
+            accountAgeDays = Math.floor(ageMs / 86400000);
+            ageLabel = accountAgeDays < 1 ? "created today" : `~${accountAgeDays} days old`;
+          } catch { /* BigInt not supported */ }
+        }
+        if (followers >= 10000 && accountAgeDays !== undefined && accountAgeDays <= 7)
+          return { status: "suspicious", detail: `@${handle}: ${followers.toLocaleString()} followers, account is only ${ageLabel}. This is a Sybil/Bot pattern — follower counts this high on a new account are virtually impossible organically. 🚨`, followers, accountAgeDays };
+        if (followers >= 10000 && accountAgeDays === undefined)
+          return { status: "suspicious", detail: `@${handle}: ${followers.toLocaleString()} followers. Account age could not be determined from the Twitter API — treat with caution if this account is recent.`, followers };
+        return { status: "clear", detail: `@${handle}: ${followers.toLocaleString()} followers, ${ageLabel}. No Sybil pattern detected from available data.`, followers, accountAgeDays };
+      } catch {
+        return { status: "inconclusive", detail: `Could not fetch X profile data for the provided link. Twitter may be rate-limiting this request.` };
+      }
+    }
+
+    if (isTg) {
+      const chMatch = socialLink.match(/(?:t\.me|telegram\.me)\/([A-Za-z0-9_]+)/);
+      const channel = chMatch?.[1];
+      if (!channel) return { status: "inconclusive", detail: "Could not parse Telegram channel from the URL." };
+      try {
+        const r = await fetch(`https://t.me/${channel}`, { signal: AbortSignal.timeout(5000) });
+        const html = await r.text();
+        const memberMatch = html.match(/(\d[\d\s,]+)\s*(?:member|subscriber)/i);
+        if (memberMatch) {
+          const members = parseInt(memberMatch[1].replace(/[\s,]/g, ""));
+          return { status: "clear", detail: `Telegram channel @${channel} has ~${members.toLocaleString()} members. Existence confirmed.`, followers: members };
+        }
+        if (html.includes("tgme_page")) return { status: "clear", detail: `Telegram channel @${channel} exists. Member count not parseable from public page.` };
+        return { status: "inconclusive", detail: `Telegram channel @${channel} could not be fetched (private or non-existent).` };
+      } catch {
+        return { status: "inconclusive", detail: "Could not reach Telegram to verify the channel." };
+      }
+    }
+    return { status: "inconclusive", detail: "Link is not an X or Telegram URL — social integrity check skipped." };
+  }
+
   app.post("/api/agent/analyze", async (req, res) => {
-    const { agentName, socialLink, wallet, chain = "ethereum", claimedAbilities } = req.body;
+    const { agentName, socialLink, wallet, chain = "ethereum", claimedAbilities, logsUrl } = req.body;
     if (!agentName?.trim()) return res.status(400).json({ error: "Agent name is required" });
 
-    let speedScore = 15; let speedLabel = "No Data";
-    let speedDetail = "No wallet provided — speed test cannot be performed.";
-    const timingPattern: string[] = [];
+    const w = wallet?.trim() || null;
+    const sl = socialLink?.trim() || null;
+    const claims = claimedAbilities?.trim() || null;
+    const lu = logsUrl?.trim() || null;
 
-    let traceScore = 2; let traceLabel = "No Footprint";
-    let traceDetail = "No wallet or social link — real agents leave verifiable traces.";
-    let isContract = false; let txTotal = 0; let hasSecurityFlags = false;
+    // ── 1. On-chain timing (Speed Test) ──────────────────────────────────────
+    const explorerApis: Record<string, string> = {
+      ethereum: "https://api.etherscan.io/api",
+      bsc: "https://api.bscscan.com/api",
+      polygon: "https://api.polygonscan.com/api",
+      base: "https://api.basescan.org/api",
+    };
 
-    let contextScore = 5; let contextLabel = "No Claims";
-    let contextDetail = "No claimed abilities provided. Real agents have documented, verifiable capabilities.";
+    let speedScored = false;
+    let speedScore = 0; let speedLabel = "Inconclusive"; let speedDetail = ""; let timingPattern: string[] = [];
+    let onchainTimestamps: number[] = [];
+    let isContract = false; let hasSecurityFlags = false;
 
-    if (wallet?.trim()) {
+    if (w) {
+      // GoPlus contract/security check
       const chainId = GOPLUS_CHAIN[chain] || "1";
-
-      // GoPlus security + contract check
       try {
-        const gpRes = await fetch(`${GOPLUS_BASE}/address_security/${encodeURIComponent(wallet.trim())}`);
-        const gpData = await gpRes.json() as any;
-        const gp = gpData.result || {};
-        hasSecurityFlags = Object.values(gp).some(v => v === "1" || v === 1);
-
+        const gpR = await fetch(`${GOPLUS_BASE}/address_security/${encodeURIComponent(w)}`);
+        const gpD = await gpR.json() as any;
+        hasSecurityFlags = Object.values(gpD.result || {}).some(v => v === "1" || v === 1);
         if (chainId !== "solana" && chainId !== "tron") {
-          const tokenRes = await fetch(`${GOPLUS_BASE}/token_security/${chainId}?contract_addresses=${encodeURIComponent(wallet.trim())}`);
-          const tokenData = await tokenRes.json() as any;
-          const key = Object.keys(tokenData.result || {})[0];
-          isContract = !!key;
+          const tR = await fetch(`${GOPLUS_BASE}/token_security/${chainId}?contract_addresses=${encodeURIComponent(w)}`);
+          const tD = await tR.json() as any;
+          isContract = !!Object.keys(tD.result || {})[0];
         }
       } catch { /* non-fatal */ }
 
-      // Etherscan-family TX timing analysis
-      const explorerApis: Record<string, string> = {
-        ethereum: "https://api.etherscan.io/api",
-        bsc: "https://api.bscscan.com/api",
-        polygon: "https://api.polygonscan.com/api",
-      };
-      const explorerUrl = explorerApis[chain];
-      if (explorerUrl) {
-        try {
-          const txRes = await fetch(
-            `${explorerUrl}?module=account&action=txlist&address=${wallet.trim()}&sort=desc&offset=10&page=1`
-          );
-          const txData = await txRes.json() as any;
-          if (txData.status === "1" && Array.isArray(txData.result) && txData.result.length > 0) {
-            const txs = txData.result.slice(0, 10);
-            txTotal = txs.length;
-            const hours = txs.map((tx: any) => new Date(parseInt(tx.timeStamp) * 1000).getUTCHours());
-            const uniqueHours = new Set(hours).size;
-            const bizRatio = hours.filter((h: number) => h >= 8 && h <= 18).length / hours.length;
-            txs.forEach((tx: any) => {
-              const d = new Date(parseInt(tx.timeStamp) * 1000);
-              timingPattern.push(d.toISOString().slice(0, 16).replace("T", " ") + " UTC");
-            });
-
-            if (uniqueHours >= 12) {
-              speedScore = 38; speedLabel = "24/7 Automated";
-              speedDetail = `Transactions spread across ${uniqueHours} different UTC hours — true round-the-clock automation pattern.`;
-            } else if (uniqueHours >= 8) {
-              speedScore = 30; speedLabel = "Mostly Automated";
-              speedDetail = `Activity spans ${uniqueHours} UTC hours — broad window consistent with automation.`;
-            } else if (uniqueHours >= 4) {
-              speedScore = 18; speedLabel = "Mixed Pattern";
-              speedDetail = `${uniqueHours} unique active hours — could be semi-automated or time-zone restricted.`;
-            } else {
-              speedScore = 8; speedLabel = "Narrow Window";
-              speedDetail = `Only ${uniqueHours} unique hour(s) — extremely concentrated timing, suggesting manual or scheduled operation.`;
-            }
-            if (bizRatio > 0.85) {
-              speedScore = Math.max(5, speedScore - 18); speedLabel = "Human Hours ⚠️";
-              speedDetail += ` ⚠️ ${Math.round(bizRatio * 100)}% of activity falls in business hours (8am–6pm UTC) — HIGH LARP RISK.`;
-            } else if (bizRatio > 0.65) {
-              speedScore = Math.max(8, speedScore - 8);
-              speedDetail += ` Activity slightly skewed toward business hours.`;
-            }
-          } else {
-            speedScore = 8; speedLabel = "No Transactions";
-            speedDetail = "No on-chain transactions found. Wallet appears inactive — agents should be busy.";
-          }
-        } catch {
-          speedScore = 12; speedLabel = "Unavailable";
-          speedDetail = "Could not retrieve transaction data — timing test inconclusive.";
-        }
+      // Transaction timestamp fetch
+      let tsList: number[] | null = null;
+      if (chain === "solana") {
+        tsList = await fetchSolanaTimestamps(w);
+        if (!tsList) { speedLabel = "No Transactions"; speedDetail = "No Solana transactions found for this address via the public RPC. Wallet appears inactive."; }
+      } else if (explorerApis[chain]) {
+        tsList = await fetchEvmTimestamps(explorerApis[chain], w);
+        if (!tsList) { speedLabel = "No Transactions"; speedDetail = `No transactions found on ${chain.charAt(0).toUpperCase() + chain.slice(1)} for this address, or the block explorer is temporarily unavailable.`; }
       } else {
-        speedDetail = `Transaction timing analysis not supported for ${chain} via this scanner.`;
+        speedLabel = "Chain Unsupported"; speedDetail = `Direct transaction scanning is not available for ${chain} — wallet security analysis still performed.`;
       }
 
-      // Traceability
-      if (socialLink?.trim()) {
-        if (isContract) { traceScore = 28; traceLabel = "Strong Trace"; traceDetail = `Smart contract at ${wallet.slice(0,10)}… + social presence at ${socialLink}. Strong autonomous footprint.`; }
-        else { traceScore = 20; traceLabel = "Moderate Trace"; traceDetail = `EOA wallet at ${wallet.slice(0,10)}… + social presence confirmed. Solid traceability.`; }
-      } else {
-        if (isContract) { traceScore = 18; traceLabel = "Contract Found"; traceDetail = `Smart contract at ${wallet.slice(0,10)}… — contract execution is evidence of automation. No social link.`; }
-        else { traceScore = 10; traceLabel = "Wallet Only"; traceDetail = `EOA wallet at ${wallet.slice(0,10)}… found — basic trace only. No social link to cross-reference.`; }
+      if (tsList && tsList.length > 0) {
+        onchainTimestamps = tsList;
+        const r = scoreTimingFromTimestamps(tsList);
+        speedScore = r.score; speedLabel = r.label; speedDetail = r.detail; timingPattern = r.timingPattern;
+        speedScored = true;
       }
-      if (hasSecurityFlags) { traceScore = Math.max(2, traceScore - 10); traceDetail += " ⚠️ Security flags detected on this wallet."; }
-
-    } else if (socialLink?.trim()) {
-      traceScore = 10; traceLabel = "Social Only";
-      traceDetail = `Social presence at ${socialLink} noted — but no on-chain wallet to verify autonomous execution.`;
+    } else {
+      speedLabel = "Inconclusive — Missing Evidence";
+      speedDetail = "No wallet address provided. The Patrol cannot assess transaction timing without an on-chain address.";
     }
 
-    // Context / Claims
-    if (claimedAbilities?.trim()) {
-      const c = claimedAbilities.toLowerCase();
+    // ── 2. Traceability ───────────────────────────────────────────────────────
+    let traceScored = false;
+    let traceScore = 0; let traceLabel = "Inconclusive"; let traceDetail = "";
+
+    if (w) {
+      traceScored = true;
+      if (sl) {
+        if (isContract) { traceScore = 28; traceLabel = "Strong Trace"; traceDetail = `Smart contract at ${w.slice(0,10)}… + social presence. Strong autonomous footprint.`; }
+        else { traceScore = 20; traceLabel = "Moderate Trace"; traceDetail = `EOA wallet at ${w.slice(0,10)}… + social presence confirmed.`; }
+      } else {
+        if (isContract) { traceScore = 18; traceLabel = "Contract Found"; traceDetail = `Smart contract at ${w.slice(0,10)}… — programmatic execution possible.`; }
+        else { traceScore = 10; traceLabel = "Wallet Only"; traceDetail = `EOA wallet at ${w.slice(0,10)}… — basic trace. No social link cross-reference.`; }
+      }
+      if (hasSecurityFlags) { traceScore = Math.max(2, traceScore - 10); traceDetail += " ⚠️ Security flags on this wallet."; traceLabel += " ⚠️"; }
+    } else if (sl) {
+      traceScored = true; traceScore = 8; traceLabel = "Social Only";
+      traceDetail = "Social link provided but no on-chain wallet to verify autonomous execution.";
+    } else {
+      traceLabel = "Inconclusive — Missing Evidence";
+      traceDetail = "No wallet or social link. The Patrol cannot establish a trace without verifiable identifiers.";
+    }
+
+    // ── 3. Context / Claims ───────────────────────────────────────────────────
+    let contextScored = false;
+    let contextScore = 0; let contextLabel = "Inconclusive"; let contextDetail = "";
+
+    if (claims) {
+      const c = claims.toLowerCase();
       const hasTrade = ["trade", "swap", "arbitrage", "dex", "buy", "sell", "liquidity"].some(k => c.includes(k));
       const hasOnchain = ["deploy", "contract", "bridge", "stake", "yield", "farm", "mint"].some(k => c.includes(k));
-
-      if (!wallet?.trim()) {
-        contextScore = 12; contextLabel = "Unverifiable";
-        contextDetail = `Claims: "${claimedAbilities.slice(0, 90)}" — No wallet provided to verify these on-chain. Always demand a verifiable address.`;
+      contextScored = true;
+      if (!w) {
+        contextScore = 10; contextLabel = "Unverifiable — No Wallet";
+        contextDetail = `Claims: "${claims.slice(0, 90)}" — No wallet provided. Cannot verify on-chain. Always demand a verifiable address.`;
       } else if (isContract && hasOnchain) {
         contextScore = 28; contextLabel = "Claim Verified ✓";
         contextDetail = `Claims on-chain execution — wallet IS a smart contract, consistent with the claimed capabilities.`;
-      } else if (hasTrade && txTotal > 0) {
+      } else if (hasTrade && onchainTimestamps.length > 0) {
         contextScore = 22; contextLabel = "Evidence Found";
         contextDetail = `Claims trading/swapping — active on-chain wallet detected, consistent with automated execution.`;
-      } else if (txTotal > 0) {
+      } else if (onchainTimestamps.length > 0) {
         contextScore = 15; contextLabel = "Partial Match";
-        contextDetail = `Claims: "${claimedAbilities.slice(0, 80)}" — Some on-chain activity found, ability-specific proof is limited.`;
+        contextDetail = `Claims: "${claims.slice(0, 80)}" — On-chain activity found but ability-specific proof is limited.`;
       } else {
         contextScore = 8; contextLabel = "No Evidence";
-        contextDetail = `Claims: "${claimedAbilities.slice(0, 80)}" — Wallet is inactive. Claims cannot be verified on-chain. LARP risk elevated.`;
+        contextDetail = `Claims: "${claims.slice(0, 80)}" — Wallet is inactive. Claims cannot be verified on-chain.`;
       }
+    } else {
+      contextLabel = "Inconclusive — No Claims";
+      contextDetail = "No claimed abilities provided. Real agents have documented, verifiable capabilities.";
     }
 
-    const cognitionScore = Math.min(100, Math.max(0, speedScore + traceScore + contextScore));
-    const verdict = cognitionScore <= 30 ? "Digital Puppet" : cognitionScore <= 70 ? "Semi-Autonomous" : "Fully Autonomous";
+    // ── 4. Logs Verification ──────────────────────────────────────────────────
+    let logsResult: { status: "verified" | "mismatch" | "inconclusive"; detail: string; logs: string[] } = { status: "inconclusive", detail: "No logs URL provided.", logs: [] };
+    if (lu) logsResult = await fetchLogsAndVerify(lu, onchainTimestamps);
+
+    // ── 5. Social Integrity ───────────────────────────────────────────────────
+    let socialResult: { status: "clear" | "suspicious" | "inconclusive"; detail: string; followers?: number; accountAgeDays?: number } = { status: "inconclusive", detail: "No social link provided." };
+    if (sl) socialResult = await checkSocialIntegrity(sl);
+
+    // ── Score + Verdict ───────────────────────────────────────────────────────
+    const scoredTests = [
+      speedScored ? { score: speedScore, max: 40 } : null,
+      traceScored ? { score: traceScore, max: 30 } : null,
+      contextScored ? { score: contextScore, max: 30 } : null,
+    ].filter(Boolean) as { score: number; max: number }[];
+
+    const scoredCount = scoredTests.length;
+    let cognitionScore: number | null = null;
+    let verdict = "Inconclusive";
+
+    if (scoredCount >= 1) {
+      const totalScored = scoredTests.reduce((a, t) => a + t.score, 0);
+      const totalMax = scoredTests.reduce((a, t) => a + t.max, 0);
+      let raw = Math.round((totalScored / totalMax) * 100);
+
+      // Modifiers
+      if (logsResult.status === "verified") raw = Math.min(100, raw + 10);
+      if (logsResult.status === "mismatch") raw = Math.max(0, raw - 12);
+      if (socialResult.status === "suspicious") raw = Math.max(0, raw - 15);
+
+      cognitionScore = Math.min(100, Math.max(0, raw));
+      verdict = cognitionScore <= 30 ? "Digital Puppet" : cognitionScore <= 70 ? "Semi-Autonomous" : "Fully Autonomous";
+    }
+
+    if (scoredCount === 0) verdict = "Inconclusive";
+
     const apolVerdict = buildAgentVerdict(agentName.trim(), cognitionScore, verdict);
 
     res.json({
-      agentName: agentName.trim(), socialLink, wallet, claimedAbilities, cognitionScore, verdict, apolVerdict,
-      speedTest: { score: speedScore, maxScore: 40, label: speedLabel, detail: speedDetail, timingPattern: timingPattern.slice(0, 5) },
-      traceabilityTest: { score: traceScore, maxScore: 30, label: traceLabel, detail: traceDetail, isContract, txTotal },
-      contextTest: { score: contextScore, maxScore: 30, label: contextLabel, detail: contextDetail },
+      agentName: agentName.trim(), socialLink: sl, wallet: w, claimedAbilities: claims, logsUrl: lu,
+      cognitionScore, verdict, apolVerdict, scoredTests: scoredCount,
+      speedTest: { scored: speedScored, score: speedScore, maxScore: 40, label: speedLabel, detail: speedDetail, timingPattern: timingPattern.slice(0, 5) },
+      traceabilityTest: { scored: traceScored, score: traceScore, maxScore: 30, label: traceLabel, detail: traceDetail, isContract },
+      contextTest: { scored: contextScored, score: contextScore, maxScore: 30, label: contextLabel, detail: contextDetail },
+      logsTest: logsResult,
+      socialTest: socialResult,
     });
   });
 
