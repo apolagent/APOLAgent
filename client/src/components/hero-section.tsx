@@ -4,19 +4,9 @@ export default function HeroSection() {
   return (
     <section
       className="relative min-h-screen flex items-center justify-center overflow-hidden"
-      style={{ background: "#020817" }}
       data-testid="hero-section"
     >
-      {/* Radial fade to keep centre dark */}
-      <div
-        className="absolute inset-0 z-0"
-        style={{
-          background:
-            "radial-gradient(ellipse 70% 60% at 50% 50%, transparent 0%, #020817 80%)",
-        }}
-      />
-
-      <div className="relative z-10 text-center px-4 max-w-4xl mx-auto">
+      <div className="text-center px-4 max-w-4xl mx-auto">
 
         {/* Official seal */}
         <div className="mb-6 inline-block">
