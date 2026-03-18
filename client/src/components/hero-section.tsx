@@ -1,4 +1,4 @@
-import { ChevronDown, Send, Coins } from "lucide-react";
+import { Send, Coins } from "lucide-react";
 
 export default function HeroSection() {
   return (
@@ -7,15 +7,6 @@ export default function HeroSection() {
       style={{ background: "#020817" }}
       data-testid="hero-section"
     >
-      {/* Grid background */}
-      <div
-        className="absolute inset-0 z-0 opacity-20"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(59,130,246,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(59,130,246,0.4) 1px, transparent 1px)",
-          backgroundSize: "60px 60px",
-        }}
-      />
       {/* Radial fade to keep centre dark */}
       <div
         className="absolute inset-0 z-0"
@@ -62,28 +53,25 @@ export default function HeroSection() {
               justifyContent: "center",
               height: "42px",
               width: "100%",
-              maxWidth: "220px",
+              maxWidth: "240px",
               backgroundColor: "#3b82f6",
               color: "#ffffff",
-              fontSize: "14px",
+              fontSize: "13px",
               fontWeight: 800,
-              borderRadius: "10px",
+              borderRadius: "0",
               border: "none",
               cursor: "pointer",
               padding: "0 16px",
               gap: "8px",
-              letterSpacing: "0.08em",
+              letterSpacing: "0.1em",
               textTransform: "uppercase",
+              fontFamily: "'JetBrains Mono', monospace",
               boxSizing: "border-box",
             }}
           >
             <Send size={16} />
             Access Terminal
           </button>
-
-          <div className="hidden sm:block">
-            <ChevronDown className="w-6 h-6 text-slate-600" />
-          </div>
 
           <button
             data-testid="button-buy-apol"
@@ -93,23 +81,24 @@ export default function HeroSection() {
               justifyContent: "center",
               height: "42px",
               width: "100%",
-              maxWidth: "220px",
+              maxWidth: "240px",
               backgroundColor: "transparent",
-              color: "#22c55e",
-              fontSize: "14px",
+              color: "#ffffff",
+              fontSize: "13px",
               fontWeight: 800,
-              borderRadius: "10px",
-              border: "1px solid #22c55e",
+              borderRadius: "0",
+              border: "1px solid #ffffff",
               cursor: "pointer",
               padding: "0 16px",
               gap: "8px",
-              letterSpacing: "0.08em",
+              letterSpacing: "0.1em",
               textTransform: "uppercase",
+              fontFamily: "'JetBrains Mono', monospace",
               boxSizing: "border-box",
             }}
           >
             <Coins size={16} />
-            Buy $APOL
+            Acquire Access Key
           </button>
         </div>
 

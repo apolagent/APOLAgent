@@ -69,8 +69,8 @@
   --opaque-button-border-intensity: 9;
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
-  --font-sans: 'Inter', sans-serif;
-  --font-mono: 'Orbitron', monospace;
+  --font-sans: 'JetBrains Mono', monospace;
+  --font-mono: 'JetBrains Mono', monospace;
 
   --shadow-2xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.00);
   --shadow-xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.00);
@@ -99,6 +99,11 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    background-image:
+      linear-gradient(rgba(59,130,246,0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(59,130,246,0.07) 1px, transparent 1px);
+    background-size: 60px 60px;
+    background-attachment: fixed;
   }
 }
 
@@ -113,7 +118,7 @@
     pointer-events: none;
   }
 
-  .font-meme { font-family: 'Fredoka One', cursive; }
+  .font-meme { font-family: 'JetBrains Mono', monospace; font-weight: 800; }
 
   .font-orbitron {
     font-family: 'Orbitron', monospace;
