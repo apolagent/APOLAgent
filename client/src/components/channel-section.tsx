@@ -11,9 +11,12 @@ export default function ChannelSection() {
           {/* Left column */}
           <div>
             <p className="text-xs text-slate-500 uppercase tracking-widest mb-4">Intelligence Channel</p>
-            <h2 className="font-meme text-4xl md:text-6xl gradient-text mb-6">
-              APOL Agent: Autonomous Market Integrity
+            <h2 className="font-meme text-4xl md:text-6xl gradient-text mb-2">
+              $APOL Agent:
             </h2>
+            <p className="font-meme text-xl md:text-2xl text-slate-400 mb-6">
+              Autonomous Market Integrity
+            </p>
             <div className="space-y-4 mb-8">
               <p className="text-base text-slate-300 leading-relaxed">
                 Ape Police provides a real-time verification layer for the agentic economy. By cross-referencing on-chain execution with autonomous reasoning logs, the APOL Agent eliminates market asymmetry and exposes developer LARPs before they impact the retail holder.
