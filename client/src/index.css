@@ -116,6 +116,21 @@
     background-color: transparent !important;
     background-image: none !important;
   }
+  /* Remap all Tailwind slate backgrounds from blue-tinted to neutral black */
+  [class*="bg-slate-9"] { background-color: #0c0c0c !important; }
+  [class*="bg-slate-8"] { background-color: #141414 !important; }
+  [class*="bg-slate-7"] { background-color: #1c1c1c !important; }
+  [class*="bg-slate-6"] { background-color: #242424 !important; }
+  [class*="bg-slate-5"] { background-color: #303030 !important; }
+  [class*="bg-slate-4"] { background-color: #3d3d3d !important; }
+  /* Also remap blue-* and indigo-* backgrounds */
+  [class*="bg-blue-9"] { background-color: #0c0c0c !important; }
+  [class*="bg-blue-8"] { background-color: #141414 !important; }
+  [class*="bg-blue-7"] { background-color: #1c1c1c !important; }
+  /* Remap text-slate muted colors to white-based */
+  [class*="text-slate-4"], [class*="text-slate-5"] { color: rgba(255,255,255,0.4) !important; }
+  [class*="text-slate-3"] { color: rgba(255,255,255,0.6) !important; }
+  [class*="text-slate-2"] { color: rgba(255,255,255,0.75) !important; }
 }
 
 @layer utilities {
