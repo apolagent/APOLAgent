@@ -48,7 +48,7 @@ export default function TokenomicsSection() {
           <h2 className="font-meme text-5xl md:text-6xl gradient-text mb-4">
             Network Specifications
           </h2>
-          <p className="text-slate-400 font-mono text-sm uppercase tracking-widest">$APOL · {CHAIN}</p>
+          <p className="text-slate-400 text-sm uppercase tracking-widest">$APOL · {CHAIN}</p>
         </div>
 
         {/* Data grid */}
@@ -56,7 +56,7 @@ export default function TokenomicsSection() {
           {rows.map((row, i) => (
             <div
               key={row.key}
-              className="flex items-center gap-4 px-6 py-4 font-mono text-sm"
+              className="flex items-center gap-4 px-6 py-4 text-sm"
               style={{ borderBottom: i < rows.length - 1 ? "1px solid rgba(255,255,255,0.06)" : undefined }}
             >
               {/* Label */}
@@ -93,7 +93,7 @@ export default function TokenomicsSection() {
 
         {/* Distribution summary */}
         <div
-          className="mt-4 bg-slate-900/70 border border-slate-700/60 rounded-xl px-6 py-5 font-mono"
+          className="mt-4 bg-slate-900/70 border border-slate-700/60 rounded-xl px-6 py-5"
           style={{ borderLeft: "3px solid rgba(148,163,184,0.3)" }}
         >
           <p className="text-xs text-slate-500 uppercase tracking-widest mb-1.5">Distribution</p>
