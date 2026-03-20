@@ -3,11 +3,17 @@ import { Link } from "wouter";
 import {
   ArrowLeft, Bot, FileText, AlertTriangle, CheckCircle,
   XCircle, Loader2, ChevronRight, Search, Brain, HelpCircle, Info,
+  Zap, Lock, ExternalLink, ShieldAlert, Activity, Clock,
 } from "lucide-react";
+import { BrowserProvider, parseEther } from "ethers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+const G = "#00ff00";
+const DEEP_DIVE_RECIPIENT = "0x857aca6A8A743C9262d64819D239f509a1Cd0A85";
+const DEEP_DIVE_AMOUNT = "0.005";
 
 type TestResult = { scored: boolean; score: number; maxScore: number; label: string; detail: string; timingPattern?: string[]; isContract?: boolean };
 type LogsTestResult = { status: "verified" | "mismatch" | "inconclusive"; detail: string; logs: string[] };
@@ -62,29 +68,14 @@ function oneLineSummary(r: AgentResult): string {
   return `Verdict based on ${parts.slice(0, 2).join(" and ")}.`;
 }
 
-// Derive the 3 Evidence Filing items from result
 function getEvidenceFiling(r: AgentResult | null, formState: { wallet: string; logsUrl: string; socialLink: string }) {
   if (!r) {
-    // Pre-scan: reflect form readiness
     return [
-      {
-        emoji: "🕒", label: "Liveliness",
-        status: formState.wallet.trim() ? "green" as StatusColor : "grey" as StatusColor,
-        tag: formState.wallet.trim() ? "Active" : "Passive",
-      },
-      {
-        emoji: "🧠", label: "Reasoning",
-        status: formState.logsUrl.trim() ? "green" as StatusColor : "yellow" as StatusColor,
-        tag: formState.logsUrl.trim() ? "Verified" : "Unlinked",
-      },
-      {
-        emoji: "👥", label: "Sybil Check",
-        status: formState.socialLink.trim() ? "green" as StatusColor : "grey" as StatusColor,
-        tag: formState.socialLink.trim() ? "Clear" : "Pending",
-      },
+      { emoji: "🕒", label: "Liveliness", status: formState.wallet.trim() ? "green" as StatusColor : "grey" as StatusColor, tag: formState.wallet.trim() ? "Active" : "Passive" },
+      { emoji: "🧠", label: "Reasoning", status: formState.logsUrl.trim() ? "green" as StatusColor : "yellow" as StatusColor, tag: formState.logsUrl.trim() ? "Verified" : "Unlinked" },
+      { emoji: "👥", label: "Sybil Check", status: formState.socialLink.trim() ? "green" as StatusColor : "grey" as StatusColor, tag: formState.socialLink.trim() ? "Clear" : "Pending" },
     ];
   }
-  // Post-scan: use actual results
   const liveStatus: StatusColor = !r.speedTest.scored ? "grey" : r.speedTest.score >= 12 ? "green" : "red";
   const reasoningStatus: StatusColor = r.logsTest.status === "verified" ? "green" : r.logsTest.status === "mismatch" ? "red" : "yellow";
   const sybilStatus: StatusColor = r.socialTest.status === "clear" ? "green" : r.socialTest.status === "suspicious" ? "red" : "grey";
@@ -93,6 +84,163 @@ function getEvidenceFiling(r: AgentResult | null, formState: { wallet: string; l
     { emoji: "🧠", label: "Reasoning", status: reasoningStatus, tag: reasoningStatus === "green" ? "Verified" : "Unlinked" },
     { emoji: "👥", label: "Sybil Check", status: sybilStatus, tag: sybilStatus === "green" ? "Clear" : sybilStatus === "red" ? "Suspicious" : "Unverified" },
   ];
+}
+
+function AdvancedResults({ result }: { result: AgentResult }) {
+  const rows: { label: string; value: string; color?: string }[] = [
+    {
+      label: "SPEED TEST SCORE",
+      value: result.speedTest.scored ? `${result.speedTest.score} / ${result.speedTest.maxScore}` : "NOT SCORED",
+      color: result.speedTest.scored ? (result.speedTest.score >= 25 ? G : result.speedTest.score >= 12 ? "#facc15" : "#f87171") : "#6b7280",
+    },
+    {
+      label: "TRACEABILITY SCORE",
+      value: result.traceabilityTest.scored ? `${result.traceabilityTest.score} / ${result.traceabilityTest.maxScore}` : "NOT SCORED",
+      color: result.traceabilityTest.scored ? (result.traceabilityTest.score >= 20 ? G : "#facc15") : "#6b7280",
+    },
+    {
+      label: "CONTEXT SCORE",
+      value: result.contextTest.scored ? `${result.contextTest.score} / ${result.contextTest.maxScore}` : "NOT SCORED",
+      color: result.contextTest.scored ? (result.contextTest.score >= 10 ? G : "#facc15") : "#6b7280",
+    },
+    {
+      label: "CONTRACT DETECTED",
+      value: result.traceabilityTest.isContract ? "YES — ON-CHAIN CONTRACT" : "NO CONTRACT FOUND",
+      color: result.traceabilityTest.isContract ? G : "#f87171",
+    },
+    {
+      label: "SOCIAL FOLLOWERS",
+      value: result.socialTest.followers !== undefined ? `${result.socialTest.followers.toLocaleString()}` : "NO DATA",
+      color: "#ffffff",
+    },
+    {
+      label: "ACCOUNT AGE",
+      value: result.socialTest.accountAgeDays !== undefined ? `${result.socialTest.accountAgeDays} DAYS` : "UNKNOWN",
+      color: result.socialTest.accountAgeDays !== undefined ? (result.socialTest.accountAgeDays > 90 ? G : "#facc15") : "#6b7280",
+    },
+    {
+      label: "SCORED TESTS",
+      value: `${result.scoredTests} / 5`,
+      color: result.scoredTests >= 3 ? G : "#facc15",
+    },
+  ];
+
+  return (
+    <div
+      data-testid="div-advanced-results"
+      style={{ border: `1px solid ${G}`, background: "#000", padding: "0" }}
+    >
+      {/* Header */}
+      <div style={{
+        background: "rgba(0,255,0,0.06)",
+        borderBottom: `1px solid rgba(0,255,0,0.25)`,
+        padding: "12px 20px",
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+      }}>
+        <Zap size={14} color={G} />
+        <span style={{ color: G, fontSize: "11px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+          Deep Dive — Advanced Forensic Report
+        </span>
+        <span style={{ marginLeft: "auto", fontSize: "9px", color: "rgba(0,255,0,0.5)", letterSpacing: "0.1em" }}>
+          [PRIORITY SCAN UNLOCKED]
+        </span>
+      </div>
+
+      <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: "0" }}>
+
+        {/* Score matrix */}
+        {rows.map((row, i) => (
+          <div key={i} style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "8px 0",
+            borderBottom: i < rows.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none",
+          }}>
+            <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+              {row.label}
+            </span>
+            <span style={{ fontSize: "11px", fontWeight: 700, color: row.color || "#fff", letterSpacing: "0.06em" }}>
+              {row.value}
+            </span>
+          </div>
+        ))}
+
+        {/* Timing pattern */}
+        {result.speedTest.timingPattern && result.speedTest.timingPattern.length > 0 && (
+          <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid rgba(0,255,0,0.15)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+              <Clock size={12} color={G} />
+              <span style={{ fontSize: "10px", color: "rgba(0,255,0,0.6)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                Transaction Timing Pattern
+              </span>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+              {result.speedTest.timingPattern.map((t, i) => (
+                <span key={i} style={{
+                  fontSize: "10px",
+                  padding: "3px 7px",
+                  border: "1px solid rgba(0,255,0,0.2)",
+                  color: "rgba(0,255,0,0.7)",
+                  letterSpacing: "0.05em",
+                }}>
+                  {t}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Raw logs */}
+        {result.logsTest.logs && result.logsTest.logs.length > 0 && (
+          <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid rgba(0,255,0,0.15)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+              <Activity size={12} color={G} />
+              <span style={{ fontSize: "10px", color: "rgba(0,255,0,0.6)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                Raw Reasoning Log Entries
+              </span>
+            </div>
+            <div style={{ background: "rgba(0,255,0,0.03)", border: "1px solid rgba(0,255,0,0.1)", padding: "10px 12px" }}>
+              {result.logsTest.logs.map((log, i) => (
+                <div key={i} style={{ fontSize: "10px", color: "rgba(255,255,255,0.6)", lineHeight: "1.7", fontFamily: "'JetBrains Mono', monospace" }}>
+                  <span style={{ color: "rgba(0,255,0,0.4)", marginRight: "8px" }}>[{String(i).padStart(2, "0")}]</span>
+                  {log}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Forensic detail rows */}
+        <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid rgba(0,255,0,0.15)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px" }}>
+            <ShieldAlert size={12} color={G} />
+            <span style={{ fontSize: "10px", color: "rgba(0,255,0,0.6)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+              Full Test Narratives
+            </span>
+          </div>
+          {[
+            { label: "Speed Analysis", detail: result.speedTest.detail },
+            { label: "Traceability", detail: result.traceabilityTest.detail },
+            { label: "Context Coherence", detail: result.contextTest.detail },
+            { label: "Log Integrity", detail: result.logsTest.detail },
+            { label: "Social Forensics", detail: result.socialTest.detail },
+          ].filter(r => r.detail).map((row, i) => (
+            <div key={i} style={{ marginBottom: "8px" }}>
+              <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.45)", letterSpacing: "0.1em", textTransform: "uppercase", display: "block", marginBottom: "2px" }}>
+                {row.label}
+              </span>
+              <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.75)", lineHeight: "1.6" }}>
+                {row.detail}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function AgentScanner() {
@@ -107,9 +255,16 @@ export default function AgentScanner() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [showSysInfo, setShowSysInfo] = useState(false);
 
+  const [deepDivePending, setDeepDivePending] = useState(false);
+  const [deepDiveUnlocked, setDeepDiveUnlocked] = useState(false);
+  const [deepDiveTxHash, setDeepDiveTxHash] = useState<string | null>(null);
+  const [deepDiveError, setDeepDiveError] = useState<string | null>(null);
+  const [deepDiveHover, setDeepDiveHover] = useState(false);
+
   const handleScan = async () => {
     if (!agentName.trim()) { setScanError("Agent name is required."); return; }
     setIsScanning(true); setScanError(null); setResult(null);
+    setDeepDiveUnlocked(false); setDeepDiveTxHash(null); setDeepDiveError(null);
     try {
       const res = await fetch("/api/agent/analyze", {
         method: "POST",
@@ -131,6 +286,41 @@ export default function AgentScanner() {
       setScanError(e.message || "Scan failed. Please try again.");
     } finally {
       setIsScanning(false);
+    }
+  };
+
+  const handleDeepDive = async () => {
+    const eth = (window as any).ethereum;
+    if (!eth) {
+      setDeepDiveError("MetaMask not detected. Install MetaMask to use Deep Dive Scan.");
+      return;
+    }
+    setDeepDivePending(true);
+    setDeepDiveError(null);
+    setDeepDiveTxHash(null);
+    try {
+      const provider = new BrowserProvider(eth);
+      const signer = await provider.getSigner();
+      const tx = await signer.sendTransaction({
+        to: DEEP_DIVE_RECIPIENT,
+        value: parseEther(DEEP_DIVE_AMOUNT),
+      });
+      setDeepDiveTxHash(tx.hash);
+      const receipt = await tx.wait(1);
+      if (receipt && receipt.status === 1) {
+        setDeepDiveUnlocked(true);
+        setTimeout(() => document.getElementById("advanced-results")?.scrollIntoView({ behavior: "smooth", block: "start" }), 200);
+      } else {
+        setDeepDiveError("Transaction reverted on-chain. Deep Dive not unlocked.");
+      }
+    } catch (e: any) {
+      if (e.code === 4001 || e.code === "ACTION_REJECTED" || e.message?.includes("rejected")) {
+        setDeepDiveError("Transaction rejected.");
+      } else {
+        setDeepDiveError(e.message || "Transaction failed. Please try again.");
+      }
+    } finally {
+      setDeepDivePending(false);
     }
   };
 
@@ -166,7 +356,6 @@ export default function AgentScanner() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-10 space-y-6">
-        {/* Hero — no scoring legend */}
         <div className="text-center space-y-2">
           <div className="inline-flex items-center gap-2 bg-blue-900/40 border border-blue-600/40 rounded-full px-4 py-1.5 text-blue-300 text-sm font-semibold">
             <Bot className="w-4 h-4" /> Scan Agent Utility
@@ -244,21 +433,116 @@ export default function AgentScanner() {
               </div>
             )}
 
-            <button onClick={handleScan} disabled={isScanning} style={{
-              background: isScanning ? "#1e3a5f" : "linear-gradient(135deg, #1d4ed8, #7c3aed)",
-              color: "white", fontWeight: "bold", padding: "12px 28px", borderRadius: "10px",
-              border: "none", cursor: isScanning ? "not-allowed" : "pointer", fontSize: "15px",
-              width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
-              gap: "8px", opacity: isScanning ? 0.7 : 1,
-            }} data-testid="button-run-scan">
-              {isScanning
-                ? <><Loader2 style={{ width: 18, height: 18, animation: "spin 1s linear infinite" }} />Analyzing Agent…</>
-                : <><Bot style={{ width: 18, height: 18 }} />Run LARP Detection 🕵️</>}
-            </button>
+            {/* Action buttons row */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button onClick={handleScan} disabled={isScanning} style={{
+                flex: 1,
+                background: isScanning ? "#1e3a5f" : "linear-gradient(135deg, #1d4ed8, #7c3aed)",
+                color: "white", fontWeight: "bold", padding: "12px 20px", borderRadius: "10px",
+                border: "none", cursor: isScanning ? "not-allowed" : "pointer", fontSize: "14px",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                gap: "8px", opacity: isScanning ? 0.7 : 1,
+              }} data-testid="button-run-scan">
+                {isScanning
+                  ? <><Loader2 style={{ width: 18, height: 18, animation: "spin 1s linear infinite" }} />Analyzing Agent…</>
+                  : <><Bot style={{ width: 18, height: 18 }} />Run LARP Detection</>}
+              </button>
+
+              {/* Deep Dive Scan button */}
+              <button
+                onClick={handleDeepDive}
+                disabled={deepDivePending || deepDiveUnlocked}
+                onMouseEnter={() => setDeepDiveHover(true)}
+                onMouseLeave={() => setDeepDiveHover(false)}
+                data-testid="button-deep-dive-scan"
+                style={{
+                  flex: "0 0 auto",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "7px",
+                  padding: "12px 18px",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  background: deepDiveUnlocked ? "rgba(0,255,0,0.1)" : deepDiveHover && !deepDivePending ? G : "#000",
+                  color: deepDiveUnlocked ? G : deepDiveHover && !deepDivePending ? "#000" : G,
+                  border: deepDiveUnlocked ? `1px solid rgba(0,255,0,0.4)` : `1px solid ${G}`,
+                  borderRadius: "0",
+                  cursor: deepDiveUnlocked || deepDivePending ? "default" : "pointer",
+                  transition: "background 0.15s ease, color 0.15s ease",
+                  whiteSpace: "nowrap",
+                  opacity: deepDivePending ? 0.75 : 1,
+                }}
+              >
+                {deepDiveUnlocked ? (
+                  <><CheckCircle size={15} />Unlocked</>
+                ) : deepDivePending ? (
+                  <><Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} />Confirming…</>
+                ) : (
+                  <><Zap size={15} />Deep Dive Scan ({DEEP_DIVE_AMOUNT} ETH)</>
+                )}
+              </button>
+            </div>
+
+            {/* Deep dive status messages */}
+            {deepDiveTxHash && !deepDiveUnlocked && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: "8px",
+                padding: "8px 12px", border: "1px solid rgba(0,255,0,0.2)",
+                background: "rgba(0,255,0,0.04)", fontSize: "11px", color: "rgba(0,255,0,0.7)",
+                fontFamily: "'JetBrains Mono', monospace",
+              }} data-testid="div-tx-pending">
+                <Loader2 size={12} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />
+                <span>TX SUBMITTED — Awaiting on-chain confirmation...</span>
+                <a
+                  href={`https://basescan.org/tx/${deepDiveTxHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: G, marginLeft: "auto", flexShrink: 0 }}
+                >
+                  <ExternalLink size={12} />
+                </a>
+              </div>
+            )}
+
+            {deepDiveUnlocked && deepDiveTxHash && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: "8px",
+                padding: "8px 12px", border: `1px solid rgba(0,255,0,0.4)`,
+                background: "rgba(0,255,0,0.06)", fontSize: "11px", color: G,
+                fontFamily: "'JetBrains Mono', monospace",
+              }} data-testid="div-tx-confirmed">
+                <CheckCircle size={12} style={{ flexShrink: 0 }} />
+                <span>TX CONFIRMED — Advanced Results unlocked below.</span>
+                <a
+                  href={`https://basescan.org/tx/${deepDiveTxHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: G, marginLeft: "auto", flexShrink: 0 }}
+                >
+                  <ExternalLink size={12} />
+                </a>
+              </div>
+            )}
+
+            {deepDiveError && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: "8px",
+                padding: "8px 12px", border: "1px solid rgba(255,68,68,0.4)",
+                background: "rgba(255,68,68,0.04)", fontSize: "11px", color: "#f87171",
+                fontFamily: "'JetBrains Mono', monospace",
+              }} data-testid="text-deep-dive-error">
+                <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                {deepDiveError}
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Evidence Filing — pre-scan (form state) */}
+        {/* Evidence Filing — pre-scan */}
         {!result && (
           <div>
             <p className="text-xs text-slate-600 uppercase tracking-widest font-semibold mb-3 px-1">Evidence Filing</p>
@@ -306,7 +590,7 @@ export default function AgentScanner() {
               </div>
             </div>
 
-            {/* Evidence Filing — post-scan results */}
+            {/* Evidence Filing — post-scan */}
             <div>
               <p className="text-xs text-slate-600 uppercase tracking-widest font-semibold mb-3 px-1">Evidence Filing</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -340,8 +624,42 @@ export default function AgentScanner() {
               </div>
             </div>
 
+            {/* Advanced Results — locked gate */}
+            <div id="advanced-results">
+              {!deepDiveUnlocked ? (
+                <div style={{
+                  border: "1px solid rgba(0,255,0,0.2)",
+                  background: "#000",
+                  padding: "32px 20px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "12px",
+                  textAlign: "center",
+                }}
+                  data-testid="div-advanced-results-locked"
+                >
+                  <Lock size={28} color="rgba(0,255,0,0.35)" />
+                  <p style={{ color: "rgba(0,255,0,0.7)", fontSize: "12px", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 700 }}>
+                    Advanced Forensic Report — Locked
+                  </p>
+                  <p style={{ color: "rgba(255,255,255,0.35)", fontSize: "11px", maxWidth: "320px", lineHeight: "1.6" }}>
+                    Timing pattern matrix, raw log entries, full test narratives, and behavioral fingerprint.
+                    Unlock with Deep Dive Scan ({DEEP_DIVE_AMOUNT} ETH).
+                  </p>
+                </div>
+              ) : (
+                <AdvancedResults result={result} />
+              )}
+            </div>
+
             <div className="text-center pt-1">
-              <button onClick={() => { setResult(null); setAgentName(""); setSocialLink(""); setWallet(""); setClaimedAbilities(""); setLogsUrl(""); setScanError(null); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+              <button onClick={() => {
+                setResult(null); setAgentName(""); setSocialLink(""); setWallet("");
+                setClaimedAbilities(""); setLogsUrl(""); setScanError(null);
+                setDeepDiveUnlocked(false); setDeepDiveTxHash(null); setDeepDiveError(null);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
                 className="text-slate-500 hover:text-white text-sm underline underline-offset-2 transition-colors" data-testid="button-scan-another">
                 Scan another agent
               </button>
@@ -349,7 +667,7 @@ export default function AgentScanner() {
           </div>
         )}
 
-        {/* System Info — collapsed by default */}
+        {/* System Info */}
         <div className="pt-4 border-t border-slate-800/60 text-center">
           <button
             onClick={() => setShowSysInfo(v => !v)}
