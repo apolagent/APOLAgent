@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Menu, X, Bot } from "lucide-react";
+import { Menu, X, Bot, Wallet, AlertTriangle } from "lucide-react";
+import { useWallet } from "@/hooks/use-wallet";
+
+const G = "#00ff00";
 
 const navLinks = [
   { id: "mission", label: "Mission" },
@@ -9,6 +12,80 @@ const navLinks = [
   { id: "roadmap", label: "Roadmap" },
   { id: "join", label: "Join" },
 ];
+
+function WalletButton({ compact = false }: { compact?: boolean }) {
+  const { address, truncated, isBase, isConnecting, isSwitching, hasMetaMask, connect, switchToBase } = useWallet();
+
+  const base: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    fontSize: "11px",
+    fontWeight: 700,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    fontFamily: "'JetBrains Mono', monospace",
+    cursor: "pointer",
+    borderRadius: "0",
+    padding: compact ? "6px 10px" : "6px 12px",
+    whiteSpace: "nowrap",
+    transition: "background 0.15s ease, color 0.15s ease",
+  };
+
+  if (address && !isBase) {
+    return (
+      <button
+        onClick={switchToBase}
+        disabled={isSwitching}
+        data-testid="button-switch-network"
+        style={{
+          ...base,
+          background: "transparent",
+          border: "1px solid #ff4444",
+          color: "#ff4444",
+        }}
+      >
+        <AlertTriangle size={12} />
+        {isSwitching ? "Switching..." : "Wrong Network"}
+      </button>
+    );
+  }
+
+  if (address && isBase) {
+    return (
+      <div
+        data-testid="div-wallet-connected"
+        style={{
+          ...base,
+          background: "transparent",
+          border: `1px solid ${G}`,
+          color: G,
+          cursor: "default",
+        }}
+      >
+        <span style={{ width: "6px", height: "6px", background: G, display: "inline-block", flexShrink: 0 }} />
+        {truncated}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={connect}
+      disabled={isConnecting}
+      data-testid="button-connect-wallet"
+      style={{
+        ...base,
+        background: "transparent",
+        border: `1px solid ${G}`,
+        color: G,
+      }}
+    >
+      <Wallet size={12} />
+      {isConnecting ? "Connecting..." : hasMetaMask ? "Connect Wallet" : "Install MetaMask"}
+    </button>
+  );
+}
 
 export default function Navigation() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -37,7 +114,7 @@ export default function Navigation() {
               alt="APE POLICE logo"
               className="w-7 h-7 object-cover rounded-full border border-[#00ff00]/40"
             />
-            <span className="font-meme text-lg" style={{ color: "#00ff00" }}>
+            <span className="font-meme text-lg" style={{ color: G }}>
               APE POLICE
             </span>
           </div>
@@ -66,14 +143,17 @@ export default function Navigation() {
             </Link>
           </div>
 
-          {/* Buy button */}
-          <button
-            className="hidden md:flex items-center gap-2 text-xs font-bold uppercase tracking-widest px-4 py-2 text-black"
-            style={{ background: "#00ff00", border: "none" }}
-            data-testid="link-buy-apol"
-          >
-            Buy $APOL
-          </button>
+          {/* Right actions */}
+          <div className="hidden md:flex items-center gap-3">
+            <WalletButton />
+            <button
+              className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest px-4 py-2 text-black"
+              style={{ background: G, border: "none" }}
+              data-testid="link-buy-apol"
+            >
+              Buy $APOL
+            </button>
+          </div>
 
           {/* Mobile toggle */}
           <button
@@ -105,12 +185,15 @@ export default function Navigation() {
                 Scan Agent
               </span>
             </Link>
-            <button
-              className="w-full mt-3 py-2 text-xs font-bold uppercase tracking-widest text-black"
-              style={{ background: "#00ff00" }}
-            >
-              Buy $APOL
-            </button>
+            <div className="pt-2 flex flex-col gap-2">
+              <WalletButton compact />
+              <button
+                className="w-full py-2 text-xs font-bold uppercase tracking-widest text-black"
+                style={{ background: G }}
+              >
+                Buy $APOL
+              </button>
+            </div>
           </div>
         </div>
       )}
