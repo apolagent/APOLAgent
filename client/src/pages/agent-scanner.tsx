@@ -174,7 +174,7 @@ function AdvancedResults({ result }: { result: AgentResult }) {
             padding: "8px 0",
             borderBottom: i < rows.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none",
           }}>
-            <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+            <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.72)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
               {row.label}
             </span>
             <span style={{ fontSize: "11px", fontWeight: 700, color: row.color || "#fff", letterSpacing: "0.06em" }}>
@@ -220,7 +220,7 @@ function AdvancedResults({ result }: { result: AgentResult }) {
             <div style={{ background: "rgba(0,255,0,0.03)", border: "1px solid rgba(0,255,0,0.1)", padding: "10px 12px" }}>
               {result.logsTest.logs.map((log, i) => (
                 <div key={i} style={{ fontSize: "10px", color: "rgba(255,255,255,0.6)", lineHeight: "1.7", fontFamily: "'JetBrains Mono', monospace" }}>
-                  <span style={{ color: "rgba(0,255,0,0.4)", marginRight: "8px" }}>[{String(i).padStart(2, "0")}]</span>
+                  <span style={{ color: "rgba(0,255,0,0.8)", marginRight: "8px" }}>[{String(i).padStart(2, "0")}]</span>
                   {log}
                 </div>
               ))}
@@ -244,7 +244,7 @@ function AdvancedResults({ result }: { result: AgentResult }) {
             { label: "Social Forensics", detail: result.socialTest.detail },
           ].filter(r => r.detail).map((row, i) => (
             <div key={i} style={{ marginBottom: "8px" }}>
-              <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.45)", letterSpacing: "0.1em", textTransform: "uppercase", display: "block", marginBottom: "2px" }}>
+              <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.82)", letterSpacing: "0.1em", textTransform: "uppercase", display: "block", marginBottom: "2px" }}>
                 {row.label}
               </span>
               <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.75)", lineHeight: "1.6" }}>
@@ -674,11 +674,11 @@ export default function AgentScanner() {
                 }}
                   data-testid="div-advanced-results-locked"
                 >
-                  <Lock size={28} color="rgba(0,255,0,0.35)" />
+                  <Lock size={28} color="rgba(0,255,0,0.65)" />
                   <p style={{ color: "rgba(0,255,0,0.7)", fontSize: "12px", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 700 }}>
                     Advanced Forensic Report — Locked
                   </p>
-                  <p style={{ color: "rgba(255,255,255,0.35)", fontSize: "11px", maxWidth: "320px", lineHeight: "1.6" }}>
+                  <p style={{ color: "rgba(255,255,255,0.72)", fontSize: "11px", maxWidth: "320px", lineHeight: "1.6" }}>
                     Timing pattern matrix, raw log entries, full test narratives, and behavioral fingerprint.
                     Unlock with Deep Dive Scan ({DEEP_DIVE_AMOUNT} ETH).
                   </p>

@@ -197,7 +197,7 @@ function TipModal({
           {/* Split breakdown */}
           {tipState.phase !== "success" && (
             <div style={{ border: "1px solid rgba(0,255,0,0.12)", background: "rgba(0,255,0,0.03)", padding: "12px" }}>
-              <div style={{ fontSize: "9px", color: "rgba(0,255,0,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "8px" }}>
+              <div style={{ fontSize: "9px", color: "rgba(0,255,0,0.82)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "8px" }}>
                 Split Breakdown
               </div>
               {[
@@ -209,7 +209,7 @@ function TipModal({
                   padding: "5px 0",
                   borderTop: i > 0 ? "1px solid rgba(255,255,255,0.06)" : "none",
                 }}>
-                  <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.45)" }}>{row.label}</span>
+                  <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.75)" }}>{row.label}</span>
                   <span style={{ fontSize: "11px", fontWeight: 700, color: row.color }}>{row.value}</span>
                 </div>
               ))}

@@ -103,7 +103,7 @@ function ProgressStepper({ status }: { status: string }) {
     {
       icon: isVerified
         ? <Award size={16} color={G} />
-        : <Award size={16} color="rgba(255,255,255,0.2)" />,
+        : <Award size={16} color="rgba(255,255,255,0.45)" />,
       label: "Project Badge Issued",
       sublabel: isVerified ? "Badge active" : "Pending review",
       active: isVerified,
@@ -137,13 +137,13 @@ function ProgressStepper({ status }: { status: string }) {
             <p style={{
               margin: "0 0 3px",
               fontSize: "12px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
-              color: step.active ? "#fff" : "rgba(255,255,255,0.25)",
+              color: step.active ? "#fff" : "rgba(255,255,255,0.5)",
             }}>
               {step.label}
             </p>
             <p style={{
               margin: 0,
-              fontSize: "11px", color: step.done ? "rgba(0,255,0,0.7)" : step.active ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.2)",
+              fontSize: "11px", color: step.done ? "rgba(0,255,0,0.9)" : step.active ? "rgba(255,255,255,0.72)" : "rgba(255,255,255,0.48)",
             }}>
               {step.sublabel}
             </p>
@@ -178,7 +178,7 @@ function WhyVerifyBox() {
             <span style={{ color: G, fontSize: "12px", flexShrink: 0, paddingTop: "1px" }}>›</span>
             <div>
               <p style={{ margin: "0 0 2px", fontSize: "11px", fontWeight: 700, color: "#fff" }}>{title}</p>
-              <p style={{ margin: 0, fontSize: "11px", color: "rgba(255,255,255,0.4)", lineHeight: "1.5" }}>{body}</p>
+              <p style={{ margin: 0, fontSize: "11px", color: "rgba(255,255,255,0.72)", lineHeight: "1.5" }}>{body}</p>
             </div>
           </div>
         ))}
@@ -231,8 +231,8 @@ function StatusDashboard({ submission, onReset }: { submission: VerificationRequ
             ["Status", submission.status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())],
           ].map(([k, v]) => (
             <div key={k}>
-              <p style={{ margin: "0 0 2px", fontSize: "9px", color: "rgba(0,255,0,0.4)", letterSpacing: "0.12em", textTransform: "uppercase" }}>{k}</p>
-              <p style={{ margin: 0, fontSize: "11px", color: "rgba(255,255,255,0.7)", wordBreak: "break-all" }} data-testid={`text-detail-${k.toLowerCase()}`}>{v}</p>
+              <p style={{ margin: "0 0 2px", fontSize: "9px", color: "rgba(0,255,0,0.82)", letterSpacing: "0.12em", textTransform: "uppercase" }}>{k}</p>
+              <p style={{ margin: 0, fontSize: "11px", color: "rgba(255,255,255,0.88)", wordBreak: "break-all" }} data-testid={`text-detail-${k.toLowerCase()}`}>{v}</p>
             </div>
           ))}
         </div>
@@ -269,7 +269,7 @@ function StatusDashboard({ submission, onReset }: { submission: VerificationRequ
       <WhyVerifyBox />
 
       {/* Submit another (different wallet) */}
-      <p style={{ fontSize: "10px", color: "rgba(255,255,255,0.2)", textAlign: "center", margin: 0 }}>
+      <p style={{ fontSize: "10px", color: "rgba(255,255,255,0.6)", textAlign: "center", margin: 0 }}>
         Submitting a different project?{" "}
         <button
           onClick={onReset}
@@ -493,7 +493,7 @@ export default function GetVerified() {
           }} data-testid="text-page-title">
             Get Verified
           </h1>
-          <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.4)", lineHeight: "1.7", margin: 0 }}>
+          <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.72)", lineHeight: "1.7", margin: 0 }}>
             Submit your project for APOL forensic audit. Our agents scan your contract,
             social presence, and on-chain activity. Results within 24 hours.
           </p>
@@ -583,7 +583,7 @@ export default function GetVerified() {
                   padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center",
                 }}>
                   <div>
-                    <p style={{ fontSize: "9px", color: "rgba(0,255,0,0.45)", letterSpacing: "0.12em", textTransform: "uppercase", margin: "0 0 4px" }}>
+                    <p style={{ fontSize: "9px", color: "rgba(0,255,0,0.85)", letterSpacing: "0.12em", textTransform: "uppercase", margin: "0 0 4px" }}>
                       Audit Fee
                     </p>
                     <p style={{ fontSize: "20px", fontWeight: 900, color: G, margin: 0 }}>
@@ -591,7 +591,7 @@ export default function GetVerified() {
                     </p>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <p style={{ fontSize: "9px", color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", textTransform: "uppercase", margin: "0 0 4px" }}>
+                    <p style={{ fontSize: "9px", color: "rgba(255,255,255,0.7)", letterSpacing: "0.1em", textTransform: "uppercase", margin: "0 0 4px" }}>
                       Turnaround
                     </p>
                     <p style={{ fontSize: "13px", fontWeight: 700, color: "rgba(255,255,255,0.7)", margin: 0 }}>
@@ -650,7 +650,7 @@ export default function GetVerified() {
                   }
                 </button>
 
-                <p style={{ fontSize: "10px", color: "rgba(255,255,255,0.2)", textAlign: "center", margin: 0, lineHeight: "1.6" }}>
+                <p style={{ fontSize: "10px", color: "rgba(255,255,255,0.6)", textAlign: "center", margin: 0, lineHeight: "1.6" }}>
                   Payment is processed on Base via your connected wallet.
                   Submitting does not guarantee a passing verdict — APOL agents issue impartial findings.
                 </p>

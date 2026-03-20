@@ -226,7 +226,7 @@ export default function ApolAgent() {
             {/* Quick queries — only at start */}
             {messages.length === 1 && (
               <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "6px" }}>
-                <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.4)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.82)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
                   SUGGESTED QUERIES
                 </span>
                 {QUICK_QUESTIONS.map((q) => (

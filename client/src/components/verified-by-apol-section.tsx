@@ -28,7 +28,7 @@ export default function VerifiedByApolSection() {
             background: "rgba(0,255,0,0.4)",
           }} />
           <span style={{
-            fontSize: "9px", color: "rgba(0,255,0,0.5)",
+            fontSize: "9px", color: "rgba(0,255,0,0.85)",
             letterSpacing: "0.18em", textTransform: "uppercase",
             fontFamily: "'JetBrains Mono', monospace",
           }}>
@@ -67,7 +67,7 @@ export default function VerifiedByApolSection() {
             </div>
 
             <p style={{
-              fontSize: "13px", color: "rgba(255,255,255,0.45)",
+              fontSize: "13px", color: "rgba(255,255,255,0.72)",
               lineHeight: "1.75", margin: 0,
               fontFamily: "'JetBrains Mono', monospace",
             }}>
@@ -81,7 +81,7 @@ export default function VerifiedByApolSection() {
               {PERKS.map(perk => (
                 <li key={perk} style={{
                   display: "flex", alignItems: "center", gap: "8px",
-                  fontSize: "12px", color: "rgba(255,255,255,0.6)",
+                  fontSize: "12px", color: "rgba(255,255,255,0.82)",
                   fontFamily: "'JetBrains Mono', monospace",
                 }}>
                   <CheckCircle size={13} color={G} style={{ flexShrink: 0 }} />
@@ -102,7 +102,7 @@ export default function VerifiedByApolSection() {
             {/* Fee block */}
             <div>
               <p style={{
-                fontSize: "9px", color: "rgba(0,255,0,0.45)",
+                fontSize: "9px", color: "rgba(0,255,0,0.85)",
                 letterSpacing: "0.14em", textTransform: "uppercase",
                 fontFamily: "'JetBrains Mono', monospace", margin: "0 0 6px",
               }}>
@@ -115,7 +115,7 @@ export default function VerifiedByApolSection() {
                 0.05 ETH
               </p>
               <p style={{
-                fontSize: "11px", color: "rgba(255,255,255,0.3)",
+                fontSize: "11px", color: "rgba(255,255,255,0.65)",
                 margin: "6px 0 0", fontFamily: "'JetBrains Mono', monospace",
               }}>
                 Results returned within 24 hours
@@ -146,7 +146,7 @@ export default function VerifiedByApolSection() {
             </Link>
 
             <p style={{
-              fontSize: "10px", color: "rgba(255,255,255,0.18)",
+              fontSize: "10px", color: "rgba(255,255,255,0.6)",
               fontFamily: "'JetBrains Mono', monospace", lineHeight: "1.6",
               margin: 0,
             }}>

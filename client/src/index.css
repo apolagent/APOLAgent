@@ -101,8 +101,8 @@
     @apply font-sans antialiased text-foreground;
     background-color: #000000 !important;
     background-image:
-      linear-gradient(rgba(0,255,0,0.35) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,255,0,0.35) 1px, transparent 1px) !important;
+      linear-gradient(rgba(0,255,0,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,0,0.06) 1px, transparent 1px) !important;
     background-size: 60px 60px;
     background-attachment: fixed;
   }
@@ -127,10 +127,12 @@
   [class*="bg-blue-9"] { background-color: #0c0c0c !important; }
   [class*="bg-blue-8"] { background-color: #141414 !important; }
   [class*="bg-blue-7"] { background-color: #1c1c1c !important; }
-  /* Remap text-slate muted colors to white-based */
-  [class*="text-slate-4"], [class*="text-slate-5"] { color: rgba(255,255,255,0.4) !important; }
-  [class*="text-slate-3"] { color: rgba(255,255,255,0.6) !important; }
-  [class*="text-slate-2"] { color: rgba(255,255,255,0.75) !important; }
+  /* Remap text-slate/gray muted colors to white-based (brighter) */
+  [class*="text-slate-6"], [class*="text-slate-5"], [class*="text-slate-4"] { color: rgba(255,255,255,0.65) !important; }
+  [class*="text-slate-3"] { color: rgba(255,255,255,0.82) !important; }
+  [class*="text-slate-2"] { color: rgba(255,255,255,0.92) !important; }
+  [class*="text-gray-4"], [class*="text-gray-5"] { color: rgba(255,255,255,0.65) !important; }
+  [class*="text-gray-3"] { color: rgba(255,255,255,0.82) !important; }
 }
 
 @layer utilities {
