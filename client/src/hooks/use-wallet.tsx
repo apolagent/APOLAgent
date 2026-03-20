@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { BrowserProvider } from "ethers";
+import { CHAIN } from "@/lib/chain-config";
 
-const BASE_CHAIN_ID = 8453;
-const BASE_HEX = "0x2105";
+const BASE_CHAIN_ID = CHAIN.id;
+const BASE_HEX = CHAIN.hex;
 
 const BASE_NETWORK = {
   chainId: BASE_HEX,
-  chainName: "Base",
-  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-  rpcUrls: ["https://mainnet.base.org"],
-  blockExplorerUrls: ["https://basescan.org"],
+  chainName: CHAIN.name,
+  nativeCurrency: CHAIN.nativeCurrency,
+  rpcUrls: [CHAIN.rpcUrl],
+  blockExplorerUrls: [CHAIN.explorerUrl],
 };
 
 export type WalletState = {

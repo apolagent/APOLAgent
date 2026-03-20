@@ -3,9 +3,10 @@ import { Link } from "wouter";
 import { ArrowLeft, ShieldCheck, CheckCircle, Loader2, AlertTriangle, ExternalLink, FileSearch } from "lucide-react";
 import { BrowserProvider, JsonRpcProvider, parseEther } from "ethers";
 import Navigation from "@/components/navigation";
+import { CHAIN } from "@/lib/chain-config";
 
 async function waitForReceipt(txHash: string, timeoutMs = 90_000): Promise<boolean> {
-  const rpc = new JsonRpcProvider("https://mainnet.base.org");
+  const rpc = new JsonRpcProvider(CHAIN.rpcUrl);
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -184,7 +185,7 @@ export default function GetVerified() {
             </p>
             {txHash && (
               <a
-                href={`https://basescan.org/tx/${txHash}`}
+                href={`${CHAIN.explorerUrl}/tx/${txHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 data-testid="link-success-tx"
@@ -298,7 +299,7 @@ export default function GetVerified() {
                   <Loader2 size={13} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />
                   {txHash ? "Awaiting on-chain confirmation..." : "Confirm transaction in MetaMask…"}
                   {txHash && (
-                    <a href={`https://basescan.org/tx/${txHash}`} target="_blank" rel="noopener noreferrer" style={{ color: G, marginLeft: "auto" }}>
+                    <a href={`${CHAIN.explorerUrl}/tx/${txHash}`} target="_blank" rel="noopener noreferrer" style={{ color: G, marginLeft: "auto" }}>
                       <ExternalLink size={12} />
                     </a>
                   )}

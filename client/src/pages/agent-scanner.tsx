@@ -10,9 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CHAIN } from "@/lib/chain-config";
 
 async function waitForReceipt(txHash: string, timeoutMs = 90_000): Promise<boolean> {
-  const rpc = new JsonRpcProvider("https://mainnet.base.org");
+  const rpc = new JsonRpcProvider(CHAIN.rpcUrl);
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -511,7 +512,7 @@ export default function AgentScanner() {
                 <Loader2 size={12} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />
                 <span>TX SUBMITTED — Awaiting on-chain confirmation...</span>
                 <a
-                  href={`https://basescan.org/tx/${deepDiveTxHash}`}
+                  href={`${CHAIN.explorerUrl}/tx/${deepDiveTxHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ color: G, marginLeft: "auto", flexShrink: 0 }}
@@ -531,7 +532,7 @@ export default function AgentScanner() {
                 <CheckCircle size={12} style={{ flexShrink: 0 }} />
                 <span>TX CONFIRMED — Advanced Results unlocked below.</span>
                 <a
-                  href={`https://basescan.org/tx/${deepDiveTxHash}`}
+                  href={`${CHAIN.explorerUrl}/tx/${deepDiveTxHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ color: G, marginLeft: "auto", flexShrink: 0 }}
