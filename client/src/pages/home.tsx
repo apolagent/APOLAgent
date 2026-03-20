@@ -34,11 +34,11 @@ export default function Home() {
       <HeroSection />
       <MissionSection />
       <TokenomicsSection />
+      <VerifiedByApolSection />
       <ChannelSection />
       <RecentlyFlagged />
       <RoadmapSection />
       <JoinSection />
-      <VerifiedByApolSection />
       <Footer />
     </div>
   );
