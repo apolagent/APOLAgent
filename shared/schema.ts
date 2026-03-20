@@ -95,6 +95,9 @@ export const verificationRequests = pgTable("verification_requests", {
   txHash: text("tx_hash").notNull(),
   walletAddress: text("wallet_address"),
   status: text("status").default("pending_verification").notNull(),
+  rejectionReason: text("rejection_reason"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedBy: text("reviewed_by"),
   submittedAt: timestamp("submitted_at").defaultNow().notNull(),
 });
 

@@ -27,6 +27,9 @@ export interface IStorage {
   createVerificationRequest(data: InsertVerificationRequest): Promise<VerificationRequest>;
   getVerificationRequestByTxHash(txHash: string): Promise<VerificationRequest | null>;
   getVerificationRequestByWallet(walletAddress: string): Promise<VerificationRequest | null>;
+  getAllVerificationRequests(): Promise<VerificationRequest[]>;
+  approveVerification(id: number, reviewerWallet: string): Promise<VerificationRequest>;
+  rejectVerification(id: number, reason: string, reviewerWallet: string): Promise<VerificationRequest>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -170,6 +173,31 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(verificationRequests.submittedAt))
       .limit(1);
     return row ?? null;
+  }
+
+  async getAllVerificationRequests(): Promise<VerificationRequest[]> {
+    return await db
+      .select()
+      .from(verificationRequests)
+      .orderBy(desc(verificationRequests.submittedAt));
+  }
+
+  async approveVerification(id: number, reviewerWallet: string): Promise<VerificationRequest> {
+    const [row] = await db
+      .update(verificationRequests)
+      .set({ status: "verified", reviewedAt: new Date(), reviewedBy: reviewerWallet.toLowerCase() })
+      .where(eq(verificationRequests.id, id))
+      .returning();
+    return row;
+  }
+
+  async rejectVerification(id: number, reason: string, reviewerWallet: string): Promise<VerificationRequest> {
+    const [row] = await db
+      .update(verificationRequests)
+      .set({ status: "rejected", rejectionReason: reason, reviewedAt: new Date(), reviewedBy: reviewerWallet.toLowerCase() })
+      .where(eq(verificationRequests.id, id))
+      .returning();
+    return row;
   }
 
   async checkInternalReports(address: string): Promise<boolean> {

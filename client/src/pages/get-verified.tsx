@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "wouter";
 import {
-  ArrowLeft, ShieldCheck, CheckCircle, Loader2, AlertTriangle,
+  ArrowLeft, ShieldCheck, CheckCircle, XCircle, Loader2, AlertTriangle,
   ExternalLink, FileSearch, Clock, Award, ShieldAlert, Info,
 } from "lucide-react";
 import { BrowserProvider, JsonRpcProvider, parseEther } from "ethers";
@@ -81,7 +81,7 @@ const inputStyle: React.CSSProperties = {
 // 3-step progress stepper
 function ProgressStepper({ status }: { status: string }) {
   const isVerified = status === "verified";
-  const isVerifying = status === "verifying";
+  const isRejected = status === "rejected";
 
   const steps = [
     {
@@ -94,9 +94,11 @@ function ProgressStepper({ status }: { status: string }) {
     {
       icon: isVerified
         ? <CheckCircle size={16} color={G} />
-        : <Loader2 size={16} color={G} style={{ animation: "spin 1.2s linear infinite" }} />,
-      label: "APOL Agent Verifying",
-      sublabel: isVerified ? "Review complete" : "Estimated 24 hours",
+        : isRejected
+          ? <XCircle size={16} color="#ff4444" />
+          : <Loader2 size={16} color={G} style={{ animation: "spin 1.2s linear infinite" }} />,
+      label: isRejected ? "Verification Rejected" : "APOL Agent Verifying",
+      sublabel: isVerified ? "Review complete" : isRejected ? "See rejection details below" : "Estimated 24 hours",
       active: true,
       done: isVerified,
     },
@@ -190,18 +192,26 @@ function WhyVerifyBox() {
 // Status dashboard shown after successful payment
 function StatusDashboard({ submission, onReset }: { submission: VerificationRequest; onReset: () => void }) {
   const isVerified = submission.status === "verified";
+  const isRejected = submission.status === "rejected";
+
+  const headerBorder = isVerified ? G : isRejected ? "#ff4444" : "rgba(0,255,0,0.3)";
+  const headerIcon = isVerified
+    ? <Award size={18} color={G} />
+    : isRejected
+      ? <XCircle size={18} color="#ff4444" />
+      : <Loader2 size={18} color={G} style={{ animation: "spin 1.5s linear infinite" }} />;
+  const headerLabel = isVerified ? "Verification Complete" : isRejected ? "Verification Rejected" : "Verification In Progress";
+  const headerLabelColor = isRejected ? "rgba(255,68,68,0.85)" : "rgba(0,255,0,0.55)";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }} data-testid="div-status-dashboard">
 
       {/* Header card */}
-      <div style={{ border: `1px solid ${isVerified ? G : "rgba(0,255,0,0.3)"}`, background: "#000", padding: "24px 24px 20px" }}>
+      <div style={{ border: `1px solid ${headerBorder}`, background: "#000", padding: "24px 24px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
-          {isVerified
-            ? <Award size={18} color={G} />
-            : <Loader2 size={18} color={G} style={{ animation: "spin 1.5s linear infinite" }} />}
-          <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.55)", letterSpacing: "0.16em", textTransform: "uppercase" }}>
-            {isVerified ? "Verification Complete" : "Verification In Progress"}
+          {headerIcon}
+          <span style={{ fontSize: "9px", color: headerLabelColor, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+            {headerLabel}
           </span>
         </div>
 
@@ -258,12 +268,54 @@ function StatusDashboard({ submission, onReset }: { submission: VerificationRequ
       </div>
 
       {/* Progress stepper */}
-      <div style={{ border: "1px solid rgba(0,255,0,0.15)", background: "#000", padding: "24px" }}>
-        <p style={{ margin: "0 0 20px", fontSize: "9px", color: "rgba(0,255,0,0.5)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
+      <div style={{ border: `1px solid ${isRejected ? "rgba(255,68,68,0.25)" : "rgba(0,255,0,0.15)"}`, background: "#000", padding: "24px" }}>
+        <p style={{ margin: "0 0 20px", fontSize: "9px", color: isRejected ? "rgba(255,68,68,0.7)" : "rgba(0,255,0,0.5)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
           Verification Progress
         </p>
         <ProgressStepper status={submission.status} />
       </div>
+
+      {/* Rejection alert */}
+      {isRejected && (
+        <div
+          data-testid="div-rejection-alert"
+          style={{
+            border: "1px solid #ff4444",
+            background: "rgba(255,0,0,0.06)",
+            padding: "20px 22px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+            <XCircle size={15} color="#ff4444" />
+            <span style={{ fontSize: "9px", color: "#ff4444", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 700 }}>
+              Verification Rejected
+            </span>
+          </div>
+          {submission.rejectionReason && (
+            <div style={{ marginBottom: "14px" }}>
+              <p style={{ margin: "0 0 6px", fontSize: "9px", color: "rgba(255,100,100,0.75)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Reason</p>
+              <p style={{ margin: 0, fontSize: "12px", color: "rgba(255,255,255,0.85)", lineHeight: "1.65" }} data-testid="text-rejection-reason">
+                {submission.rejectionReason}
+              </p>
+            </div>
+          )}
+          <p style={{ margin: "0 0 14px", fontSize: "11px", color: "rgba(255,255,255,0.65)", lineHeight: "1.65" }}>
+            Please address the issues listed above and resubmit your project for review. A new audit fee will apply.
+          </p>
+          <button
+            onClick={onReset}
+            data-testid="button-resubmit"
+            style={{
+              background: "transparent", border: "1px solid #ff4444",
+              color: "#ff4444", padding: "9px 18px",
+              fontFamily: "JetBrains Mono, monospace", fontSize: "10px",
+              fontWeight: 700, letterSpacing: "0.1em", cursor: "pointer",
+            }}
+          >
+            Fix Issues &amp; Resubmit
+          </button>
+        </div>
+      )}
 
       {/* Why verify box */}
       <WhyVerifyBox />

@@ -1,7 +1,34 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertScamReportSchema, insertHeroNominationSchema, insertVoteSchema, insertVerificationRequestSchema } from "@shared/schema";
+import { verifyMessage } from "ethers";
+import { randomBytes } from "crypto";
+
+const ADMIN_WALLET = (process.env.ADMIN_WALLET_ADDRESS || "").toLowerCase();
+
+// In-memory stores for nonces (5 min TTL) and session tokens (12 hr TTL)
+const nonceStore = new Map<string, { nonce: string; expires: number }>();
+const tokenStore = new Map<string, { address: string; expires: number }>();
+
+function cleanExpired() {
+  const now = Date.now();
+  for (const [k, v] of nonceStore) if (v.expires < now) nonceStore.delete(k);
+  for (const [k, v] of tokenStore) if (v.expires < now) tokenStore.delete(k);
+}
+
+function requireAdmin(req: Request & { adminAddress?: string }, res: Response, next: NextFunction) {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
+  const token = auth.slice(7);
+  const session = tokenStore.get(token);
+  if (!session || session.expires < Date.now()) {
+    tokenStore.delete(token);
+    return res.status(401).json({ error: "Session expired" });
+  }
+  (req as any).adminAddress = session.address;
+  next();
+}
 
 const CHAINABUSE_API_KEY = process.env.CHAINABUSE_API_KEY;
 const CHAINABUSE_BASE = "https://api.chainabuse.com/v0";
@@ -764,6 +791,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(request);
     } catch (error) {
       res.status(500).json({ error: "Failed to save verification request" });
+    }
+  });
+
+  // ─── Admin Auth ────────────────────────────────────────────────────────────
+
+  app.get("/api/admin/nonce", (req, res) => {
+    cleanExpired();
+    const address = (req.query.address as string || "").toLowerCase();
+    if (!address || !address.startsWith("0x")) {
+      return res.status(400).json({ error: "Invalid address" });
+    }
+    const nonce = `APOL Admin Authentication\nNonce: ${randomBytes(16).toString("hex")}\nTimestamp: ${Date.now()}`;
+    nonceStore.set(address, { nonce, expires: Date.now() + 5 * 60 * 1000 });
+    res.json({ nonce });
+  });
+
+  app.post("/api/admin/auth", async (req, res) => {
+    if (!ADMIN_WALLET) {
+      return res.status(503).json({ error: "Admin wallet not configured. Set ADMIN_WALLET_ADDRESS env var." });
+    }
+    const { address, signature } = req.body as { address: string; signature: string };
+    if (!address || !signature) return res.status(400).json({ error: "Missing address or signature" });
+
+    const lowerAddr = address.toLowerCase();
+    const stored = nonceStore.get(lowerAddr);
+    if (!stored || stored.expires < Date.now()) {
+      return res.status(401).json({ error: "Nonce expired or not found. Request a new one." });
+    }
+
+    try {
+      const recovered = (await verifyMessage(stored.nonce, signature)).toLowerCase();
+      nonceStore.delete(lowerAddr);
+
+      if (recovered !== lowerAddr) {
+        return res.status(401).json({ error: "Signature does not match address" });
+      }
+      if (recovered !== ADMIN_WALLET) {
+        return res.status(403).json({ error: "Wallet is not authorized as admin" });
+      }
+
+      const token = randomBytes(32).toString("hex");
+      tokenStore.set(token, { address: lowerAddr, expires: Date.now() + 12 * 60 * 60 * 1000 });
+      res.json({ token });
+    } catch (err) {
+      res.status(400).json({ error: "Invalid signature" });
+    }
+  });
+
+  // ─── Admin CRUD ────────────────────────────────────────────────────────────
+
+  app.get("/api/admin/verifications", requireAdmin as any, async (req, res) => {
+    try {
+      const all = await storage.getAllVerificationRequests();
+      res.json(all);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch verification requests" });
+    }
+  });
+
+  app.post("/api/admin/verifications/:id/approve", requireAdmin as any, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const adminAddr = (req as any).adminAddress as string;
+      const updated = await storage.approveVerification(id, adminAddr);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to approve verification" });
+    }
+  });
+
+  app.post("/api/admin/verifications/:id/reject", requireAdmin as any, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const { reason } = req.body as { reason: string };
+      if (!reason?.trim()) return res.status(400).json({ error: "Rejection reason is required" });
+      const adminAddr = (req as any).adminAddress as string;
+      const updated = await storage.rejectVerification(id, reason.trim(), adminAddr);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to reject verification" });
     }
   });
 
