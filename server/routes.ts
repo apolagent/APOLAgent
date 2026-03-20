@@ -3,29 +3,53 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertScamReportSchema, insertHeroNominationSchema, insertVoteSchema, insertVerificationRequestSchema } from "@shared/schema";
 import { verifyMessage } from "ethers";
-import { randomBytes } from "crypto";
+import { randomBytes, createHmac, timingSafeEqual } from "crypto";
 
 const ADMIN_WALLET = (process.env.ADMIN_WALLET_ADDRESS || "").toLowerCase();
+const SESSION_SECRET = process.env.SESSION_SECRET || randomBytes(32).toString("hex");
+const TOKEN_TTL = 12 * 60 * 60 * 1000; // 12 hours
 
-// In-memory stores for nonces (5 min TTL) and session tokens (12 hr TTL)
+// In-memory store for nonces only (5 min TTL) — tokens are now stateless HMAC-signed
 const nonceStore = new Map<string, { nonce: string; expires: number }>();
-const tokenStore = new Map<string, { address: string; expires: number }>();
 
 function cleanExpired() {
   const now = Date.now();
   for (const [k, v] of nonceStore) if (v.expires < now) nonceStore.delete(k);
-  for (const [k, v] of tokenStore) if (v.expires < now) tokenStore.delete(k);
+}
+
+function signAdminToken(address: string): string {
+  const expires = Date.now() + TOKEN_TTL;
+  const payload = `${address}|${expires}`;
+  const sig = createHmac("sha256", SESSION_SECRET).update(payload).digest("hex");
+  return Buffer.from(`${payload}|${sig}`).toString("base64url");
+}
+
+function verifyAdminToken(token: string): { address: string } | null {
+  try {
+    const decoded = Buffer.from(token, "base64url").toString("utf8");
+    const lastBar = decoded.lastIndexOf("|");
+    const payload = decoded.slice(0, lastBar);
+    const sig = decoded.slice(lastBar + 1);
+    const bar = payload.lastIndexOf("|");
+    const expires = parseInt(payload.slice(bar + 1), 10);
+    if (isNaN(expires) || expires < Date.now()) return null;
+    const expected = createHmac("sha256", SESSION_SECRET).update(payload).digest("hex");
+    const a = Buffer.from(sig, "hex");
+    const b = Buffer.from(expected, "hex");
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+    const address = payload.slice(0, bar);
+    return { address };
+  } catch {
+    return null;
+  }
 }
 
 function requireAdmin(req: Request & { adminAddress?: string }, res: Response, next: NextFunction) {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
   const token = auth.slice(7);
-  const session = tokenStore.get(token);
-  if (!session || session.expires < Date.now()) {
-    tokenStore.delete(token);
-    return res.status(401).json({ error: "Session expired" });
-  }
+  const session = verifyAdminToken(token);
+  if (!session) return res.status(401).json({ error: "Session expired or invalid" });
   (req as any).adminAddress = session.address;
   next();
 }
@@ -1082,8 +1106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Wallet is not authorized as admin" });
       }
 
-      const token = randomBytes(32).toString("hex");
-      tokenStore.set(token, { address: lowerAddr, expires: Date.now() + 12 * 60 * 60 * 1000 });
+      const token = signAdminToken(lowerAddr);
       res.json({ token });
     } catch (err) {
       res.status(400).json({ error: "Invalid signature" });
