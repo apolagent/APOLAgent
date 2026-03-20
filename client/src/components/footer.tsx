@@ -1,4 +1,9 @@
+import { Link } from "wouter";
+import { useWallet } from "@/hooks/use-wallet";
+
 export default function Footer() {
+  const { address } = useWallet();
+
   return (
     <footer
       className="py-12"
@@ -29,6 +34,29 @@ export default function Footer() {
             © 2026 APE POLICE. Providing on-chain forensics and agent verification for the Base ecosystem.
             Data is aggregated from public streams; users are responsible for all trading decisions.
           </p>
+
+          {/* Admin shortcut — only visible when a wallet is connected */}
+          {address && (
+            <div className="mt-6">
+              <Link
+                href="/admin/dashboard"
+                data-testid="link-admin-dashboard"
+                style={{
+                  fontSize: "9px",
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                  color: "rgba(0,255,0,0.3)",
+                  textDecoration: "none",
+                  fontFamily: "JetBrains Mono, monospace",
+                  transition: "color 0.15s",
+                }}
+                onMouseEnter={e => (e.currentTarget.style.color = "rgba(0,255,0,0.75)")}
+                onMouseLeave={e => (e.currentTarget.style.color = "rgba(0,255,0,0.3)")}
+              >
+                Admin
+              </Link>
+            </div>
+          )}
 
         </div>
       </div>
