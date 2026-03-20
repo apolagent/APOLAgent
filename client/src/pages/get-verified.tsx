@@ -73,33 +73,49 @@ export default function GetVerified() {
 
     const eth = (window as any).ethereum;
     if (!eth) {
+      console.log("[APOL Verified] Error: MetaMask not detected.");
       setErrorMsg("MetaMask not detected. Please install MetaMask to submit for audit.");
       setPhase("error");
       return;
     }
 
+    console.log("[APOL Verified] Initiating audit submission...");
     setPhase("awaiting_tx");
     setErrorMsg("");
 
     try {
+      // Step 1: request accounts via window.ethereum.request
+      console.log("[APOL Verified] Requesting accounts...");
+      const accounts: string[] = await eth.request({ method: "eth_requestAccounts" });
+      console.log("[APOL Verified] Account available:", accounts[0]);
+
+      // Step 2: build signer from BrowserProvider (no extra popup)
       const provider = new BrowserProvider(eth);
       const signer = await provider.getSigner();
 
+      // Step 3: send transaction — MetaMask popup opens here
+      console.log(`[APOL Verified] Sending ${AUDIT_FEE} ETH to ${AUDIT_WALLET}...`);
       const tx = await signer.sendTransaction({
         to: AUDIT_WALLET,
         value: parseEther(AUDIT_FEE),
       });
-
+      console.log("[APOL Verified] Transaction sent:", tx.hash);
       setTxHash(tx.hash);
+
+      // Step 4: poll for receipt via public RPC
+      console.log("[APOL Verified] Waiting for on-chain confirmation...");
       const success = await waitForReceipt(tx.hash);
 
       if (!success) {
+        console.log("[APOL Verified] Transaction reverted on-chain.");
         setErrorMsg("Transaction reverted on-chain. Submission not recorded.");
         setPhase("error");
         return;
       }
+      console.log("[APOL Verified] Transaction confirmed.");
 
-      // Save to DB after confirmed tx
+      // Step 5: save to DB
+      console.log("[APOL Verified] Saving submission to database...");
       setPhase("saving");
       const res = await fetch("/api/verification-requests", {
         method: "POST",
@@ -121,11 +137,15 @@ export default function GetVerified() {
       setPhase("success");
     } catch (e: any) {
       if (e.code === 4001 || e.code === "ACTION_REJECTED" || e.message?.includes("rejected")) {
+        console.log("[APOL Verified] User rejected request.");
         setErrorMsg("Transaction rejected by user.");
       } else {
+        console.log("[APOL Verified] Error:", e.message);
         setErrorMsg(e.message || "Submission failed. Please try again.");
       }
       setPhase("error");
+    } finally {
+      console.log("[APOL Verified] Handler complete — spinner cleared.");
     }
   };
 

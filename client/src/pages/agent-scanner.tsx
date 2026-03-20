@@ -306,34 +306,54 @@ export default function AgentScanner() {
   const handleDeepDive = async () => {
     const eth = (window as any).ethereum;
     if (!eth) {
+      console.log("[APOL DeepDive] Error: MetaMask not detected.");
       setDeepDiveError("MetaMask not detected. Install MetaMask to use Deep Dive Scan.");
       return;
     }
+    console.log("[APOL DeepDive] Initiating Deep Dive Scan...");
     setDeepDivePending(true);
     setDeepDiveError(null);
     setDeepDiveTxHash(null);
     try {
+      // Step 1: ensure accounts are unlocked via window.ethereum.request
+      console.log("[APOL DeepDive] Requesting accounts...");
+      const accounts: string[] = await eth.request({ method: "eth_requestAccounts" });
+      console.log("[APOL DeepDive] Account available:", accounts[0]);
+
+      // Step 2: build signer from BrowserProvider (no extra popup needed)
       const provider = new BrowserProvider(eth);
       const signer = await provider.getSigner();
+
+      // Step 3: send transaction — MetaMask popup opens here
+      console.log(`[APOL DeepDive] Sending ${DEEP_DIVE_AMOUNT} ETH to ${DEEP_DIVE_RECIPIENT}...`);
       const tx = await signer.sendTransaction({
         to: DEEP_DIVE_RECIPIENT,
         value: parseEther(DEEP_DIVE_AMOUNT),
       });
+      console.log("[APOL DeepDive] Transaction sent:", tx.hash);
       setDeepDiveTxHash(tx.hash);
+
+      // Step 4: poll for receipt via public RPC
+      console.log("[APOL DeepDive] Waiting for on-chain confirmation...");
       const success = await waitForReceipt(tx.hash);
       if (success) {
+        console.log("[APOL DeepDive] Confirmed! Advanced report unlocked.");
         setDeepDiveUnlocked(true);
         setTimeout(() => document.getElementById("advanced-results")?.scrollIntoView({ behavior: "smooth", block: "start" }), 200);
       } else {
+        console.log("[APOL DeepDive] Transaction reverted on-chain.");
         setDeepDiveError("Transaction reverted on-chain. Deep Dive not unlocked.");
       }
     } catch (e: any) {
       if (e.code === 4001 || e.code === "ACTION_REJECTED" || e.message?.includes("rejected")) {
+        console.log("[APOL DeepDive] User rejected transaction.");
         setDeepDiveError("Transaction rejected.");
       } else {
+        console.log("[APOL DeepDive] Error:", e.message);
         setDeepDiveError(e.message || "Transaction failed. Please try again.");
       }
     } finally {
+      console.log("[APOL DeepDive] Handler complete — clearing pending state.");
       setDeepDivePending(false);
     }
   };
