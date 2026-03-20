@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ShieldAlert, CheckCircle2, XCircle, Loader2, LogOut, RefreshCw, Search, AlertTriangle, Lock, Unlock, Users, ChevronDown, ChevronUp } from "lucide-react";
+import { ShieldAlert, CheckCircle2, XCircle, Loader2, LogOut, RefreshCw, Search, AlertTriangle, Lock, Unlock, Users, ChevronDown, ChevronUp, ArrowLeft } from "lucide-react";
 import { getSelectedProvider } from "@/hooks/use-wallet";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -405,7 +406,7 @@ function AuthScreen({ onAuth }: { onAuth: (token: string) => void }) {
       }
 
       const { token } = await authRes.json();
-      sessionStorage.setItem(STORAGE_KEY, token);
+      localStorage.setItem(STORAGE_KEY, token);
       onAuth(token);
     } catch (err: any) {
       setError(err.message || "Authentication failed");
@@ -579,7 +580,20 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
             SECURE
           </span>
         </div>
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <Link
+            href="/"
+            data-testid="link-back-home"
+            style={{
+              display: "flex", alignItems: "center", gap: "6px",
+              background: "transparent", border: "1px solid rgba(255,255,255,0.2)",
+              color: "rgba(255,255,255,0.6)", padding: "6px 12px",
+              fontFamily: "JetBrains Mono, monospace", fontSize: "10px",
+              cursor: "pointer", textDecoration: "none", letterSpacing: "0.08em",
+            }}
+          >
+            <ArrowLeft size={11} /> HOME
+          </Link>
           <button
             onClick={() => refetch()}
             data-testid="button-refresh"
@@ -802,12 +816,12 @@ export default function AdminDashboard() {
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) setToken(stored);
   }, []);
 
   const handleLogout = useCallback(() => {
-    sessionStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY);
     setToken(null);
   }, []);
 
