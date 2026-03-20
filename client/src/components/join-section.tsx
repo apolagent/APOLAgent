@@ -9,7 +9,8 @@ const cards = [
     cta: "FIELD COMMS",
     gradient: "from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800",
     textColor: "text-white",
-    href: null,
+    href: "https://t.me/+aR-n79XFWKhjOTg8",
+    external: true,
   },
   {
     icon: (
@@ -22,6 +23,7 @@ const cards = [
     gradient: "from-gray-800 to-black hover:from-gray-700 hover:to-gray-800",
     textColor: "text-white",
     href: null,
+    external: false,
   },
   {
     icon: <Radio className="w-8 h-8" />,
@@ -30,6 +32,7 @@ const cards = [
     gradient: "from-green-600 to-green-700 hover:from-green-700 hover:to-green-800",
     textColor: "text-white",
     href: "/report-scam",
+    external: false,
   },
   {
     icon: <Coins className="w-8 h-8" />,
@@ -38,6 +41,7 @@ const cards = [
     gradient: "from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700",
     textColor: "text-slate-900",
     href: null,
+    external: false,
   },
 ];
 
@@ -70,7 +74,11 @@ export default function JoinSection() {
               </Button>
             );
             return card.href ? (
-              <Link key={i} href={card.href} className="w-full">{btn}</Link>
+              card.external ? (
+                <a key={i} href={card.href} target="_blank" rel="noopener noreferrer" className="w-full block">{btn}</a>
+              ) : (
+                <Link key={i} href={card.href} className="w-full">{btn}</Link>
+              )
             ) : (
               <div key={i} className="w-full">{btn}</div>
             );

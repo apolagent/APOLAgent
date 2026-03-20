@@ -43,7 +43,10 @@ export default function HeroSection() {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 flex-wrap">
 
           {/* PRIMARY — ACCESS TERMINAL */}
-          <button
+          <a
+            href="https://t.me/+aR-n79XFWKhjOTg8"
+            target="_blank"
+            rel="noopener noreferrer"
             data-testid="button-join-patrol"
             onMouseEnter={() => setPrimaryHover(true)}
             onMouseLeave={() => setPrimaryHover(false)}
@@ -72,7 +75,7 @@ export default function HeroSection() {
           >
             <Send size={16} />
             Access Terminal
-          </button>
+          </a>
 
           {/* SECONDARY — ACQUIRE ACCESS KEY */}
           <button
