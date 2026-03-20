@@ -34,12 +34,27 @@ const actionBtnStyle: React.CSSProperties = {
 };
 
 function WalletButton({ compact = false }: { compact?: boolean }) {
-  const { address, truncated, isBase, isConnecting, isSwitching, hasMetaMask, connect, switchToBase } = useWallet();
+  const { address, truncated, isBase, isConnecting, isSwitching, hasMetaMask, isIframe, connect, switchToBase } = useWallet();
 
   const base: React.CSSProperties = {
     ...actionBtnStyle,
     padding: compact ? "5px 8px" : "5px 10px",
   };
+
+  // Only show "open in tab" if we're in an iframe AND MetaMask hasn't injected
+  if (isIframe && !hasMetaMask && !address) {
+    return (
+      <button
+        onClick={() => window.open(window.location.href, "_blank")}
+        data-testid="button-open-new-tab"
+        style={{ ...base, border: "1px solid rgba(0,255,0,0.4)", color: G }}
+        title="MetaMask requires a direct browser tab — click to open"
+      >
+        <Wallet size={11} />
+        {compact ? "Open App" : "Open in Tab"}
+      </button>
+    );
+  }
 
   if (address && !isBase) {
     return (
