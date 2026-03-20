@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertScamReportSchema, insertHeroNominationSchema, insertVoteSchema } from "@shared/schema";
+import { insertScamReportSchema, insertHeroNominationSchema, insertVoteSchema, insertVerificationRequestSchema } from "@shared/schema";
 
 const CHAINABUSE_API_KEY = process.env.CHAINABUSE_API_KEY;
 const CHAINABUSE_BASE = "https://api.chainabuse.com/v0";
@@ -727,6 +727,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(wallets);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch flagged wallets" });
+    }
+  });
+
+  app.post("/api/verification-requests", async (req, res) => {
+    try {
+      const result = insertVerificationRequestSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ error: "Invalid data", details: result.error.issues });
+      }
+      const request = await storage.createVerificationRequest(result.data);
+      res.status(201).json(request);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to save verification request" });
     }
   });
 

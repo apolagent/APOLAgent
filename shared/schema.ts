@@ -86,6 +86,28 @@ export const flaggedWallets = pgTable("flagged_wallets", {
   flaggedAt: timestamp("flagged_at").defaultNow().notNull(),
 });
 
+export const verificationRequests = pgTable("verification_requests", {
+  id: serial("id").primaryKey(),
+  projectName: text("project_name").notNull(),
+  tokenTicker: text("token_ticker").notNull(),
+  contractAddress: text("contract_address").notNull(),
+  website: text("website").notNull(),
+  txHash: text("tx_hash").notNull(),
+  status: text("status").default("pending").notNull(),
+  submittedAt: timestamp("submitted_at").defaultNow().notNull(),
+});
+
+export const insertVerificationRequestSchema = createInsertSchema(verificationRequests).pick({
+  projectName: true,
+  tokenTicker: true,
+  contractAddress: true,
+  website: true,
+  txHash: true,
+});
+
+export type InsertVerificationRequest = z.infer<typeof insertVerificationRequestSchema>;
+export type VerificationRequest = typeof verificationRequests.$inferSelect;
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,

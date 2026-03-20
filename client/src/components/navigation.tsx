@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Menu, X, Bot, Wallet, AlertTriangle } from "lucide-react";
+import { Menu, X, Bot, Wallet, AlertTriangle, ShieldCheck } from "lucide-react";
 import { useWallet } from "@/hooks/use-wallet";
 
 const G = "#00ff00";
@@ -141,6 +141,16 @@ export default function Navigation() {
                 Scan Agent
               </span>
             </Link>
+            <Link href="/get-verified">
+              <span
+                className="flex items-center gap-1 text-xs uppercase tracking-widest px-3 py-1.5 cursor-pointer text-[#00ff00] transition-colors"
+                style={{ border: "1px solid rgba(0,255,0,0.4)" }}
+                data-testid="link-nav-get-verified"
+              >
+                <ShieldCheck className="w-3 h-3" />
+                Get Verified
+              </span>
+            </Link>
           </div>
 
           {/* Right actions */}
@@ -183,6 +193,12 @@ export default function Navigation() {
               <span className="flex items-center gap-2 py-2 text-xs uppercase tracking-widest text-[#00ff00] cursor-pointer">
                 <Bot className="w-3.5 h-3.5" />
                 Scan Agent
+              </span>
+            </Link>
+            <Link href="/get-verified" onClick={() => setIsMobileMenuOpen(false)}>
+              <span className="flex items-center gap-2 py-2 text-xs uppercase tracking-widest text-[#00ff00] cursor-pointer">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Get Verified
               </span>
             </Link>
             <div className="pt-2 flex flex-col gap-2">

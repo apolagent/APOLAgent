@@ -1,4 +1,4 @@
-import { users, scamReports, heroNominations, votes, flaggedWallets, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet } from "@shared/schema";
+import { users, scamReports, heroNominations, votes, flaggedWallets, verificationRequests, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet, type InsertVerificationRequest, type VerificationRequest } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, gte, or, and, sql } from "drizzle-orm";
 
@@ -24,6 +24,7 @@ export interface IStorage {
   }): Promise<FlaggedWallet>;
   getFlaggedWallets(limit?: number): Promise<FlaggedWallet[]>;
   checkInternalReports(address: string): Promise<boolean>;
+  createVerificationRequest(data: InsertVerificationRequest): Promise<VerificationRequest>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -140,6 +141,14 @@ export class DatabaseStorage implements IStorage {
       .from(flaggedWallets)
       .orderBy(desc(flaggedWallets.flaggedAt))
       .limit(limit);
+  }
+
+  async createVerificationRequest(data: InsertVerificationRequest): Promise<VerificationRequest> {
+    const [request] = await db
+      .insert(verificationRequests)
+      .values(data)
+      .returning();
+    return request;
   }
 
   async checkInternalReports(address: string): Promise<boolean> {

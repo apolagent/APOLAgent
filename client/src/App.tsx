@@ -8,6 +8,7 @@ import NominateHero from "@/pages/nominate-hero";
 import Rankings from "@/pages/rankings";
 import ReportScam from "@/pages/report-scam";
 import AgentScanner from "@/pages/agent-scanner";
+import GetVerified from "@/pages/get-verified";
 import NotFound from "@/pages/not-found";
 import ApolAgent from "@/components/apol-agent";
 
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/rankings" component={Rankings} />
       <Route path="/report-scam" component={ReportScam} />
       <Route path="/agent-scanner" component={AgentScanner} />
+      <Route path="/get-verified" component={GetVerified} />
       <Route component={NotFound} />
     </Switch>
   );
