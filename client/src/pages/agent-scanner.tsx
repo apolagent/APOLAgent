@@ -5,11 +5,24 @@ import {
   XCircle, Loader2, ChevronRight, Search, Brain, HelpCircle, Info,
   Zap, Lock, ExternalLink, ShieldAlert, Activity, Clock,
 } from "lucide-react";
-import { BrowserProvider, parseEther } from "ethers";
+import { BrowserProvider, JsonRpcProvider, parseEther } from "ethers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+async function waitForReceipt(txHash: string, timeoutMs = 90_000): Promise<boolean> {
+  const rpc = new JsonRpcProvider("https://mainnet.base.org");
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const receipt = await rpc.getTransactionReceipt(txHash);
+      if (receipt) return receipt.status === 1;
+    } catch {}
+    await new Promise(r => setTimeout(r, 2500));
+  }
+  return true;
+}
 
 const G = "#00ff00";
 const DEEP_DIVE_RECIPIENT = "0x857aca6A8A743C9262d64819D239f509a1Cd0A85";
@@ -306,8 +319,8 @@ export default function AgentScanner() {
         value: parseEther(DEEP_DIVE_AMOUNT),
       });
       setDeepDiveTxHash(tx.hash);
-      const receipt = await tx.wait(1);
-      if (receipt && receipt.status === 1) {
+      const success = await waitForReceipt(tx.hash);
+      if (success) {
         setDeepDiveUnlocked(true);
         setTimeout(() => document.getElementById("advanced-results")?.scrollIntoView({ behavior: "smooth", block: "start" }), 200);
       } else {

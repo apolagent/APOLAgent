@@ -1,8 +1,21 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { ArrowLeft, ShieldCheck, CheckCircle, Loader2, AlertTriangle, ExternalLink, FileSearch } from "lucide-react";
-import { BrowserProvider, parseEther } from "ethers";
+import { BrowserProvider, JsonRpcProvider, parseEther } from "ethers";
 import Navigation from "@/components/navigation";
+
+async function waitForReceipt(txHash: string, timeoutMs = 90_000): Promise<boolean> {
+  const rpc = new JsonRpcProvider("https://mainnet.base.org");
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const receipt = await rpc.getTransactionReceipt(txHash);
+      if (receipt) return receipt.status === 1;
+    } catch {}
+    await new Promise(r => setTimeout(r, 2500));
+  }
+  return true;
+}
 
 const G = "#00ff00";
 const AUDIT_WALLET = "0x857aca6A8A743C9262d64819D239f509a1Cd0A85";
@@ -77,9 +90,9 @@ export default function GetVerified() {
       });
 
       setTxHash(tx.hash);
-      const receipt = await tx.wait(1);
+      const success = await waitForReceipt(tx.hash);
 
-      if (!receipt || receipt.status !== 1) {
+      if (!success) {
         setErrorMsg("Transaction reverted on-chain. Submission not recorded.");
         setPhase("error");
         return;
