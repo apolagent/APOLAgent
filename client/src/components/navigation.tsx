@@ -90,7 +90,7 @@ function WalletButton({ compact = false }: { compact?: boolean }) {
       style={base}
     >
       <Wallet size={11} />
-      {isConnecting ? "Connecting..." : hasMetaMask ? "Connect Wallet" : "Install MetaMask"}
+      {isConnecting ? "Connecting..." : hasMetaMask ? "Connect" : "Install MetaMask"}
     </button>
   );
 }
