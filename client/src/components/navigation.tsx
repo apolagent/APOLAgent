@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
-import { Menu, X, Bot, Wallet, AlertTriangle } from "lucide-react";
-import { useWallet } from "@/hooks/use-wallet";
+import { Menu, X, Bot, Wallet, AlertTriangle, ChevronDown } from "lucide-react";
+import { useWallet, type EIP6963ProviderDetail } from "@/hooks/use-wallet";
 
 const G = "#00ff00";
 
@@ -33,22 +33,108 @@ const actionBtnStyle: React.CSSProperties = {
   flexShrink: 0,
 };
 
+// Wallet picker dropdown
+function WalletPicker({
+  providers,
+  onSelect,
+  onClose,
+}: {
+  providers: EIP6963ProviderDetail[];
+  onSelect: (d: EIP6963ProviderDetail) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      data-testid="div-wallet-picker"
+      style={{
+        position: "absolute",
+        top: "calc(100% + 6px)",
+        right: 0,
+        background: "#000",
+        border: "1px solid rgba(0,255,0,0.35)",
+        minWidth: "200px",
+        zIndex: 9999,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.8)",
+      }}
+    >
+      <div style={{
+        padding: "8px 12px 6px",
+        fontSize: "9px",
+        color: "rgba(0,255,0,0.45)",
+        letterSpacing: "0.14em",
+        textTransform: "uppercase",
+        fontFamily: "'JetBrains Mono', monospace",
+        borderBottom: "1px solid rgba(0,255,0,0.12)",
+      }}>
+        Select Wallet
+      </div>
+      {providers.map(d => (
+        <button
+          key={d.info.uuid}
+          onClick={() => onSelect(d)}
+          data-testid={`button-wallet-${d.info.rdns}`}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            width: "100%",
+            padding: "10px 14px",
+            background: "transparent",
+            border: "none",
+            borderBottom: "1px solid rgba(0,255,0,0.07)",
+            color: "#fff",
+            fontSize: "12px",
+            fontFamily: "'JetBrains Mono', monospace",
+            cursor: "pointer",
+            textAlign: "left",
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = "rgba(0,255,0,0.07)")}
+          onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+        >
+          {d.info.icon
+            ? <img src={d.info.icon} alt={d.info.name} style={{ width: 18, height: 18, flexShrink: 0 }} />
+            : <Wallet size={15} color={G} style={{ flexShrink: 0 }} />
+          }
+          {d.info.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function WalletButton({ compact = false }: { compact?: boolean }) {
-  const { address, truncated, isBase, isConnecting, isSwitching, hasMetaMask, isIframe, connect, switchToBase } = useWallet();
+  const {
+    address, truncated, isBase, isConnecting, isSwitching,
+    isIframe, providers, showPicker, setShowPicker,
+    connect, connectWith, switchToBase,
+  } = useWallet();
+
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   const base: React.CSSProperties = {
     ...actionBtnStyle,
     padding: compact ? "5px 8px" : "5px 10px",
   };
 
-  // Only show "open in tab" if we're in an iframe AND MetaMask hasn't injected
-  if (isIframe && !hasMetaMask && !address) {
+  // iframe + no providers = can't use MetaMask
+  if (isIframe && providers.length === 0) {
     return (
       <button
         onClick={() => window.open(window.location.href, "_blank")}
         data-testid="button-open-new-tab"
-        style={{ ...base, border: "1px solid rgba(0,255,0,0.4)", color: G }}
-        title="MetaMask requires a direct browser tab — click to open"
+        style={base}
+        title="MetaMask requires a direct browser tab"
       >
         <Wallet size={11} />
         {compact ? "Open App" : "Open in Tab"}
@@ -72,10 +158,7 @@ function WalletButton({ compact = false }: { compact?: boolean }) {
 
   if (address && isBase) {
     return (
-      <div
-        data-testid="div-wallet-connected"
-        style={{ ...base, cursor: "default" }}
-      >
+      <div data-testid="div-wallet-connected" style={{ ...base, cursor: "default" }}>
         <span style={{ width: "6px", height: "6px", background: G, display: "inline-block", flexShrink: 0 }} />
         {truncated}
       </div>
@@ -83,15 +166,31 @@ function WalletButton({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <button
-      onClick={connect}
-      disabled={isConnecting}
-      data-testid="button-connect-wallet"
-      style={base}
-    >
-      <Wallet size={11} />
-      {isConnecting ? "Connecting..." : hasMetaMask ? "Connect" : "Install MetaMask"}
-    </button>
+    <div ref={wrapperRef} style={{ position: "relative" }}>
+      <button
+        onClick={connect}
+        disabled={isConnecting}
+        data-testid="button-connect-wallet"
+        style={base}
+      >
+        <Wallet size={11} />
+        {isConnecting
+          ? "Connecting..."
+          : providers.length === 0
+            ? "Install MetaMask"
+            : "Connect"}
+        {providers.length > 1 && !isConnecting && (
+          <ChevronDown size={10} style={{ marginLeft: "2px" }} />
+        )}
+      </button>
+      {showPicker && (
+        <WalletPicker
+          providers={providers}
+          onSelect={connectWith}
+          onClose={() => setShowPicker(false)}
+        />
+      )}
+    </div>
   );
 }
 
@@ -114,25 +213,22 @@ export default function Navigation() {
     >
       <div className="max-w-screen-xl mx-auto px-4 sm:px-6">
 
-        {/* ── Desktop bar (3-column grid) ── */}
+        {/* Desktop bar (3-column grid) */}
         <div
           className="hidden lg:grid items-center h-14"
           style={{ gridTemplateColumns: "1fr auto 1fr" }}
         >
-
-          {/* Col 1 – Logo */}
+          {/* Logo */}
           <div className="flex items-center gap-2 justify-self-start">
             <img
               src="/ape-police-logo.png"
               alt="APE POLICE logo"
               className="w-7 h-7 object-cover rounded-full border border-[#00ff00]/40"
             />
-            <span className="font-meme text-lg" style={{ color: G }}>
-              APE POLICE
-            </span>
+            <span className="font-meme text-lg" style={{ color: G }}>APE POLICE</span>
           </div>
 
-          {/* Col 2 – Nav links (truly centered) */}
+          {/* Center nav links */}
           <div className="flex items-center gap-5">
             {navLinks.map(({ id, label }) => (
               <button
@@ -147,7 +243,7 @@ export default function Navigation() {
             ))}
           </div>
 
-          {/* Col 3 – Action buttons */}
+          {/* Right actions */}
           <div className="flex items-center gap-2 justify-self-end">
             <Link href="/agent-scanner">
               <span style={actionBtnStyle} data-testid="link-nav-agent-scanner">
@@ -157,14 +253,7 @@ export default function Navigation() {
             </Link>
             <WalletButton />
             <button
-              style={{
-                ...actionBtnStyle,
-                background: G,
-                border: `1px solid ${G}`,
-                color: "#000",
-                padding: "5px 14px",
-                fontWeight: 900,
-              }}
+              style={{ ...actionBtnStyle, background: G, border: `1px solid ${G}`, color: "#000", padding: "5px 14px", fontWeight: 900 }}
               data-testid="link-buy-apol"
             >
               Buy $APOL
@@ -172,33 +261,20 @@ export default function Navigation() {
           </div>
         </div>
 
-        {/* ── Mobile / tablet bar ── */}
+        {/* Mobile / tablet bar */}
         <div className="flex lg:hidden items-center h-14">
-
-          {/* Logo */}
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <img
               src="/ape-police-logo.png"
               alt="APE POLICE logo"
               className="w-7 h-7 object-cover rounded-full border border-[#00ff00]/40 flex-shrink-0"
             />
-            <span className="font-meme text-base truncate" style={{ color: G }}>
-              APE POLICE
-            </span>
+            <span className="font-meme text-base truncate" style={{ color: G }}>APE POLICE</span>
           </div>
-
-          {/* Always-visible right controls */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <WalletButton compact />
             <button
-              style={{
-                ...actionBtnStyle,
-                background: G,
-                border: `1px solid ${G}`,
-                color: "#000",
-                padding: "5px 10px",
-                fontWeight: 900,
-              }}
+              style={{ ...actionBtnStyle, background: G, border: `1px solid ${G}`, color: "#000", padding: "5px 10px", fontWeight: 900 }}
               data-testid="link-buy-apol-mobile"
             >
               Buy $APOL

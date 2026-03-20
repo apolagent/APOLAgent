@@ -6,6 +6,7 @@ import {
   Zap, Lock, ExternalLink, ShieldAlert, Activity, Clock,
 } from "lucide-react";
 import { BrowserProvider, JsonRpcProvider, parseEther } from "ethers";
+import { getSelectedProvider } from "@/hooks/use-wallet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -304,9 +305,9 @@ export default function AgentScanner() {
   };
 
   const handleDeepDive = async () => {
-    const eth = (window as any).ethereum;
+    const eth = getSelectedProvider();
     if (!eth) {
-      console.log("[APOL DeepDive] Error: MetaMask not detected.");
+      console.log("[APOL DeepDive] Error: No wallet provider found.");
       setDeepDiveError("MetaMask not detected. Install MetaMask to use Deep Dive Scan.");
       return;
     }

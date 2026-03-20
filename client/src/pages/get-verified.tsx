@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { ArrowLeft, ShieldCheck, CheckCircle, Loader2, AlertTriangle, ExternalLink, FileSearch } from "lucide-react";
 import { BrowserProvider, JsonRpcProvider, parseEther } from "ethers";
+import { getSelectedProvider } from "@/hooks/use-wallet";
 import Navigation from "@/components/navigation";
 import { CHAIN } from "@/lib/chain-config";
 
@@ -71,9 +72,9 @@ export default function GetVerified() {
   const handleSubmit = async () => {
     if (!isFormValid) return;
 
-    const eth = (window as any).ethereum;
+    const eth = getSelectedProvider();
     if (!eth) {
-      console.log("[APOL Verified] Error: MetaMask not detected.");
+      console.log("[APOL Verified] Error: No wallet provider found.");
       setErrorMsg("MetaMask not detected. Please install MetaMask to submit for audit.");
       setPhase("error");
       return;
