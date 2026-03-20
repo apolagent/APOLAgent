@@ -22,8 +22,8 @@ const cards = [
     cta: "INTELLIGENCE FEED",
     gradient: "from-gray-800 to-black hover:from-gray-700 hover:to-gray-800",
     textColor: "text-white",
-    href: null,
-    external: false,
+    href: "https://x.com/OnlineAPOL",
+    external: true,
   },
   {
     icon: <Radio className="w-8 h-8" />,
