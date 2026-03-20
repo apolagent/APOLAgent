@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, createContext, useContext } from "react";
+import type { ReactNode } from "react";
 import { BrowserProvider } from "ethers";
 import { CHAIN } from "@/lib/chain-config";
 
@@ -231,4 +232,21 @@ export function useWallet(): WalletState {
     providers, showPicker, setShowPicker,
     connect, connectWith, switchToBase,
   };
+}
+
+// ─── Shared Wallet Context ─────────────────────────────────────────────────
+// Wrap the app once with <WalletProvider> so every component reads from
+// the same wallet instance instead of creating isolated per-component state.
+
+const WalletContext = createContext<WalletState | null>(null);
+
+export function WalletProvider({ children }: { children: ReactNode }) {
+  const state = useWallet();
+  return <WalletContext.Provider value={state}>{children}</WalletContext.Provider>;
+}
+
+export function useWalletContext(): WalletState {
+  const ctx = useContext(WalletContext);
+  if (!ctx) throw new Error("useWalletContext must be inside <WalletProvider>");
+  return ctx;
 }

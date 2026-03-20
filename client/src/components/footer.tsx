@@ -1,8 +1,8 @@
 import { Link } from "wouter";
-import { useWallet } from "@/hooks/use-wallet";
+import { useWalletContext } from "@/hooks/use-wallet";
 
 export default function Footer() {
-  const { address } = useWallet();
+  const { address } = useWalletContext();
 
   return (
     <footer

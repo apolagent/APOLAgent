@@ -5,8 +5,7 @@ import {
   ExternalLink, FileSearch, Clock, Award, ShieldAlert, Info,
 } from "lucide-react";
 import { BrowserProvider, JsonRpcProvider, parseEther } from "ethers";
-import { getSelectedProvider } from "@/hooks/use-wallet";
-import { useWallet } from "@/hooks/use-wallet";
+import { getSelectedProvider, useWalletContext } from "@/hooks/use-wallet";
 import Navigation from "@/components/navigation";
 import { CHAIN } from "@/lib/chain-config";
 import type { VerificationRequest } from "@shared/schema";
@@ -339,7 +338,7 @@ function StatusDashboard({ submission, onReset }: { submission: VerificationRequ
 type Phase = "checking" | "form" | "awaiting_tx" | "saving" | "dashboard" | "error";
 
 export default function GetVerified() {
-  const { address } = useWallet();
+  const { address } = useWalletContext();
 
   // form fields
   const [projectName, setProjectName] = useState("");

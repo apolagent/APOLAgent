@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
 import { Menu, X, Bot, Wallet, AlertTriangle, ChevronDown } from "lucide-react";
-import { useWallet, type EIP6963ProviderDetail } from "@/hooks/use-wallet";
+import { useWalletContext, type EIP6963ProviderDetail } from "@/hooks/use-wallet";
 
 const G = "#00ff00";
 
@@ -118,7 +118,7 @@ function WalletButton({ compact = false }: { compact?: boolean }) {
     address, truncated, isBase, isConnecting, isSwitching,
     isIframe, providers, showPicker, setShowPicker,
     connect, connectWith, switchToBase,
-  } = useWallet();
+  } = useWalletContext();
 
   const wrapperRef = useRef<HTMLDivElement>(null);
 
