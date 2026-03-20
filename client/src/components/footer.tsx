@@ -1,8 +1,11 @@
 import { Link } from "wouter";
 import { useWalletContext } from "@/hooks/use-wallet";
 
+const ADMIN_WALLET = "0x857aca6a8a743c9262d64819d239f509a1cd0a85";
+
 export default function Footer() {
   const { address } = useWalletContext();
+  const isAdmin = !!address && address.toLowerCase() === ADMIN_WALLET;
 
   return (
     <footer
@@ -35,8 +38,8 @@ export default function Footer() {
             Data is aggregated from public streams; users are responsible for all trading decisions.
           </p>
 
-          {/* Admin shortcut — only visible when a wallet is connected */}
-          {address && (
+          {/* Admin shortcut — only visible to the admin wallet */}
+          {isAdmin && (
             <div className="mt-6">
               <Link
                 href="/admin/dashboard"
