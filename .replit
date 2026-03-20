@@ -37,3 +37,8 @@ author = "agent"
 task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
+
+[userenv]
+
+[userenv.shared]
+ADMIN_WALLET_ADDRESS = "0x857aca6A8A743C9262d64819D239f509a1Cd0A85"
