@@ -730,6 +730,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/verification-requests/by-tx/:txHash", async (req, res) => {
+    try {
+      const { txHash } = req.params;
+      if (!txHash) return res.status(400).json({ error: "txHash required" });
+      const request = await storage.getVerificationRequestByTxHash(txHash);
+      if (!request) return res.status(404).json({ error: "Not found" });
+      res.json(request);
+    } catch {
+      res.status(500).json({ error: "Failed to fetch verification request" });
+    }
+  });
+
+  app.get("/api/verification-requests/by-wallet/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      if (!address) return res.status(400).json({ error: "address required" });
+      const request = await storage.getVerificationRequestByWallet(address.toLowerCase());
+      if (!request) return res.status(404).json({ error: "Not found" });
+      res.json(request);
+    } catch {
+      res.status(500).json({ error: "Failed to fetch verification request" });
+    }
+  });
+
   app.post("/api/verification-requests", async (req, res) => {
     try {
       const result = insertVerificationRequestSchema.safeParse(req.body);

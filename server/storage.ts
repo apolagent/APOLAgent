@@ -25,6 +25,8 @@ export interface IStorage {
   getFlaggedWallets(limit?: number): Promise<FlaggedWallet[]>;
   checkInternalReports(address: string): Promise<boolean>;
   createVerificationRequest(data: InsertVerificationRequest): Promise<VerificationRequest>;
+  getVerificationRequestByTxHash(txHash: string): Promise<VerificationRequest | null>;
+  getVerificationRequestByWallet(walletAddress: string): Promise<VerificationRequest | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -149,6 +151,25 @@ export class DatabaseStorage implements IStorage {
       .values(data)
       .returning();
     return request;
+  }
+
+  async getVerificationRequestByTxHash(txHash: string): Promise<VerificationRequest | null> {
+    const [row] = await db
+      .select()
+      .from(verificationRequests)
+      .where(eq(verificationRequests.txHash, txHash))
+      .limit(1);
+    return row ?? null;
+  }
+
+  async getVerificationRequestByWallet(walletAddress: string): Promise<VerificationRequest | null> {
+    const [row] = await db
+      .select()
+      .from(verificationRequests)
+      .where(eq(verificationRequests.walletAddress, walletAddress.toLowerCase()))
+      .orderBy(desc(verificationRequests.submittedAt))
+      .limit(1);
+    return row ?? null;
   }
 
   async checkInternalReports(address: string): Promise<boolean> {

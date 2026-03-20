@@ -93,7 +93,8 @@ export const verificationRequests = pgTable("verification_requests", {
   contractAddress: text("contract_address").notNull(),
   website: text("website").notNull(),
   txHash: text("tx_hash").notNull(),
-  status: text("status").default("pending").notNull(),
+  walletAddress: text("wallet_address"),
+  status: text("status").default("pending_verification").notNull(),
   submittedAt: timestamp("submitted_at").defaultNow().notNull(),
 });
 
@@ -103,6 +104,7 @@ export const insertVerificationRequestSchema = createInsertSchema(verificationRe
   contractAddress: true,
   website: true,
   txHash: true,
+  walletAddress: true,
 });
 
 export type InsertVerificationRequest = z.infer<typeof insertVerificationRequestSchema>;
