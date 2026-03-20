@@ -6,6 +6,7 @@ import TokenomicsSection from "@/components/tokenomics-section";
 import ChannelSection from "@/components/channel-section";
 import RoadmapSection from "@/components/roadmap-section";
 import JoinSection from "@/components/join-section";
+import VerifiedByApolSection from "@/components/verified-by-apol-section";
 import Footer from "@/components/footer";
 import RecentlyFlagged from "@/components/recently-flagged";
 
@@ -37,6 +38,7 @@ export default function Home() {
       <RecentlyFlagged />
       <RoadmapSection />
       <JoinSection />
+      <VerifiedByApolSection />
       <Footer />
     </div>
   );

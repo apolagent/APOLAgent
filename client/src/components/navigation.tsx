@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Menu, X, Bot, Wallet, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Menu, X, Bot, Wallet, AlertTriangle } from "lucide-react";
 import { useWallet } from "@/hooks/use-wallet";
 
 const G = "#00ff00";
@@ -140,12 +140,6 @@ export default function Navigation() {
                 Scan Agent
               </span>
             </Link>
-            <Link href="/get-verified">
-              <span style={actionBtnStyle} data-testid="link-nav-get-verified">
-                <ShieldCheck size={11} />
-                Get Verified
-              </span>
-            </Link>
             <WalletButton />
             <button
               style={{
@@ -225,12 +219,6 @@ export default function Navigation() {
                 <span className="flex items-center gap-2 py-1 text-xs uppercase tracking-widest cursor-pointer" style={{ color: G, fontFamily: "'JetBrains Mono', monospace" }}>
                   <Bot size={13} />
                   Scan Agent
-                </span>
-              </Link>
-              <Link href="/get-verified" onClick={() => setIsMobileMenuOpen(false)}>
-                <span className="flex items-center gap-2 py-1 text-xs uppercase tracking-widest cursor-pointer" style={{ color: G, fontFamily: "'JetBrains Mono', monospace" }}>
-                  <ShieldCheck size={13} />
-                  Get Verified
                 </span>
               </Link>
             </div>
