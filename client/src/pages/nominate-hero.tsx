@@ -15,9 +15,9 @@ import { BrowserProvider, parseEther } from "ethers";
 import { insertHeroNominationSchema, type InsertHeroNomination, type HeroNomination } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import Navigation from "@/components/navigation";
+import { PAYMENT, ensureCorrectNetwork } from "@/lib/chain-config";
 
 const G = "#00ff00";
-const PLATFORM_WALLET = "0x857aca6A8A743C9262d64819D239f509a1Cd0A85";
 const PLATFORM_FEE_PCT = 0.2;
 const BUILDER_PCT = 0.8;
 
@@ -59,6 +59,7 @@ function TipModal({
 
     setTipState({ phase: "pending_builder" });
     try {
+      await ensureCorrectNetwork(eth);
       const provider = new BrowserProvider(eth);
       const signer = await provider.getSigner();
 
@@ -77,7 +78,7 @@ function TipModal({
       // TX 2: 20% to platform
       setTipState({ phase: "pending_platform", builderTxHash: builderTx.hash });
       const platformTx = await signer.sendTransaction({
-        to: PLATFORM_WALLET,
+        to: PAYMENT.platformWallet,
         value: parseEther((parsed * PLATFORM_FEE_PCT).toFixed(18)),
       });
       const platformReceipt = await platformTx.wait(1);

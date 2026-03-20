@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CHAIN } from "@/lib/chain-config";
+import { CHAIN, PAYMENT, ensureCorrectNetwork } from "@/lib/chain-config";
 
 async function waitForReceipt(txHash: string, timeoutMs = 90_000): Promise<boolean> {
   const rpc = new JsonRpcProvider(CHAIN.rpcUrl);
@@ -27,8 +27,6 @@ async function waitForReceipt(txHash: string, timeoutMs = 90_000): Promise<boole
 }
 
 const G = "#00ff00";
-const DEEP_DIVE_RECIPIENT = "0x857aca6A8A743C9262d64819D239f509a1Cd0A85";
-const DEEP_DIVE_AMOUNT = "0.005";
 
 type TestResult = { scored: boolean; score: number; maxScore: number; label: string; detail: string; timingPattern?: string[]; isContract?: boolean };
 type LogsTestResult = { status: "verified" | "mismatch" | "inconclusive"; detail: string; logs: string[] };
@@ -321,15 +319,19 @@ export default function AgentScanner() {
       const accounts: string[] = await eth.request({ method: "eth_requestAccounts" });
       console.log("[APOL DeepDive] Account available:", accounts[0]);
 
-      // Step 2: build signer from BrowserProvider (no extra popup needed)
+      // Step 2: ensure correct network — auto-prompts switch if needed
+      console.log("[APOL DeepDive] Checking network...");
+      await ensureCorrectNetwork(eth);
+
+      // Step 3: build signer from BrowserProvider (no extra popup needed)
       const provider = new BrowserProvider(eth);
       const signer = await provider.getSigner();
 
-      // Step 3: send transaction — MetaMask popup opens here
-      console.log(`[APOL DeepDive] Sending ${DEEP_DIVE_AMOUNT} ETH to ${DEEP_DIVE_RECIPIENT}...`);
+      // Step 4: send transaction — MetaMask popup opens here
+      console.log(`[APOL DeepDive] Sending ${PAYMENT.deepDiveFee} ETH to ${PAYMENT.platformWallet}...`);
       const tx = await signer.sendTransaction({
-        to: DEEP_DIVE_RECIPIENT,
-        value: parseEther(DEEP_DIVE_AMOUNT),
+        to: PAYMENT.platformWallet,
+        value: parseEther(PAYMENT.deepDiveFee),
       });
       console.log("[APOL DeepDive] Transaction sent:", tx.hash);
       setDeepDiveTxHash(tx.hash);
@@ -517,7 +519,7 @@ export default function AgentScanner() {
                 ) : deepDivePending ? (
                   <><Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} />Confirming…</>
                 ) : (
-                  <><Zap size={15} />Deep Dive Scan ({DEEP_DIVE_AMOUNT} ETH)</>
+                  <><Zap size={15} />Deep Dive Scan ({PAYMENT.deepDiveFee} ETH)</>
                 )}
               </button>
             </div>
@@ -680,7 +682,7 @@ export default function AgentScanner() {
                   </p>
                   <p style={{ color: "rgba(255,255,255,0.72)", fontSize: "11px", maxWidth: "320px", lineHeight: "1.6" }}>
                     Timing pattern matrix, raw log entries, full test narratives, and behavioral fingerprint.
-                    Unlock with Deep Dive Scan ({DEEP_DIVE_AMOUNT} ETH).
+                    Unlock with Deep Dive Scan ({PAYMENT.deepDiveFee} ETH).
                   </p>
                 </div>
               ) : (

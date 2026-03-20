@@ -7,13 +7,11 @@ import {
 import { BrowserProvider, JsonRpcProvider, parseEther } from "ethers";
 import { getSelectedProvider, useWalletContext } from "@/hooks/use-wallet";
 import Navigation from "@/components/navigation";
-import { CHAIN } from "@/lib/chain-config";
+import { CHAIN, PAYMENT, ensureCorrectNetwork } from "@/lib/chain-config";
 import type { VerificationRequest } from "@shared/schema";
 
 // ─── constants ──────────────────────────────────────────────────────────────
 const G = "#00ff00";
-const AUDIT_WALLET = "0x857aca6A8A743C9262d64819D239f509a1Cd0A85";
-const AUDIT_FEE = "0.05";
 const LS_TX_KEY = "apol_verify_tx";
 const LS_WALLET_KEY = "apol_verify_wallet";
 const LS_PENDING_KEY = "apol_verify_pending"; // raw form data stored before DB save
@@ -418,13 +416,17 @@ export default function GetVerified() {
       const senderAddress = accounts[0];
       console.log("[APOL Verified] Account:", senderAddress);
 
-      // Step 2: signer + send tx
+      // Step 2: ensure correct network — auto-prompts switch if needed
+      console.log("[APOL Verified] Checking network...");
+      await ensureCorrectNetwork(eth);
+
+      // Step 3: signer + send tx
       const provider = new BrowserProvider(eth);
       const signer = await provider.getSigner();
-      console.log(`[APOL Verified] Sending ${AUDIT_FEE} ETH to ${AUDIT_WALLET}...`);
+      console.log(`[APOL Verified] Sending ${PAYMENT.verifyFee} ETH to ${PAYMENT.platformWallet}...`);
       const tx = await signer.sendTransaction({
-        to: AUDIT_WALLET,
-        value: parseEther(AUDIT_FEE),
+        to: PAYMENT.platformWallet,
+        value: parseEther(PAYMENT.verifyFee),
       });
       console.log("[APOL Verified] Transaction sent:", tx.hash);
       setTxHash(tx.hash);
@@ -638,7 +640,7 @@ export default function GetVerified() {
                       Audit Fee
                     </p>
                     <p style={{ fontSize: "20px", fontWeight: 900, color: G, margin: 0 }}>
-                      {AUDIT_FEE} ETH
+                      {PAYMENT.verifyFee} ETH
                     </p>
                   </div>
                   <div style={{ textAlign: "right" }}>
@@ -697,7 +699,7 @@ export default function GetVerified() {
                 >
                   {isPending
                     ? <><Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} />Processing…</>
-                    : <><ShieldCheck size={15} />Submit for Audit ({AUDIT_FEE} ETH)</>
+                    : <><ShieldCheck size={15} />Submit for Audit ({PAYMENT.verifyFee} ETH)</>
                   }
                 </button>
 
