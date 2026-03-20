@@ -30,6 +30,7 @@ export const heroNominations = pgTable("hero_nominations", {
   category: text("category").notNull(),
   nominatedBy: integer("nominated_by").notNull(),
   evidenceUrl: text("evidence_url"),
+  walletAddress: text("wallet_address"),
   votes: integer("votes").default(0).notNull(),
   approved: boolean("approved").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -105,6 +106,7 @@ export const insertHeroNominationSchema = createInsertSchema(heroNominations).pi
   category: true,
   nominatedBy: true,
   evidenceUrl: true,
+  walletAddress: true,
 });
 
 export const insertVoteSchema = createInsertSchema(votes).pick({
