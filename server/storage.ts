@@ -30,6 +30,7 @@ export interface IStorage {
   getAllVerificationRequests(): Promise<VerificationRequest[]>;
   approveVerification(id: number, reviewerWallet: string): Promise<VerificationRequest>;
   rejectVerification(id: number, reason: string, reviewerWallet: string): Promise<VerificationRequest>;
+  getVerifiedProjectByContract(contractAddress: string): Promise<VerificationRequest | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -171,6 +172,20 @@ export class DatabaseStorage implements IStorage {
       .from(verificationRequests)
       .where(eq(verificationRequests.walletAddress, walletAddress.toLowerCase()))
       .orderBy(desc(verificationRequests.submittedAt))
+      .limit(1);
+    return row ?? null;
+  }
+
+  async getVerifiedProjectByContract(contractAddress: string): Promise<VerificationRequest | null> {
+    const [row] = await db
+      .select()
+      .from(verificationRequests)
+      .where(
+        and(
+          eq(verificationRequests.contractAddress, contractAddress),
+          eq(verificationRequests.status, "verified")
+        )
+      )
       .limit(1);
     return row ?? null;
   }

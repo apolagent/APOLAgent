@@ -10,6 +10,7 @@ import ReportScam from "@/pages/report-scam";
 import AgentScanner from "@/pages/agent-scanner";
 import GetVerified from "@/pages/get-verified";
 import AdminDashboard from "@/pages/admin-dashboard";
+import VerifyCertificate from "@/pages/verify-certificate";
 import NotFound from "@/pages/not-found";
 import ApolAgent from "@/components/apol-agent";
 
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/agent-scanner" component={AgentScanner} />
       <Route path="/get-verified" component={GetVerified} />
       <Route path="/admin/dashboard" component={AdminDashboard} />
+      <Route path="/verify/:contractAddress" component={VerifyCertificate} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -801,6 +801,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "0x000000000000000000000000000000000000dead",
   ]);
 
+  // In-memory audit cache — shared by admin audit + public verify (1 hr TTL)
+  const auditResultCache = new Map<string, { data: Record<string, unknown>; cachedAt: number }>();
+  const AUDIT_CACHE_TTL = 60 * 60 * 1000;
+
   const LOCKER_LABELS: Record<string, string> = {
     "0x663a5c229c09b049e36dcc11a9b0d4a8eb9db214": "Unicrypt",
     "0xadb2437e6f65682b85f814fbc12fec0508a7b1d": "Unicrypt BSC",
@@ -919,6 +923,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
       riskLevel,
       dataSource: tokenData ? "GoPlus" : "No data",
     });
+  });
+
+  // ─── Public Verification Certificate ──────────────────────────────────────
+
+  app.get("/api/verify/:contractAddress", async (req, res) => {
+    const contractAddress = (req.params.contractAddress || "").toLowerCase().trim();
+    if (!contractAddress || !contractAddress.startsWith("0x")) {
+      return res.status(400).json({ error: "Invalid contract address" });
+    }
+
+    const project = await storage.getVerifiedProjectByContract(contractAddress);
+    if (!project) {
+      return res.status(404).json({ error: "No verified certificate found for this contract" });
+    }
+
+    // Return cached audit data if fresh
+    const cacheKey = `${contractAddress}:base`;
+    const cached = auditResultCache.get(cacheKey);
+    if (cached && Date.now() - cached.cachedAt < AUDIT_CACHE_TTL) {
+      return res.json({ project, audit: cached.data });
+    }
+
+    const chainId = "8453"; // Base mainnet
+    const GOPLUS_BASE = "https://api.gopluslabs.io/api/v1";
+
+    let tokenData: Record<string, any> | null = null;
+    let hpData: Record<string, any> | null = null;
+
+    try {
+      const [tRes, hRes] = await Promise.all([
+        fetch(`${GOPLUS_BASE}/token_security/${chainId}?contract_addresses=${encodeURIComponent(contractAddress)}`),
+        fetch(`https://api.honeypot.is/v2/IsHoneypot?address=${encodeURIComponent(contractAddress)}&chainID=${chainId}`),
+      ]);
+      if (tRes.ok) {
+        const tj = await tRes.json();
+        tokenData = tj?.result?.[contractAddress.toLowerCase()] ?? null;
+      }
+      if (hRes.ok) {
+        hpData = await hRes.json();
+      }
+    } catch { /* non-fatal */ }
+
+    const flag1 = (v: any) => v === "1" || v === 1 || v === true;
+
+    const isHoneypot = hpData?.IsHoneypot ?? flag1(tokenData?.is_honeypot);
+    const simulationSuccess = hpData ? (hpData.simulationSuccess ?? null) : null;
+    const buyTax = hpData?.BuyTax != null ? hpData.BuyTax : taxPct(tokenData?.buy_tax ?? "0");
+    const sellTax = hpData?.SellTax != null ? hpData.SellTax : taxPct(tokenData?.sell_tax ?? "0");
+
+    const lpHolders: { address: string; balance: string; percent: string; is_contract: string; locked: string; tag: string }[]
+      = tokenData?.lp_holders ?? [];
+
+    let lockedBalance = 0;
+    let totalBalance = 0;
+    const lockLocations: string[] = [];
+
+    for (const lp of lpHolders) {
+      const pct = parseFloat(lp.percent || "0");
+      totalBalance += pct;
+      const addr = (lp.address || "").toLowerCase();
+      const isBurn = BURN_ADDRESSES.has(addr);
+      const lockerLabel = LOCKER_LABELS[addr];
+      if (lp.locked === "1" || lp.locked === true as any || isBurn || lockerLabel) {
+        lockedBalance += pct;
+        const label = lockerLabel || (isBurn ? "Burn Address" : lp.tag || "Locked");
+        if (label && !lockLocations.includes(label)) lockLocations.push(label);
+      }
+    }
+
+    const clampedLocked = totalBalance > 0 ? Math.min((lockedBalance / totalBalance) * 100, 100) : 0;
+
+    const holders: { address: string; balance: string; percent: string; is_contract: string; tag: string }[]
+      = tokenData?.holders ?? [];
+
+    const topHolders = holders.slice(0, 10).map((h, i) => ({
+      rank: i + 1,
+      address: h.address || "",
+      percent: parseFloat(h.percent || "0") * 100,
+      tag: h.tag || "",
+      isLocked: false,
+      isContract: flag1(h.is_contract),
+    }));
+
+    const top5pct = topHolders.slice(0, 5).reduce((s, h) => s + h.percent, 0);
+
+    const flags: string[] = [];
+    if (isHoneypot) flags.push("HONEYPOT");
+    if (buyTax > 10) flags.push(`BUY TAX ${buyTax.toFixed(1)}%`);
+    if (sellTax > 10) flags.push(`SELL TAX ${sellTax.toFixed(1)}%`);
+    if (lpHolders.length > 0 && clampedLocked < 50) flags.push("UNLOCKED LIQUIDITY");
+    if (flag1(tokenData?.is_mintable)) flags.push("MINTABLE");
+    if (flag1(tokenData?.slippage_modifiable)) flags.push("SLIPPAGE MODIFIABLE");
+    if (top5pct > 50) flags.push("HIGH HOLDER CONCENTRATION");
+
+    const riskLevel = isHoneypot ? "Honeypot"
+      : flags.length >= 3 ? "High Risk"
+      : flags.length >= 1 ? "Caution"
+      : "Low Risk";
+
+    const auditResult = {
+      tokenName: tokenData?.token_name || "",
+      tokenSymbol: tokenData?.token_symbol || "",
+      holderCount: parseInt(tokenData?.holder_count || "0"),
+      isOpenSource: flag1(tokenData?.is_open_source),
+      isInDex: flag1(tokenData?.is_in_dex),
+      honeypot: { isHoneypot, simulationSuccess, buyTax, sellTax, source: hpData ? "honeypot.is" : "GoPlus" },
+      liquidityLock: {
+        lockedPercent: clampedLocked,
+        lockLocations,
+        status: clampedLocked >= 90 ? "Fully Locked" : clampedLocked >= 50 ? "Partially Locked" : lpHolders.length > 0 ? "Unlocked" : "No LP data",
+        lpHoldersChecked: lpHolders.length,
+      },
+      topHolders,
+      top5pct,
+      flags,
+      riskLevel,
+    };
+
+    auditResultCache.set(cacheKey, { data: auditResult as any, cachedAt: Date.now() });
+    return res.json({ project, audit: auditResult });
   });
 
   // ─── Admin Auth ────────────────────────────────────────────────────────────
