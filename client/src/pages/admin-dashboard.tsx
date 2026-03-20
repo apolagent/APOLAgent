@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ShieldAlert, CheckCircle2, XCircle, Loader2, LogOut, RefreshCw, ChevronDown } from "lucide-react";
+import { ShieldAlert, CheckCircle2, XCircle, Loader2, LogOut, RefreshCw, Search, AlertTriangle, Lock, Unlock, Users, ChevronDown, ChevronUp } from "lucide-react";
 import { getSelectedProvider } from "@/hooks/use-wallet";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -24,6 +24,41 @@ type VerificationRequest = {
 
 type StatusFilter = "all" | "pending_verification" | "verified" | "rejected";
 
+type AuditData = {
+  contractAddress: string;
+  chain: string;
+  tokenName: string;
+  tokenSymbol: string;
+  holderCount: number;
+  isOpenSource: boolean;
+  isInDex: boolean;
+  honeypot: {
+    isHoneypot: boolean;
+    simulationSuccess: boolean | null;
+    buyTax: number;
+    sellTax: number;
+    source: string;
+  };
+  liquidityLock: {
+    lockedPercent: number;
+    lockLocations: string[];
+    status: string;
+    lpHoldersChecked: number;
+  };
+  topHolders: Array<{
+    rank: number;
+    address: string;
+    percent: number;
+    tag: string;
+    isLocked: boolean;
+    isContract: boolean;
+  }>;
+  top5pct: number;
+  flags: string[];
+  riskLevel: string;
+  dataSource: string;
+};
+
 const STATUS_LABELS: Record<string, string> = {
   pending_verification: "PENDING",
   verified: "VERIFIED",
@@ -35,6 +70,219 @@ const STATUS_COLORS: Record<string, string> = {
   verified: "#00FF00",
   rejected: "#ff4444",
 };
+
+// ─── Audit Panel ───────────────────────────────────────────────────────────
+function AuditPanel({ data, onClose }: { data: AuditData | "loading" | "error"; onClose: () => void }) {
+  const RISK_COLORS: Record<string, string> = {
+    "High Risk": "#ff4444",
+    "Caution": "#ffaa00",
+    "Watch": "#ffdd44",
+    "Looks Clean": "#00FF00",
+  };
+
+  if (data === "loading") {
+    return (
+      <div style={{
+        marginTop: "16px", border: "1px solid rgba(0,255,0,0.2)", background: "rgba(0,255,0,0.02)",
+        padding: "28px", textAlign: "center",
+      }}>
+        <Loader2 size={20} color={G} style={{ animation: "spin 1s linear infinite", margin: "0 auto 10px", display: "block" }} />
+        <p style={{ margin: 0, fontSize: "11px", color: "rgba(255,255,255,0.5)" }}>
+          Querying GoPlus + honeypot.is — running simulated buy/sell...
+        </p>
+      </div>
+    );
+  }
+
+  if (data === "error") {
+    return (
+      <div style={{
+        marginTop: "16px", border: "1px solid rgba(255,68,68,0.3)", background: "rgba(255,0,0,0.04)",
+        padding: "16px",
+      }}>
+        <p style={{ margin: 0, fontSize: "11px", color: "#ff6666" }}>Audit fetch failed. Check network or try again.</p>
+      </div>
+    );
+  }
+
+  const riskColor = RISK_COLORS[data.riskLevel] || "rgba(255,255,255,0.5)";
+  const { honeypot: hp, liquidityLock: liq } = data;
+
+  return (
+    <div style={{ marginTop: "16px", border: `1px solid ${riskColor}33`, background: "#000" }}>
+
+      {/* Audit header */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "14px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)",
+        background: `${riskColor}08`,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <Search size={13} color={riskColor} />
+          <span style={{ fontSize: "9px", color: riskColor, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700 }}>
+            Contract Audit — {data.dataSource}
+          </span>
+          <span style={{
+            padding: "2px 8px", border: `1px solid ${riskColor}`,
+            fontSize: "8px", fontWeight: 700, letterSpacing: "0.12em", color: riskColor,
+          }}>
+            {data.riskLevel.toUpperCase()}
+          </span>
+          {data.tokenName && (
+            <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.45)" }}>
+              {data.tokenName} / {data.tokenSymbol} · {data.holderCount.toLocaleString()} holders
+            </span>
+          )}
+        </div>
+        <button onClick={onClose} style={{
+          background: "none", border: "none", color: "rgba(255,255,255,0.35)",
+          cursor: "pointer", fontSize: "16px", lineHeight: 1,
+        }}>✕</button>
+      </div>
+
+      {/* Flags */}
+      {data.flags.length > 0 && (
+        <div style={{ padding: "12px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", flexWrap: "wrap", gap: "6px" }}>
+          {data.flags.map((f, i) => (
+            <span key={i} style={{
+              padding: "3px 10px",
+              border: `1px solid ${f.includes("HONEY") || f.includes("Extreme") ? "#ff4444" : "#ffaa00"}`,
+              color: f.includes("HONEY") || f.includes("Extreme") ? "#ff6666" : "#ffcc44",
+              fontSize: "9px", fontWeight: 700, letterSpacing: "0.1em",
+            }}>
+              ⚠ {f}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 0 }}>
+
+        {/* Honeypot panel */}
+        <div style={{ padding: "18px", borderRight: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "14px" }}>
+            {hp.isHoneypot
+              ? <AlertTriangle size={13} color="#ff4444" />
+              : <CheckCircle2 size={13} color={G} />}
+            <span style={{ fontSize: "9px", letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 700, color: hp.isHoneypot ? "#ff4444" : G }}>
+              Honeypot Check
+            </span>
+          </div>
+
+          {[
+            ["Result", hp.isHoneypot ? "HONEYPOT ✕" : "SAFE ✓", hp.isHoneypot ? "#ff4444" : G],
+            ["Can Buy", !hp.isHoneypot ? "YES ✓" : "BLOCKED ✕", !hp.isHoneypot ? G : "#ff4444"],
+            ["Can Sell", !hp.isHoneypot ? "YES ✓" : "BLOCKED ✕", !hp.isHoneypot ? G : "#ff4444"],
+            ["Buy Tax", `${hp.buyTax.toFixed(1)}%`, hp.buyTax > 25 ? "#ff4444" : hp.buyTax > 10 ? "#ffaa00" : "rgba(255,255,255,0.8)"],
+            ["Sell Tax", `${hp.sellTax.toFixed(1)}%`, hp.sellTax > 25 ? "#ff4444" : hp.sellTax > 10 ? "#ffaa00" : "rgba(255,255,255,0.8)"],
+            ["Simulated", hp.simulationSuccess === null ? "Static only" : hp.simulationSuccess ? "YES ✓" : "FAILED ✕",
+              hp.simulationSuccess === null ? "rgba(255,255,255,0.4)" : hp.simulationSuccess ? G : "#ffaa00"],
+            ["Source", hp.source, "rgba(255,255,255,0.35)"],
+          ].map(([k, v, c]) => (
+            <div key={k as string} style={{ marginBottom: "8px" }}>
+              <p style={{ margin: "0 0 1px", fontSize: "8px", color: "rgba(0,255,0,0.55)", letterSpacing: "0.12em", textTransform: "uppercase" }}>{k}</p>
+              <p style={{ margin: 0, fontSize: "11px", color: c as string, fontWeight: 700 }}>{v}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Liquidity lock panel */}
+        <div style={{ padding: "18px", borderRight: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "14px" }}>
+            {liq.lockedPercent >= 50 ? <Lock size={13} color={G} /> : <Unlock size={13} color="#ff4444" />}
+            <span style={{ fontSize: "9px", letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 700, color: liq.lockedPercent >= 50 ? G : "#ff4444" }}>
+              Liquidity Lock
+            </span>
+          </div>
+
+          <div style={{ marginBottom: "12px" }}>
+            <p style={{ margin: "0 0 4px", fontSize: "8px", color: "rgba(0,255,0,0.55)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Locked %</p>
+            <div style={{ height: "6px", background: "rgba(255,255,255,0.08)", marginBottom: "4px" }}>
+              <div style={{
+                height: "100%", width: `${liq.lockedPercent}%`,
+                background: liq.lockedPercent >= 90 ? G : liq.lockedPercent >= 50 ? "#ffaa00" : "#ff4444",
+              }} />
+            </div>
+            <p style={{ margin: 0, fontSize: "14px", fontWeight: 900, color: liq.lockedPercent >= 50 ? G : "#ff4444" }}>
+              {liq.lockedPercent.toFixed(1)}%
+            </p>
+          </div>
+
+          {[
+            ["Status", liq.status, liq.lockedPercent >= 90 ? G : liq.lockedPercent >= 50 ? "#ffaa00" : "#ff4444"],
+            ["LP Holders Checked", String(liq.lpHoldersChecked), "rgba(255,255,255,0.7)"],
+          ].map(([k, v, c]) => (
+            <div key={k as string} style={{ marginBottom: "8px" }}>
+              <p style={{ margin: "0 0 1px", fontSize: "8px", color: "rgba(0,255,0,0.55)", letterSpacing: "0.12em", textTransform: "uppercase" }}>{k}</p>
+              <p style={{ margin: 0, fontSize: "11px", color: c as string, fontWeight: 700 }}>{v}</p>
+            </div>
+          ))}
+
+          {liq.lockLocations.length > 0 && (
+            <div>
+              <p style={{ margin: "0 0 6px", fontSize: "8px", color: "rgba(0,255,0,0.55)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Lock Locations</p>
+              {liq.lockLocations.map(loc => (
+                <span key={loc} style={{
+                  display: "inline-block", marginRight: "6px", marginBottom: "4px",
+                  padding: "2px 8px", border: `1px solid ${G}`,
+                  fontSize: "9px", color: G, fontWeight: 700,
+                }}>
+                  {loc}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Top holders panel */}
+        <div style={{ padding: "18px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "7px", marginBottom: "14px" }}>
+            <Users size={13} color={data.top5pct > 50 ? "#ffaa00" : G} />
+            <span style={{ fontSize: "9px", letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 700, color: data.top5pct > 50 ? "#ffaa00" : G }}>
+              Top Holders
+            </span>
+          </div>
+
+          <div style={{ marginBottom: "10px" }}>
+            <p style={{ margin: "0 0 1px", fontSize: "8px", color: "rgba(0,255,0,0.55)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Top 5 Combined</p>
+            <p style={{ margin: 0, fontSize: "14px", fontWeight: 900, color: data.top5pct > 50 ? "#ffaa00" : G }}>
+              {data.top5pct.toFixed(1)}%
+            </p>
+          </div>
+
+          {data.topHolders.slice(0, 10).map(h => (
+            <div key={h.rank} style={{
+              display: "flex", alignItems: "center", gap: "6px",
+              paddingBottom: "5px", marginBottom: "5px",
+              borderBottom: "1px solid rgba(255,255,255,0.04)",
+            }}>
+              <span style={{ fontSize: "8px", color: "rgba(255,255,255,0.25)", width: "14px", flexShrink: 0 }}>#{h.rank}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                  <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.6)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {h.tag || `${h.address.slice(0, 6)}…${h.address.slice(-4)}`}
+                  </span>
+                  {h.isContract && <span style={{ fontSize: "7px", color: "rgba(0,255,0,0.5)", border: "1px solid rgba(0,255,0,0.3)", padding: "0 3px" }}>CONTRACT</span>}
+                  {h.isLocked && <Lock size={8} color="rgba(0,255,0,0.6)" />}
+                </div>
+              </div>
+              <span style={{
+                fontSize: "10px", fontWeight: 700, flexShrink: 0,
+                color: h.percent > 10 ? "#ffaa00" : "rgba(255,255,255,0.75)",
+              }}>
+                {h.percent.toFixed(2)}%
+              </span>
+            </div>
+          ))}
+
+          {data.topHolders.length === 0 && (
+            <p style={{ fontSize: "10px", color: "rgba(255,255,255,0.3)", margin: 0 }}>No holder data available</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Rejection Modal ───────────────────────────────────────────────────────
 function RejectModal({
@@ -229,6 +477,27 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const qc = useQueryClient();
   const [filter, setFilter] = useState<StatusFilter>("pending_verification");
   const [rejectTarget, setRejectTarget] = useState<number | null>(null);
+  const [auditMap, setAuditMap] = useState<Record<number, AuditData | "loading" | "error">>({});
+
+  const fetchAudit = useCallback(async (r: VerificationRequest) => {
+    if (auditMap[r.id] && auditMap[r.id] !== "error") return; // already loaded or loading
+    setAuditMap(prev => ({ ...prev, [r.id]: "loading" }));
+    try {
+      const res = await fetch(
+        `/api/admin/audit?contractAddress=${encodeURIComponent(r.contractAddress)}&chain=base`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) throw new Error("fetch failed");
+      const data: AuditData = await res.json();
+      setAuditMap(prev => ({ ...prev, [r.id]: data }));
+    } catch {
+      setAuditMap(prev => ({ ...prev, [r.id]: "error" }));
+    }
+  }, [token, auditMap]);
+
+  const closeAudit = useCallback((id: number) => {
+    setAuditMap(prev => { const next = { ...prev }; delete next[id]; return next; });
+  }, []);
 
   const { data: requests = [], isLoading, isError, refetch } = useQuery<VerificationRequest[]>({
     queryKey: ["/api/admin/verifications", token],
@@ -425,39 +694,58 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 </p>
               </div>
 
-              {/* Action buttons — only for pending */}
-              {r.status === "pending_verification" && (
-                <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
-                  <button
-                    onClick={() => approveMutation.mutate(r.id)}
-                    disabled={approveMutation.isPending}
-                    data-testid={`button-approve-${r.id}`}
-                    style={{
-                      background: "rgba(0,255,0,0.08)", border: `1px solid ${G}`,
-                      color: G, padding: "8px 16px",
-                      fontFamily: "JetBrains Mono, monospace", fontSize: "10px",
-                      fontWeight: 700, letterSpacing: "0.1em", cursor: "pointer",
-                      display: "flex", alignItems: "center", gap: "6px",
-                    }}
-                  >
-                    {approveMutation.isPending ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} /> : <CheckCircle2 size={11} />}
-                    APPROVE
-                  </button>
-                  <button
-                    onClick={() => setRejectTarget(r.id)}
-                    data-testid={`button-reject-${r.id}`}
-                    style={{
-                      background: "transparent", border: "1px solid #ff4444",
-                      color: "#ff4444", padding: "8px 16px",
-                      fontFamily: "JetBrains Mono, monospace", fontSize: "10px",
-                      fontWeight: 700, letterSpacing: "0.1em", cursor: "pointer",
-                      display: "flex", alignItems: "center", gap: "6px",
-                    }}
-                  >
-                    <XCircle size={11} /> REJECT
-                  </button>
-                </div>
-              )}
+              {/* Action buttons */}
+              <div style={{ display: "flex", gap: "8px", flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {/* Audit button — always available */}
+                <button
+                  onClick={() => auditMap[r.id] ? closeAudit(r.id) : fetchAudit(r)}
+                  data-testid={`button-audit-${r.id}`}
+                  style={{
+                    background: "transparent", border: "1px solid rgba(0,255,0,0.4)",
+                    color: "rgba(0,255,0,0.7)", padding: "8px 14px",
+                    fontFamily: "JetBrains Mono, monospace", fontSize: "10px",
+                    fontWeight: 700, letterSpacing: "0.1em", cursor: "pointer",
+                    display: "flex", alignItems: "center", gap: "6px",
+                  }}
+                >
+                  <Search size={11} />
+                  {auditMap[r.id] ? "HIDE AUDIT" : "AUDIT CONTRACT"}
+                </button>
+
+                {/* Approve/Reject — only for pending */}
+                {r.status === "pending_verification" && (
+                  <>
+                    <button
+                      onClick={() => approveMutation.mutate(r.id)}
+                      disabled={approveMutation.isPending}
+                      data-testid={`button-approve-${r.id}`}
+                      style={{
+                        background: "rgba(0,255,0,0.08)", border: `1px solid ${G}`,
+                        color: G, padding: "8px 16px",
+                        fontFamily: "JetBrains Mono, monospace", fontSize: "10px",
+                        fontWeight: 700, letterSpacing: "0.1em", cursor: "pointer",
+                        display: "flex", alignItems: "center", gap: "6px",
+                      }}
+                    >
+                      {approveMutation.isPending ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} /> : <CheckCircle2 size={11} />}
+                      APPROVE
+                    </button>
+                    <button
+                      onClick={() => setRejectTarget(r.id)}
+                      data-testid={`button-reject-${r.id}`}
+                      style={{
+                        background: "transparent", border: "1px solid #ff4444",
+                        color: "#ff4444", padding: "8px 16px",
+                        fontFamily: "JetBrains Mono, monospace", fontSize: "10px",
+                        fontWeight: 700, letterSpacing: "0.1em", cursor: "pointer",
+                        display: "flex", alignItems: "center", gap: "6px",
+                      }}
+                    >
+                      <XCircle size={11} /> REJECT
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Details grid */}
@@ -487,6 +775,11 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
                 <p style={{ margin: "0 0 4px", fontSize: "8px", color: "#ff6666", letterSpacing: "0.14em", textTransform: "uppercase" }}>Rejection Reason</p>
                 <p style={{ margin: 0, fontSize: "11px", color: "rgba(255,255,255,0.75)", lineHeight: "1.5" }}>{r.rejectionReason}</p>
               </div>
+            )}
+
+            {/* Audit panel */}
+            {auditMap[r.id] && (
+              <AuditPanel data={auditMap[r.id]} onClose={() => closeAudit(r.id)} />
             )}
           </div>
         ))}

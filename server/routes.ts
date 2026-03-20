@@ -794,6 +794,133 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ─── Admin Contract Audit ─────────────────────────────────────────────────
+
+  const BURN_ADDRESSES = new Set([
+    "0x0000000000000000000000000000000000000000",
+    "0x000000000000000000000000000000000000dead",
+  ]);
+
+  const LOCKER_LABELS: Record<string, string> = {
+    "0x663a5c229c09b049e36dcc11a9b0d4a8eb9db214": "Unicrypt",
+    "0xadb2437e6f65682b85f814fbc12fec0508a7b1d": "Unicrypt BSC",
+    "0x71b5759d73262fbb223956913ecf4ecc51057641": "PinkLock",
+    "0x407993575c91ce7643a4d4ccdaa9b98f5b96e40": "PinkLock V2",
+    "0xe2fe530c047f2d85298b07d9333c05737f1435fb": "Team Finance",
+    "0x8bac53e19d5db68f62c3770c1db33c5b07c19a0": "Mudra Locker",
+  };
+
+  app.get("/api/admin/audit", requireAdmin as any, async (req, res) => {
+    const { contractAddress, chain = "base" } = req.query as { contractAddress: string; chain?: string };
+    if (!contractAddress) return res.status(400).json({ error: "contractAddress required" });
+
+    const chainId = GOPLUS_CHAIN[chain] || "8453";
+
+    // 1. GoPlus token_security
+    let tokenData: any = null;
+    try {
+      const r = await fetch(
+        `${GOPLUS_BASE}/token_security/${chainId}?contract_addresses=${encodeURIComponent(contractAddress)}`,
+        { signal: AbortSignal.timeout(12000) }
+      );
+      const j = await r.json() as any;
+      const key = Object.keys(j.result || {})[0];
+      if (key) tokenData = j.result[key];
+    } catch { /* non-fatal */ }
+
+    // 2. Honeypot.is simulated buy/sell
+    let hpData: any = null;
+    try {
+      const r = await fetch(
+        `https://api.honeypot.is/v2/IsHoneypot?address=${encodeURIComponent(contractAddress)}&chainID=${chainId}`,
+        { signal: AbortSignal.timeout(12000) }
+      );
+      if (r.ok) hpData = await r.json() as any;
+    } catch { /* non-fatal */ }
+
+    const flag1 = (v: any) => v === "1" || v === 1;
+
+    // Honeypot
+    const isHoneypotGP = flag1(tokenData?.is_honeypot);
+    const isHoneypotHP = hpData?.IsHoneypot === true;
+    const isHoneypot = isHoneypotGP || isHoneypotHP;
+    const simulationSuccess = hpData != null ? hpData.simulationSuccess !== false : null;
+    const buyTax = hpData?.BuyTax != null ? hpData.BuyTax : taxPct(tokenData?.buy_tax ?? "0");
+    const sellTax = hpData?.SellTax != null ? hpData.SellTax : taxPct(tokenData?.sell_tax ?? "0");
+
+    // LP Lock
+    const lpHolders: any[] = tokenData?.lp_holders || [];
+    let lockedLpPercent = 0;
+    const lockLocations: string[] = [];
+
+    for (const lp of lpHolders) {
+      const addr = (lp.address || "").toLowerCase();
+      const pct = parseFloat(lp.percent || "0") * 100;
+      const isBurn = BURN_ADDRESSES.has(addr);
+      const lockerLabel = LOCKER_LABELS[addr];
+      const isLocked = flag1(lp.is_locked) || isBurn || !!lockerLabel || !!(lp.tag);
+      if (isLocked) {
+        lockedLpPercent += pct;
+        const loc = lp.tag || lockerLabel || (isBurn ? "Burn Address" : "Locked");
+        if (!lockLocations.includes(loc)) lockLocations.push(loc);
+      }
+    }
+    const clampedLocked = Math.min(100, lockedLpPercent);
+
+    // Top holders
+    const rawHolders: any[] = tokenData?.holders || [];
+    const topHolders = rawHolders.slice(0, 10).map((h: any, i: number) => ({
+      rank: i + 1,
+      address: h.address || "Unknown",
+      percent: parseFloat(h.percent || "0") * 100,
+      tag: h.tag || "",
+      isLocked: flag1(h.is_locked),
+      isContract: flag1(h.is_contract),
+    }));
+
+    const top5pct = topHolders.slice(0, 5).reduce((s, h) => s + h.percent, 0);
+
+    // Flags
+    const flags: string[] = [];
+    if (isHoneypot) flags.push("HONEYPOT — tokens cannot be sold");
+    if (simulationSuccess === false) flags.push("Trade simulation failed — unverifiable");
+    if (buyTax > 25) flags.push(`Extreme buy tax: ${buyTax.toFixed(1)}%`);
+    else if (buyTax > 10) flags.push(`High buy tax: ${buyTax.toFixed(1)}%`);
+    if (sellTax > 25) flags.push(`Extreme sell tax: ${sellTax.toFixed(1)}%`);
+    else if (sellTax > 10) flags.push(`High sell tax: ${sellTax.toFixed(1)}%`);
+    if (clampedLocked < 50 && lpHolders.length > 0) flags.push("Liquidity is not adequately locked");
+    if (flag1(tokenData?.is_mintable)) flags.push("Owner can mint unlimited tokens");
+    if (flag1(tokenData?.slippage_modifiable)) flags.push("Owner can modify sell slippage");
+    if (top5pct > 50) flags.push(`Top 5 wallets hold ${top5pct.toFixed(1)}% — high concentration`);
+
+    const riskLevel = isHoneypot || buyTax > 25 || sellTax > 25
+      ? "High Risk"
+      : flags.length >= 2 ? "Caution"
+      : flags.length === 1 ? "Watch"
+      : "Looks Clean";
+
+    res.json({
+      contractAddress, chain,
+      tokenName: tokenData?.token_name || "",
+      tokenSymbol: tokenData?.token_symbol || "",
+      holderCount: parseInt(tokenData?.holder_count || "0"),
+      isOpenSource: flag1(tokenData?.is_open_source),
+      isInDex: flag1(tokenData?.is_in_dex),
+      honeypot: { isHoneypot, simulationSuccess, buyTax, sellTax, source: hpData ? "honeypot.is" : "GoPlus" },
+      liquidityLock: {
+        lockedPercent: clampedLocked,
+        lockLocations,
+        status: clampedLocked >= 90 ? "Fully Locked" : clampedLocked >= 50 ? "Partially Locked" : lpHolders.length > 0 ? "Unlocked" : "No LP data",
+        lpHoldersChecked: lpHolders.length,
+      },
+      topHolders,
+      top5pct,
+      flags,
+      riskLevel,
+      dataSource: tokenData ? "GoPlus" : "No data",
+    });
+  });
+
   // ─── Admin Auth ────────────────────────────────────────────────────────────
 
   app.get("/api/admin/nonce", (req, res) => {
