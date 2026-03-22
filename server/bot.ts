@@ -53,75 +53,101 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const token = tKey ? (tokenData.result[tKey] as any) : null;
     const sec   = (secData?.result ?? {}) as Record<string, any>;
 
-    // ── Risk flags ────────────────────────────────────────────────────────────
-    const flags: string[] = [];
+    // ── Critical check values ─────────────────────────────────────────────────
 
-    if (token) {
-      if (flag(token.is_honeypot))                flags.push("⛔ HONEYPOT DETECTED");
-      if (parseFloat(token.buy_tax  ?? "0") > 0.1) flags.push(`💸 Buy Tax: ${pct(token.buy_tax)}`);
-      if (parseFloat(token.sell_tax ?? "0") > 0.1) flags.push(`💸 Sell Tax: ${pct(token.sell_tax)}`);
-      if (flag(token.can_take_back_ownership))    flags.push("⚠️ Recoverable Ownership");
-      if (flag(token.owner_change_balance))       flags.push("⚠️ Owner Can Change Balance");
-      if (flag(token.is_mintable))                flags.push("🖨️ Mintable Supply");
-      if (flag(token.is_blacklist))               flags.push("🚫 Blacklist Function");
-      if (flag(token.trading_cooldown))           flags.push("⏱️ Trading Cooldown");
-      if (flag(token.anti_whale_modifiable))      flags.push("🐋 Anti-Whale Modifiable");
-      if (!flag(token.is_open_source))            flags.push("👁️ Contract Not Verified");
-    }
-
-    const secFlagKeys = Object.keys(sec).filter(k =>
-      flag(sec[k]) && !["contract_address", "chainId"].includes(k)
-    );
-    secFlagKeys.forEach(k => flags.push(`🔍 ${k.replace(/_/g, " ")}`));
-
-    // ── Risk level ────────────────────────────────────────────────────────────
-    let riskEmoji: string;
-    if (flags.some(f => f.includes("HONEYPOT"))) riskEmoji = "🚨 CRITICAL";
-    else if (flags.length >= 3)                  riskEmoji = "🔴 HIGH RISK";
-    else if (flags.length >= 1)                  riskEmoji = "🟡 MEDIUM RISK";
-    else                                         riskEmoji = "🟢 LOW RISK";
-
-    // ── Token metadata ────────────────────────────────────────────────────────
-    const isContract  = !!tKey;
-    const tokenName   = token?.token_name   ?? "—";
-    const tokenSymbol = token?.token_symbol ? `$${token.token_symbol}` : "—";
-    const holderCount = token?.holder_count ? parseInt(token.holder_count).toLocaleString() : "—";
-    const buyTaxFmt   = token ? pct(token.buy_tax)  : "—";
-    const sellTaxFmt  = token ? pct(token.sell_tax) : "—";
-
+    // Liquidity status
     const lpHolders: any[] = token?.lp_holders ?? [];
-    const lpLocked = lpHolders
+    const lpBurnedPct = lpHolders
+      .filter(h => (h.tag ?? "").toLowerCase().includes("burn") || (h.address ?? "").toLowerCase() === "0x000000000000000000000000000000000000dead")
+      .reduce((acc, h) => acc + parseFloat(h.percent ?? "0") * 100, 0);
+    const lpLockedPct = lpHolders
       .filter(h => flag(h.is_locked))
       .reduce((acc, h) => acc + parseFloat(h.percent ?? "0") * 100, 0);
 
+    let liquidityStatus: string;
+    if (lpBurnedPct >= 50)       liquidityStatus = `Burned (${lpBurnedPct.toFixed(0)}%) ✅`;
+    else if (lpLockedPct >= 50)  liquidityStatus = `Locked (${lpLockedPct.toFixed(0)}%) ✅`;
+    else if (lpLockedPct > 0)    liquidityStatus = `Partially Locked (${lpLockedPct.toFixed(0)}%) ⚠️`;
+    else if (!token)             liquidityStatus = `N/A`;
+    else                         liquidityStatus = `Unlocked ⚠️`;
+
+    // Mint function
+    const mintable = token ? flag(token.is_mintable) : false;
+    const mintStatus = mintable ? "Active ⚠️" : "Disabled ✅";
+
+    // Tax
+    const buyTax  = token ? pct(token.buy_tax)  : "—";
+    const sellTax = token ? pct(token.sell_tax) : "—";
+    const taxLine = `Buy ${buyTax} / Sell ${sellTax}`;
+
+    // Top 10 holders % of supply
+    const holders: any[] = token?.holders ?? [];
+    const top10Pct = holders
+      .slice(0, 10)
+      .reduce((acc, h) => acc + parseFloat(h.percent ?? "0") * 100, 0);
+    const top10Line = token ? `${top10Pct.toFixed(1)}% of Supply` : "—";
+
+    // ── Risk level ────────────────────────────────────────────────────────────
+    const isHoneypot   = token ? flag(token.is_honeypot) : false;
+    const highTax      = token ? (parseFloat(token.buy_tax ?? "0") > 0.1 || parseFloat(token.sell_tax ?? "0") > 0.1) : false;
+    const unverified   = token ? !flag(token.is_open_source) : false;
+    const ownerRisk    = token ? (flag(token.can_take_back_ownership) || flag(token.owner_change_balance)) : false;
+
+    const riskScore =
+      (isHoneypot   ? 10 : 0) +
+      (lpLockedPct < 50 && lpBurnedPct < 50 && !!token ? 2 : 0) +
+      (mintable      ? 2 : 0) +
+      (highTax       ? 1 : 0) +
+      (ownerRisk     ? 2 : 0) +
+      (unverified    ? 1 : 0) +
+      (top10Pct > 70 ? 1 : 0);
+
+    let riskLevel: string;
+    if (isHoneypot)      riskLevel = "🚨 CRITICAL";
+    else if (riskScore >= 4) riskLevel = "🔴 HIGH";
+    else if (riskScore >= 2) riskLevel = "🟡 MEDIUM";
+    else                     riskLevel = "🟢 LOW";
+
+    // ── Agent verdict (rule-based) ────────────────────────────────────────────
+    let verdict: string;
+    if (isHoneypot) {
+      verdict = "Contract is flagged as a honeypot — funds sent in cannot be withdrawn.";
+    } else if (mintable && lpLockedPct < 50 && lpBurnedPct < 50 && !!token) {
+      verdict = "Active mint function combined with unlocked liquidity represents a critical rug risk.";
+    } else if (lpLockedPct < 50 && lpBurnedPct < 50 && !!token && highTax) {
+      verdict = "Unlocked liquidity and elevated taxes are a common signature of exit scam setups.";
+    } else if (lpLockedPct < 50 && lpBurnedPct < 50 && !!token) {
+      verdict = "Liquidity is not locked — the team can remove funds from the pool at any time.";
+    } else if (mintable) {
+      verdict = "Mint function is active — the team retains the ability to inflate token supply.";
+    } else if (ownerRisk) {
+      verdict = "Owner privileges are elevated — balance or ownership can be modified post-launch.";
+    } else if (highTax) {
+      verdict = "Tax levels are above normal — verify these are intentional before trading.";
+    } else if (unverified) {
+      verdict = "Contract source code is not verified — the code cannot be independently audited.";
+    } else if (!token) {
+      verdict = "No token data found on Base chain — verify this is a valid contract address.";
+    } else {
+      verdict = "No major red flags detected — this contract appears clean on Base chain.";
+    }
+
+    // ── Token identity ────────────────────────────────────────────────────────
+    const tokenName   = token?.token_name   ?? "Unknown";
+    const tokenSymbol = token?.token_symbol ? `$${token.token_symbol}` : "Unknown";
+
     // ── Build message ─────────────────────────────────────────────────────────
     let msg = "";
-
-    msg += `🚔 *APE POLICE — POLICE SNAPSHOT*\n\n`;
-    msg += `📍 *Address:* \`${shortAddr(address)}\`\n`;
-    msg += `⛓️ *Chain:* Base Mainnet\n`;
-    msg += `🏷️ *Type:* ${isContract ? "Token Contract" : "Wallet Address"}\n`;
-
-    if (isContract && token) {
-      msg += `\n*${tokenName}* (${tokenSymbol})\n`;
-      msg += `👥 Holders: *${holderCount}*\n`;
-      msg += `💰 Buy Tax: *${buyTaxFmt}*  |  Sell Tax: *${sellTaxFmt}*\n`;
-      msg += `🔒 LP Locked: *${lpLocked.toFixed(0)}%*\n`;
-    }
-
-    msg += `\n*RISK LEVEL: ${riskEmoji}*\n`;
-
-    if (flags.length > 0) {
-      msg += `\n🚩 *FLAGS DETECTED:*\n`;
-      flags.slice(0, 8).forEach(f => (msg += `  ${f}\n`));
-      if (flags.length > 8) msg += `  _(+${flags.length - 8} more)_\n`;
-    } else {
-      msg += `\n✅ *No flags detected on Base chain.*\n`;
-    }
-
-    msg += `\n🔍 [Full Scan](${siteUrl}/agent-scanner)   `;
-    msg += `🗺️ [Wall of Shame](${siteUrl}/report-scam)   `;
-    msg += `🛡️ [Verified Builders](${siteUrl}/verified-builders)`;
+    msg += `📑 *APOL INVESTIGATION REPORT*\n\n`;
+    msg += `🏷️ *Project:* ${tokenName} (${tokenSymbol})\n`;
+    msg += `🚨 *Risk Level:* ${riskLevel}\n\n`;
+    msg += `🔍 *CRITICAL CHECKS:*\n\n`;
+    msg += `Liquidity: ${liquidityStatus}\n`;
+    msg += `Mint Function: ${mintStatus}\n`;
+    msg += `Tax: ${taxLine}\n`;
+    msg += `Top 10 Holders: ${top10Line}\n\n`;
+    msg += `🛡️ *AGENT VERDICT:* ${verdict}\n\n`;
+    msg += `🔗 [Full Deep Dive on Website](${siteUrl}/agent-scanner)`;
 
     return msg;
   } catch (err: any) {
