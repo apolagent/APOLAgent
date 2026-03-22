@@ -34,33 +34,103 @@ function flag(v: any): boolean {
   return v === "1" || v === 1 || v === true;
 }
 
+// ─── Formatters ───────────────────────────────────────────────────────────────
+
+function fmtUsd(n: number): string {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000)     return `$${(n / 1_000).toFixed(1)}K`;
+  return `$${n.toFixed(2)}`;
+}
+
 // ─── Police Snapshot Scanner ─────────────────────────────────────────────────
 
 async function buildSnapshot(address: string, siteUrl: string): Promise<string> {
   try {
-    const [tokenRes, secRes] = await Promise.all([
-      fetch(`${GOPLUS_BASE}/token_security/${BASE_CHAIN_ID}?contract_addresses=${encodeURIComponent(address)}`, {
-        signal: AbortSignal.timeout(10_000),
-      }),
-      fetch(`${GOPLUS_BASE}/address_security/${encodeURIComponent(address)}`, {
-        signal: AbortSignal.timeout(10_000),
-      }),
+    // ── Fetch all sources in parallel ─────────────────────────────────────────
+    const [goplusRes, dexRes] = await Promise.all([
+      fetch(
+        `${GOPLUS_BASE}/token_security/${BASE_CHAIN_ID}?contract_addresses=${encodeURIComponent(address)}`,
+        { signal: AbortSignal.timeout(12_000) }
+      ),
+      fetch(
+        `https://api.dexscreener.com/latest/dex/tokens/${address}`,
+        { signal: AbortSignal.timeout(12_000) }
+      ),
     ]);
 
-    const tokenData = (await tokenRes.json()) as any;
-    const secData  = (await secRes.json()) as any;
+    const goplusData = (await goplusRes.json()) as any;
+    const dexData    = (await dexRes.json())    as any;
 
-    const tKey  = Object.keys(tokenData?.result ?? {})[0];
-    const token = tKey ? (tokenData.result[tKey] as any) : null;
-    const sec   = (secData?.result ?? {}) as Record<string, any>;
+    // ── Parse GoPlus ──────────────────────────────────────────────────────────
+    const tKey  = Object.keys(goplusData?.result ?? {})[0];
+    const token = tKey ? (goplusData.result[tKey] as any) : null;
 
-    // ── Risk flags ────────────────────────────────────────────────────────────
+    // ── Parse DexScreener — filter for Base chain pairs only ─────────────────
+    const allPairs: any[] = dexData?.pairs ?? [];
+    const basePairs = allPairs
+      .filter((p: any) => p.chainId === "base")
+      .sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
+    const topPair = basePairs[0] ?? null;
+
+    // ── Not found on either source ────────────────────────────────────────────
+    if (!token && !topPair) {
+      return (
+        `⚠️ *INVESTIGATION STALLED*\n\n` +
+        `Contract not found on Base Mainnet. Ensure the CA is correct.\n\n` +
+        `\`${address}\``
+      );
+    }
+
+    // ── Token identity (GoPlus primary, DexScreener fallback) ─────────────────
+    const rawName   = token?.token_name   ?? topPair?.baseToken?.name   ?? "Unknown";
+    const rawSymbol = token?.token_symbol ?? topPair?.baseToken?.symbol ?? "?";
+    const tokenName   = rawName;
+    const tokenSymbol = `$${rawSymbol}`;
+
+    // ── Holder count (GoPlus — show Data Pending if missing or zero) ──────────
+    const holderRaw = parseInt(token?.holder_count ?? "0");
+    const holderCount = holderRaw > 0 ? holderRaw.toLocaleString() : "Data Pending";
+
+    // ── Taxes from GoPlus simulation (most accurate source) ───────────────────
+    const buyTaxFmt  = token ? pct(token.buy_tax)  : "Data Pending";
+    const sellTaxFmt = token ? pct(token.sell_tax) : "Data Pending";
+
+    // ── Liquidity from DexScreener (real-time USD) ────────────────────────────
+    const liqUsd: number | null = topPair?.liquidity?.usd ?? null;
+    const liqFormatted = liqUsd !== null ? fmtUsd(liqUsd) : "Data Pending";
+
+    // ── LP lock status from GoPlus on-chain data ───────────────────────────────
+    const lpHolders: any[] = token?.lp_holders ?? [];
+    const lpBurnedPct = lpHolders
+      .filter(h =>
+        (h.tag ?? "").toLowerCase().includes("burn") ||
+        (h.address ?? "").toLowerCase() === "0x000000000000000000000000000000000000dead"
+      )
+      .reduce((acc, h) => acc + parseFloat(h.percent ?? "0") * 100, 0);
+    const lpLockedPct = lpHolders
+      .filter(h => flag(h.is_locked))
+      .reduce((acc, h) => acc + parseFloat(h.percent ?? "0") * 100, 0);
+
+    let lpStatus: string;
+    if (lpBurnedPct >= 50)      lpStatus = `Burned (${lpBurnedPct.toFixed(0)}%) ✅`;
+    else if (lpLockedPct >= 50) lpStatus = `Locked (${lpLockedPct.toFixed(0)}%) ✅`;
+    else if (lpLockedPct > 0)   lpStatus = `Partially Locked (${lpLockedPct.toFixed(0)}%) ⚠️`;
+    else if (!token && !topPair) lpStatus = `Data Pending`;
+    else                        lpStatus = `Unlocked ⚠️`;
+
+    // ── Price from DexScreener ────────────────────────────────────────────────
+    const priceRaw  = parseFloat(topPair?.priceUsd ?? "0");
+    const priceStr  = priceRaw > 0
+      ? (priceRaw < 0.0001 ? `$${priceRaw.toExponential(3)}` : `$${priceRaw.toPrecision(5)}`)
+      : "Data Pending";
+
+    // ── Risk flags (GoPlus simulation data) ───────────────────────────────────
     const flags: string[] = [];
 
     if (token) {
       if (flag(token.is_honeypot))                 flags.push("⛔ HONEYPOT DETECTED");
-      if (parseFloat(token.buy_tax  ?? "0") > 0.1) flags.push(`💸 Buy Tax: ${pct(token.buy_tax)}`);
-      if (parseFloat(token.sell_tax ?? "0") > 0.1) flags.push(`💸 Sell Tax: ${pct(token.sell_tax)}`);
+      if (parseFloat(token.buy_tax  ?? "0") > 0.1) flags.push(`💸 High Buy Tax: ${pct(token.buy_tax)}`);
+      if (parseFloat(token.sell_tax ?? "0") > 0.1) flags.push(`💸 High Sell Tax: ${pct(token.sell_tax)}`);
       if (flag(token.can_take_back_ownership))     flags.push("⚠️ Recoverable Ownership");
       if (flag(token.owner_change_balance))        flags.push("⚠️ Owner Can Change Balance");
       if (flag(token.is_mintable))                 flags.push("🖨️ Mintable Supply");
@@ -69,46 +139,30 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       if (flag(token.anti_whale_modifiable))       flags.push("🐋 Anti-Whale Modifiable");
       if (!flag(token.is_open_source))             flags.push("👁️ Contract Not Verified");
     }
-
-    const secFlagKeys = Object.keys(sec).filter(k =>
-      flag(sec[k]) && !["contract_address", "chainId"].includes(k)
-    );
-    secFlagKeys.forEach(k => flags.push(`🔍 ${k.replace(/_/g, " ")}`));
+    if (lpLockedPct < 50 && lpBurnedPct < 50 && (token || topPair)) {
+      flags.push("🔓 LP Not Locked");
+    }
 
     // ── Risk level ────────────────────────────────────────────────────────────
     let riskEmoji: string;
     if (flags.some(f => f.includes("HONEYPOT"))) riskEmoji = "🚨 CRITICAL";
-    else if (flags.length >= 3)                  riskEmoji = "🔴 HIGH RISK";
+    else if (flags.length >= 4)                  riskEmoji = "🔴 HIGH RISK";
     else if (flags.length >= 1)                  riskEmoji = "🟡 MEDIUM RISK";
     else                                         riskEmoji = "🟢 LOW RISK";
-
-    // ── Token metadata ────────────────────────────────────────────────────────
-    const isContract  = !!tKey;
-    const tokenName   = token?.token_name   ?? "—";
-    const tokenSymbol = token?.token_symbol ? `$${token.token_symbol}` : "—";
-    const holderCount = token?.holder_count ? parseInt(token.holder_count).toLocaleString() : "—";
-    const buyTaxFmt   = token ? pct(token.buy_tax)  : "—";
-    const sellTaxFmt  = token ? pct(token.sell_tax) : "—";
-
-    const lpHolders: any[] = token?.lp_holders ?? [];
-    const lpLocked = lpHolders
-      .filter(h => flag(h.is_locked))
-      .reduce((acc, h) => acc + parseFloat(h.percent ?? "0") * 100, 0);
 
     // ── Build message ─────────────────────────────────────────────────────────
     let msg = "";
 
     msg += `🚔 *APE POLICE — POLICE SNAPSHOT*\n\n`;
     msg += `📍 *Address:* \`${shortAddr(address)}\`\n`;
-    msg += `⛓️ *Chain:* Base Mainnet\n`;
-    msg += `🏷️ *Type:* ${isContract ? "Token Contract" : "Wallet Address"}\n`;
+    msg += `⛓️ *Chain:* Base Mainnet\n\n`;
 
-    if (isContract && token) {
-      msg += `\n*${tokenName}* (${tokenSymbol})\n`;
-      msg += `👥 Holders: *${holderCount}*\n`;
-      msg += `💰 Buy Tax: *${buyTaxFmt}*  |  Sell Tax: *${sellTaxFmt}*\n`;
-      msg += `🔒 LP Locked: *${lpLocked.toFixed(0)}%*\n`;
-    }
+    msg += `*${tokenName}* (${tokenSymbol})\n`;
+    msg += `💲 Price: *${priceStr}*\n`;
+    msg += `💧 Liquidity: *${liqFormatted}*\n`;
+    msg += `🔒 LP Status: *${lpStatus}*\n`;
+    msg += `👥 Holders: *${holderCount}*\n`;
+    msg += `💰 Buy Tax: *${buyTaxFmt}*  |  Sell Tax: *${sellTaxFmt}*\n`;
 
     msg += `\n*RISK LEVEL: ${riskEmoji}*\n`;
 
@@ -125,12 +179,13 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     msg += `🛡️ [Verified Builders](${siteUrl}/verified-builders)`;
 
     return msg;
+
   } catch (err: any) {
     console.error("[APOL Bot] Scan error:", err?.message ?? err);
     return (
       `❌ *Scan Failed*\n\n` +
       `Could not reach the security database. Please try again in a moment.\n` +
-      `If the problem persists, try the full scanner at [ape-police.app](${siteUrl}/agent-scanner).`
+      `If the problem persists, try the full scanner at [${siteUrl}](${siteUrl}/agent-scanner).`
     );
   }
 }
