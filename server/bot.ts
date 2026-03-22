@@ -170,9 +170,7 @@ export function createBot(): Telegraf | null {
       `🚨 *APOL AGENT ONLINE*\n` +
       `Protecting the Base trenches.\n\n` +
       `Use /scan [address] to check a contract or /report to flag a larp.\n\n` +
-      `${div}\n` +
       `*AVAILABLE COMMANDS*\n` +
-      `${div}\n` +
       `🔍 /scan [contract] — Security check\n` +
       `🚩 /report — Submit scam evidence\n` +
       `🗺️ /map — Wall of Shame\n` +
