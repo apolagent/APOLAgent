@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import {
-  ArrowLeft, Bot, FileText, AlertTriangle, CheckCircle,
+  ArrowLeft, Bot, AlertTriangle, CheckCircle,
   XCircle, Loader2, ChevronRight, Search, Brain, HelpCircle, Info,
-  Zap, Lock, ExternalLink, ShieldAlert, Activity, Clock,
+  Zap, Lock, ExternalLink, ShieldAlert, Activity, Clock, Shield,
+  ShieldCheck, Droplets, Users, TrendingUp, FileBarChart2,
 } from "lucide-react";
 import { BrowserProvider, JsonRpcProvider, parseEther } from "ethers";
 import { getSelectedProvider } from "@/hooks/use-wallet";
@@ -32,8 +33,19 @@ type TestResult = { scored: boolean; score: number; maxScore: number; label: str
 type LogsTestResult = { status: "verified" | "mismatch" | "inconclusive"; detail: string; logs: string[] };
 type SocialTestResult = { status: "clear" | "suspicious" | "inconclusive"; detail: string; followers?: number; accountAgeDays?: number };
 
+type ContractScan = {
+  honeypot: boolean;
+  buyTax: number;
+  sellTax: number;
+  lpLockedPercent: number;
+  lockLocations: string[];
+  topHolders: { address: string; percent: number; tag: string; isBurn: boolean }[];
+  holderCount: number;
+};
+
 type AgentResult = {
   agentName: string;
+  wallet: string | null;
   cognitionScore: number | null;
   verdict: "Digital Puppet" | "Semi-Autonomous" | "Fully Autonomous" | "Inconclusive";
   apolVerdict: string;
@@ -43,6 +55,7 @@ type AgentResult = {
   contextTest: TestResult;
   logsTest: LogsTestResult;
   socialTest: SocialTestResult;
+  contractScan: ContractScan | null;
 };
 
 type StatusColor = "green" | "red" | "yellow" | "grey";
@@ -99,159 +112,246 @@ function getEvidenceFiling(r: AgentResult | null, formState: { wallet: string; l
   ];
 }
 
+function ScoreBar({ value, max, color }: { value: number; max: number; color: string }) {
+  const pct = Math.round((value / max) * 100);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      <div style={{ flex: 1, height: "6px", background: "rgba(255,255,255,0.08)", position: "relative" }}>
+        <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${pct}%`, background: color, transition: "width 0.5s ease" }} />
+      </div>
+      <span style={{ fontSize: "10px", color, fontWeight: 700, minWidth: "32px", textAlign: "right" }}>{pct}%</span>
+    </div>
+  );
+}
+
+function HolderBar({ holder, maxPct }: { holder: ContractScan["topHolders"][0]; maxPct: number }) {
+  const barW = maxPct > 0 ? (holder.percent / maxPct) * 100 : 0;
+  const label = holder.isBurn ? "Burn Address" : holder.tag || `${holder.address.slice(0, 6)}…${holder.address.slice(-4)}`;
+  const barColor = holder.isBurn ? "#22c55e" : holder.percent > 10 ? "#facc15" : G;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "4px 0" }}>
+      <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.5)", width: "100px", flexShrink: 0, fontFamily: "'JetBrains Mono', monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {label}
+      </span>
+      <div style={{ flex: 1, height: "10px", background: "rgba(255,255,255,0.06)", position: "relative" }}>
+        <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${barW}%`, background: barColor }} />
+      </div>
+      <span style={{ fontSize: "10px", color: barColor, fontWeight: 700, minWidth: "38px", textAlign: "right" }}>
+        {holder.percent.toFixed(1)}%
+      </span>
+    </div>
+  );
+}
+
 function AdvancedResults({ result }: { result: AgentResult }) {
-  const rows: { label: string; value: string; color?: string }[] = [
-    {
-      label: "SPEED TEST SCORE",
-      value: result.speedTest.scored ? `${result.speedTest.score} / ${result.speedTest.maxScore}` : "NOT SCORED",
-      color: result.speedTest.scored ? (result.speedTest.score >= 25 ? G : result.speedTest.score >= 12 ? "#facc15" : "#f87171") : "#6b7280",
-    },
-    {
-      label: "TRACEABILITY SCORE",
-      value: result.traceabilityTest.scored ? `${result.traceabilityTest.score} / ${result.traceabilityTest.maxScore}` : "NOT SCORED",
-      color: result.traceabilityTest.scored ? (result.traceabilityTest.score >= 20 ? G : "#facc15") : "#6b7280",
-    },
-    {
-      label: "CONTEXT SCORE",
-      value: result.contextTest.scored ? `${result.contextTest.score} / ${result.contextTest.maxScore}` : "NOT SCORED",
-      color: result.contextTest.scored ? (result.contextTest.score >= 10 ? G : "#facc15") : "#6b7280",
-    },
-    {
-      label: "CONTRACT DETECTED",
-      value: result.traceabilityTest.isContract ? "YES — ON-CHAIN CONTRACT" : "NO CONTRACT FOUND",
-      color: result.traceabilityTest.isContract ? G : "#f87171",
-    },
-    {
-      label: "SOCIAL FOLLOWERS",
-      value: result.socialTest.followers !== undefined ? `${result.socialTest.followers.toLocaleString()}` : "NO DATA",
-      color: "#ffffff",
-    },
-    {
-      label: "ACCOUNT AGE",
-      value: result.socialTest.accountAgeDays !== undefined ? `${result.socialTest.accountAgeDays} DAYS` : "UNKNOWN",
-      color: result.socialTest.accountAgeDays !== undefined ? (result.socialTest.accountAgeDays > 90 ? G : "#facc15") : "#6b7280",
-    },
-    {
-      label: "SCORED TESTS",
-      value: `${result.scoredTests} / 5`,
-      color: result.scoredTests >= 3 ? G : "#facc15",
-    },
-  ];
+  const [briefingOpen, setBriefingOpen] = useState(false);
+  const cs = result.contractScan;
+
+  const riskLevel = result.cognitionScore === null ? "UNKNOWN"
+    : result.cognitionScore >= 71 ? "LOW RISK"
+    : result.cognitionScore >= 31 ? "MEDIUM RISK"
+    : "HIGH RISK";
+  const riskColor = result.cognitionScore === null ? "#6b7280"
+    : result.cognitionScore >= 71 ? G
+    : result.cognitionScore >= 31 ? "#facc15"
+    : "#f87171";
+
+  const caseNum = `APOL-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+  const reportDate = new Date().toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" }).toUpperCase();
+
+  const lpStatus = !cs ? "N/A"
+    : cs.lpLockedPercent >= 90 ? `LOCKED (${cs.lpLockedPercent.toFixed(0)}%${cs.lockLocations[0] ? ` · ${cs.lockLocations[0]}` : ""})`
+    : cs.lockLocations.some(l => l.toLowerCase().includes("burn")) ? `BURNED (${cs.lpLockedPercent.toFixed(0)}%)`
+    : cs.lpLockedPercent > 0 ? `PARTIALLY LOCKED (${cs.lpLockedPercent.toFixed(0)}%)`
+    : "MANUAL / UNLOCKED";
+  const lpColor = !cs ? "#6b7280"
+    : cs.lpLockedPercent >= 90 ? G
+    : cs.lpLockedPercent >= 50 ? "#facc15"
+    : "#f87171";
+
+  const maxHolderPct = cs ? Math.max(...cs.topHolders.map(h => h.percent), 1) : 1;
+
+  const narratives = [
+    { label: "Speed Analysis", detail: result.speedTest.detail },
+    { label: "Traceability", detail: result.traceabilityTest.detail },
+    { label: "Context Coherence", detail: result.contextTest.detail },
+    { label: "Log Integrity", detail: result.logsTest.detail },
+    { label: "Social Forensics", detail: result.socialTest.detail },
+  ].filter(r => r.detail);
 
   return (
-    <div
-      data-testid="div-advanced-results"
-      style={{ border: `1px solid ${G}`, background: "#000", padding: "0" }}
-    >
-      {/* Header */}
-      <div style={{
-        background: "rgba(0,255,0,0.06)",
-        borderBottom: `1px solid rgba(0,255,0,0.25)`,
-        padding: "12px 20px",
-        display: "flex",
-        alignItems: "center",
-        gap: "10px",
-      }}>
-        <Zap size={14} color={G} />
-        <span style={{ color: G, fontSize: "11px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase" }}>
-          Deep Dive — Advanced Forensic Report
-        </span>
-        <span style={{ marginLeft: "auto", fontSize: "9px", color: "rgba(0,255,0,0.5)", letterSpacing: "0.1em" }}>
-          [PRIORITY SCAN UNLOCKED]
-        </span>
+    <div data-testid="div-advanced-results" style={{ border: `1px solid ${G}`, background: "#000" }}>
+
+      {/* ── Report Header ── */}
+      <div style={{ background: "rgba(0,255,0,0.07)", borderBottom: `1px solid rgba(0,255,0,0.25)`, padding: "14px 20px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <img src="/ape-police-logo.png" alt="APOL" style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${G}` }} />
+            <div>
+              <div style={{ color: G, fontSize: "11px", fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+                Ape Police — Investigation Report
+              </div>
+              <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                Deep Dive · Priority Scan
+              </div>
+            </div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ color: "rgba(0,255,0,0.6)", fontSize: "9px", letterSpacing: "0.1em" }}>CASE {caseNum}</div>
+            <div style={{ color: "rgba(255,255,255,0.3)", fontSize: "9px" }}>{reportDate}</div>
+          </div>
+        </div>
       </div>
 
-      <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: "0" }}>
-
-        {/* Score matrix */}
-        {rows.map((row, i) => (
-          <div key={i} style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "8px 0",
-            borderBottom: i < rows.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none",
-          }}>
-            <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.72)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-              {row.label}
-            </span>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: row.color || "#fff", letterSpacing: "0.06em" }}>
-              {row.value}
-            </span>
-          </div>
-        ))}
-
-        {/* Timing pattern */}
-        {result.speedTest.timingPattern && result.speedTest.timingPattern.length > 0 && (
-          <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid rgba(0,255,0,0.15)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
-              <Clock size={12} color={G} />
-              <span style={{ fontSize: "10px", color: "rgba(0,255,0,0.6)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                Transaction Timing Pattern
+      {/* ── Subject Info ── */}
+      <div style={{ padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", flexWrap: "wrap", gap: "16px" }}>
+        <div>
+          <div style={{ fontSize: "9px", color: "rgba(0,255,0,0.5)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "2px" }}>Subject</div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>{result.agentName}</div>
+        </div>
+        {result.wallet && (
+          <div>
+            <div style={{ fontSize: "9px", color: "rgba(0,255,0,0.5)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "2px" }}>Wallet</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.7)", fontFamily: "'JetBrains Mono', monospace" }}>
+                {result.wallet.slice(0, 8)}…{result.wallet.slice(-6)}
               </span>
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-              {result.speedTest.timingPattern.map((t, i) => (
-                <span key={i} style={{
-                  fontSize: "10px",
-                  padding: "3px 7px",
-                  border: "1px solid rgba(0,255,0,0.2)",
-                  color: "rgba(0,255,0,0.7)",
-                  letterSpacing: "0.05em",
-                }}>
-                  {t}
-                </span>
-              ))}
+              <a href={`${CHAIN.explorerUrl}/address/${result.wallet}`} target="_blank" rel="noopener noreferrer" style={{ color: G }}>
+                <ExternalLink size={11} />
+              </a>
             </div>
           </div>
         )}
+        <div style={{ marginLeft: "auto" }}>
+          <div style={{ fontSize: "9px", color: "rgba(0,255,0,0.5)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "2px" }}>Scored Tests</div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: result.scoredTests >= 3 ? G : "#facc15" }}>{result.scoredTests} / 5</div>
+        </div>
+      </div>
 
-        {/* Raw logs */}
-        {result.logsTest.logs && result.logsTest.logs.length > 0 && (
-          <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid rgba(0,255,0,0.15)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
-              <Activity size={12} color={G} />
-              <span style={{ fontSize: "10px", color: "rgba(0,255,0,0.6)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                Raw Reasoning Log Entries
-              </span>
+      {/* ── Two-column: Risk + Authenticity ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        {/* Risk Assessment */}
+        <div style={{ padding: "16px 20px", borderRight: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px" }}>
+            <ShieldAlert size={12} color={riskColor} />
+            <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Risk Assessment</span>
+          </div>
+          <div style={{ fontSize: "20px", fontWeight: 900, color: riskColor, letterSpacing: "0.04em", marginBottom: "8px" }}>{riskLevel}</div>
+          <ScoreBar value={result.cognitionScore ?? 0} max={100} color={riskColor} />
+        </div>
+        {/* Authenticity Score */}
+        <div style={{ padding: "16px 20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px" }}>
+            <TrendingUp size={12} color={G} />
+            <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Authenticity Score</span>
+          </div>
+          <div style={{ fontSize: "20px", fontWeight: 900, color: riskColor, letterSpacing: "0.04em", marginBottom: "8px" }}>
+            {result.cognitionScore !== null ? `${result.cognitionScore}%` : "N/A"}
+          </div>
+          <div style={{ fontSize: "10px", color: riskColor, fontWeight: 700, letterSpacing: "0.06em" }}>{result.verdict.toUpperCase()}</div>
+        </div>
+      </div>
+
+      {/* ── Contract Security (only if contract data exists) ── */}
+      {cs && (
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px" }}>
+            <ShieldCheck size={12} color={G} />
+            <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.6)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Contract Security Analysis</span>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px" }}>
+            {[
+              { label: "Honeypot", value: cs.honeypot ? "DETECTED" : "CLEAR", color: cs.honeypot ? "#f87171" : G },
+              { label: "Buy Tax", value: `${cs.buyTax.toFixed(1)}%`, color: cs.buyTax > 5 ? "#f87171" : cs.buyTax > 0 ? "#facc15" : G },
+              { label: "Sell Tax", value: `${cs.sellTax.toFixed(1)}%`, color: cs.sellTax > 5 ? "#f87171" : cs.sellTax > 0 ? "#facc15" : G },
+              { label: "Liquidity", value: lpStatus, color: lpColor },
+            ].map((item, i) => (
+              <div key={i}>
+                <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>{item.label}</div>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: item.color }}>{item.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Top Holders ── */}
+      {cs && cs.topHolders.length > 0 && (
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <Users size={12} color={G} />
+              <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.6)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Top Holders</span>
             </div>
-            <div style={{ background: "rgba(0,255,0,0.03)", border: "1px solid rgba(0,255,0,0.1)", padding: "10px 12px" }}>
-              {result.logsTest.logs.map((log, i) => (
-                <div key={i} style={{ fontSize: "10px", color: "rgba(255,255,255,0.6)", lineHeight: "1.7", fontFamily: "'JetBrains Mono', monospace" }}>
-                  <span style={{ color: "rgba(0,255,0,0.8)", marginRight: "8px" }}>[{String(i).padStart(2, "0")}]</span>
-                  {log}
+            {cs.holderCount > 0 && (
+              <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.3)" }}>{cs.holderCount.toLocaleString()} total holders</span>
+            )}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+            {cs.topHolders.map((h, i) => (
+              <HolderBar key={i} holder={h} maxPct={maxHolderPct} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Transaction Timing Pattern ── */}
+      {result.speedTest.timingPattern && result.speedTest.timingPattern.length > 0 && (
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+            <Clock size={12} color={G} />
+            <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.6)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Transaction Timing Pattern</span>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+            {result.speedTest.timingPattern.map((t, i) => (
+              <span key={i} style={{ fontSize: "10px", padding: "3px 7px", border: "1px solid rgba(0,255,0,0.2)", color: "rgba(0,255,0,0.7)" }}>{t}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Raw Logs ── */}
+      {result.logsTest.logs && result.logsTest.logs.length > 0 && (
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+            <Activity size={12} color={G} />
+            <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.6)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Raw Reasoning Log Entries</span>
+          </div>
+          <div style={{ background: "rgba(0,255,0,0.03)", border: "1px solid rgba(0,255,0,0.1)", padding: "10px 12px" }}>
+            {result.logsTest.logs.map((log, i) => (
+              <div key={i} style={{ fontSize: "10px", color: "rgba(255,255,255,0.6)", lineHeight: "1.7", fontFamily: "'JetBrains Mono', monospace" }}>
+                <span style={{ color: "rgba(0,255,0,0.8)", marginRight: "8px" }}>[{String(i).padStart(2, "0")}]</span>{log}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Intelligence Briefing (collapsible) ── */}
+      {narratives.length > 0 && (
+        <div style={{ padding: "14px 20px" }}>
+          <button
+            onClick={() => setBriefingOpen(v => !v)}
+            style={{ display: "flex", alignItems: "center", gap: "6px", background: "none", border: "none", cursor: "pointer", padding: 0, width: "100%" }}
+          >
+            <FileBarChart2 size={12} color={G} />
+            <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.6)", letterSpacing: "0.12em", textTransform: "uppercase", flex: 1, textAlign: "left" }}>
+              Intelligence Briefing
+            </span>
+            <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.5)" }}>{briefingOpen ? "▲ COLLAPSE" : "▼ EXPAND"}</span>
+          </button>
+          {briefingOpen && (
+            <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "10px" }}>
+              {narratives.map((row, i) => (
+                <div key={i}>
+                  <div style={{ fontSize: "9px", color: G, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "3px" }}>{row.label}</div>
+                  <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.72)", lineHeight: "1.65" }}>{row.detail}</div>
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* Forensic detail rows */}
-        <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid rgba(0,255,0,0.15)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px" }}>
-            <ShieldAlert size={12} color={G} />
-            <span style={{ fontSize: "10px", color: "rgba(0,255,0,0.6)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-              Full Test Narratives
-            </span>
-          </div>
-          {[
-            { label: "Speed Analysis", detail: result.speedTest.detail },
-            { label: "Traceability", detail: result.traceabilityTest.detail },
-            { label: "Context Coherence", detail: result.contextTest.detail },
-            { label: "Log Integrity", detail: result.logsTest.detail },
-            { label: "Social Forensics", detail: result.socialTest.detail },
-          ].filter(r => r.detail).map((row, i) => (
-            <div key={i} style={{ marginBottom: "8px" }}>
-              <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.82)", letterSpacing: "0.1em", textTransform: "uppercase", display: "block", marginBottom: "2px" }}>
-                {row.label}
-              </span>
-              <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.75)", lineHeight: "1.6" }}>
-                {row.detail}
-              </span>
-            </div>
-          ))}
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -273,6 +373,14 @@ export default function AgentScanner() {
   const [deepDiveTxHash, setDeepDiveTxHash] = useState<string | null>(null);
   const [deepDiveError, setDeepDiveError] = useState<string | null>(null);
   const [deepDiveHover, setDeepDiveHover] = useState(false);
+
+  const [apolCertified, setApolCertified] = useState<{ certified: boolean; project?: any } | null>(null);
+
+  useEffect(() => {
+    if (!result?.wallet || !result.traceabilityTest.isContract) { setApolCertified(null); return; }
+    fetch(`/api/contracts/verified/${result.wallet.toLowerCase()}`)
+      .then(r => r.json()).then(setApolCertified).catch(() => setApolCertified(null));
+  }, [result?.wallet, result?.traceabilityTest.isContract]);
 
   const handleScan = async () => {
     if (!agentName.trim()) { setScanError("Agent name is required."); return; }
@@ -598,6 +706,41 @@ export default function AgentScanner() {
         {/* Results */}
         {result && (
           <div id="larp-result" className="space-y-4">
+
+            {/* APOL Certified Banner */}
+            {apolCertified?.certified && (
+              <div
+                data-testid="div-apol-certified-banner"
+                style={{
+                  border: `2px solid ${G}`,
+                  background: "rgba(0,255,0,0.06)",
+                  padding: "20px 24px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "16px",
+                }}
+              >
+                <Shield size={40} color={G} strokeWidth={2.5} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ color: G, fontSize: "14px", fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase" }}>
+                    APE POLICE CERTIFIED
+                  </div>
+                  <div style={{ color: "rgba(255,255,255,0.6)", fontSize: "11px", marginTop: "3px", letterSpacing: "0.06em" }}>
+                    This contract has passed a full Ape Police audit and is verified on-chain.
+                    {apolCertified.project?.projectName && (
+                      <span style={{ color: G, marginLeft: "6px" }}>— {apolCertified.project.projectName}</span>
+                    )}
+                  </div>
+                </div>
+                <a
+                  href={`/verify/${result.wallet?.toLowerCase()}`}
+                  style={{ color: G, fontSize: "10px", letterSpacing: "0.1em", textDecoration: "underline", whiteSpace: "nowrap" }}
+                  data-testid="link-view-certificate"
+                >
+                  VIEW CERTIFICATE ↗
+                </a>
+              </div>
+            )}
 
             {/* Verdict card */}
             <div className={`bg-slate-900 border-2 rounded-xl p-6 flex flex-col md:flex-row items-center gap-6 ${vm?.border}`}>

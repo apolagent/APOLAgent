@@ -633,6 +633,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     let speedScore = 0; let speedLabel = "Inconclusive"; let speedDetail = ""; let timingPattern: string[] = [];
     let onchainTimestamps: number[] = [];
     let isContract = false; let hasSecurityFlags = false;
+    let contractTokenData: any = null;
 
     if (w) {
       // Contract/security check
@@ -644,7 +645,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (chainId !== "solana" && chainId !== "tron") {
           const tR = await fetch(`${GOPLUS_BASE}/token_security/${chainId}?contract_addresses=${encodeURIComponent(w)}`);
           const tD = await tR.json() as any;
-          isContract = !!Object.keys(tD.result || {})[0];
+          const tKey = Object.keys(tD.result || {})[0];
+          isContract = !!tKey;
+          if (tKey) contractTokenData = tD.result[tKey];
         }
       } catch { /* non-fatal */ }
 
@@ -760,6 +763,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const apolVerdict = buildAgentVerdict(agentName.trim(), cognitionScore, verdict);
 
+    // ── Contract Scan summary (only when wallet is a token contract) ──────────
+    type ContractScanResult = {
+      honeypot: boolean; buyTax: number; sellTax: number;
+      lpLockedPercent: number; lockLocations: string[];
+      topHolders: { address: string; percent: number; tag: string; isBurn: boolean }[];
+      holderCount: number;
+    };
+    let contractScan: ContractScanResult | null = null;
+    if (isContract && contractTokenData) {
+      const flag1c = (v: any) => v === "1" || v === 1;
+      const BURNS = new Set(["0x0000000000000000000000000000000000000000","0x000000000000000000000000000000000000dead"]);
+      const LOCKERS: Record<string,string> = {
+        "0x663a5c229c09b049e36dcc11a9b0d4a8eb9db214":"Unicrypt",
+        "0xadb2437e6f65682b85f814fbc12fec0508a7b1d":"Unicrypt BSC",
+        "0x71b5759d73262fbb223956913ecf4ecc51057641":"PinkLock",
+        "0x407993575c91ce7643a4d4ccdaa9b98f5b96e40":"PinkLock V2",
+        "0xe2fe530c047f2d85298b07d9333c05737f1435fb":"Team Finance",
+      };
+      const lpHolders: any[] = contractTokenData.lp_holders || [];
+      let lpLockedPct = 0; const lockLocs: string[] = [];
+      for (const lp of lpHolders) {
+        const addr = (lp.address || "").toLowerCase();
+        const pct = parseFloat(lp.percent || "0") * 100;
+        const isBurn = BURNS.has(addr);
+        const lockerLabel = LOCKERS[addr];
+        if (flag1c(lp.is_locked) || isBurn || !!lockerLabel || !!lp.tag) {
+          lpLockedPct += pct;
+          const loc = lp.tag || lockerLabel || (isBurn ? "Burn Address" : "Locked");
+          if (!lockLocs.includes(loc)) lockLocs.push(loc);
+        }
+      }
+      const rawH: any[] = contractTokenData.holders || [];
+      contractScan = {
+        honeypot: flag1c(contractTokenData.is_honeypot),
+        buyTax: parseFloat(contractTokenData.buy_tax || "0"),
+        sellTax: parseFloat(contractTokenData.sell_tax || "0"),
+        lpLockedPercent: Math.min(100, lpLockedPct),
+        lockLocations: lockLocs,
+        topHolders: rawH.slice(0, 8).map(h => ({
+          address: h.address || "",
+          percent: parseFloat(h.percent || "0") * 100,
+          tag: h.tag || "",
+          isBurn: BURNS.has((h.address || "").toLowerCase()),
+        })),
+        holderCount: parseInt(contractTokenData.holder_count || "0"),
+      };
+    }
+
     res.json({
       agentName: agentName.trim(), socialLink: sl, wallet: w, claimedAbilities: claims, logsUrl: lu,
       cognitionScore, verdict, apolVerdict, scoredTests: scoredCount,
@@ -768,6 +819,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       contextTest: { scored: contextScored, score: contextScore, maxScore: 30, label: contextLabel, detail: contextDetail },
       logsTest: logsResult,
       socialTest: socialResult,
+      contractScan,
     });
   });
 
@@ -815,6 +867,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(request);
     } catch (error) {
       res.status(500).json({ error: "Failed to save verification request" });
+    }
+  });
+
+  // Public endpoint — check if a contract is APOL-certified
+  app.get("/api/contracts/verified/:address", async (req, res) => {
+    try {
+      const address = (req.params.address || "").toLowerCase().trim();
+      if (!address) return res.json({ certified: false });
+      const project = await storage.getVerifiedProjectByContract(address);
+      if (!project || project.status !== "verified") return res.json({ certified: false });
+      res.json({ certified: true, project });
+    } catch {
+      res.json({ certified: false });
+    }
+  });
+
+  // Public endpoint — list all verified projects
+  app.get("/api/contracts/verified", async (req, res) => {
+    try {
+      const all = await storage.getAllVerificationRequests();
+      res.json(all.filter(r => r.status === "verified"));
+    } catch {
+      res.status(500).json({ error: "Failed to fetch verified projects" });
     }
   });
 

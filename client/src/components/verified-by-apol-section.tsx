@@ -145,6 +145,26 @@ export default function VerifiedByApolSection() {
               </button>
             </Link>
 
+            <Link href="/verified-builders">
+              <button
+                data-testid="button-view-verified-builders"
+                style={{
+                  display: "flex", alignItems: "center", gap: "8px",
+                  padding: "10px 20px",
+                  background: "none", color: G,
+                  border: `1px solid rgba(0,255,0,0.35)`,
+                  fontSize: "11px", fontWeight: 700,
+                  letterSpacing: "0.12em", textTransform: "uppercase",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  cursor: "pointer", borderRadius: "0",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <ShieldCheck size={13} />
+                View Certified Projects
+              </button>
+            </Link>
+
             <p style={{
               fontSize: "10px", color: "rgba(255,255,255,0.6)",
               fontFamily: "'JetBrains Mono', monospace", lineHeight: "1.6",
