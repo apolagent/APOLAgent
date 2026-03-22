@@ -5,7 +5,6 @@ import { Telegraf } from "telegraf";
 const GOPLUS_BASE = "https://api.gopluslabs.io/api/v1";
 const BASE_CHAIN_ID = "8453";
 
-// Derive the public URL from environment (works on Replit deployments & dev)
 function getSiteUrl(): string {
   const domains = process.env.REPLIT_DOMAINS;
   if (domains) {
@@ -58,16 +57,16 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const flags: string[] = [];
 
     if (token) {
-      if (flag(token.is_honeypot))               flags.push("⛔ HONEYPOT DETECTED");
+      if (flag(token.is_honeypot))                flags.push("⛔ HONEYPOT DETECTED");
       if (parseFloat(token.buy_tax  ?? "0") > 0.1) flags.push(`💸 Buy Tax: ${pct(token.buy_tax)}`);
       if (parseFloat(token.sell_tax ?? "0") > 0.1) flags.push(`💸 Sell Tax: ${pct(token.sell_tax)}`);
-      if (flag(token.can_take_back_ownership))   flags.push("⚠️ Recoverable Ownership");
-      if (flag(token.owner_change_balance))      flags.push("⚠️ Owner Can Change Balance");
-      if (flag(token.is_mintable))               flags.push("🖨️ Mintable Supply");
-      if (flag(token.is_blacklist))              flags.push("🚫 Blacklist Function");
-      if (flag(token.trading_cooldown))          flags.push("⏱️ Trading Cooldown");
-      if (flag(token.anti_whale_modifiable))     flags.push("🐋 Anti-Whale Modifiable");
-      if (!flag(token.is_open_source))           flags.push("👁️ Contract Not Verified");
+      if (flag(token.can_take_back_ownership))    flags.push("⚠️ Recoverable Ownership");
+      if (flag(token.owner_change_balance))       flags.push("⚠️ Owner Can Change Balance");
+      if (flag(token.is_mintable))                flags.push("🖨️ Mintable Supply");
+      if (flag(token.is_blacklist))               flags.push("🚫 Blacklist Function");
+      if (flag(token.trading_cooldown))           flags.push("⏱️ Trading Cooldown");
+      if (flag(token.anti_whale_modifiable))      flags.push("🐋 Anti-Whale Modifiable");
+      if (!flag(token.is_open_source))            flags.push("👁️ Contract Not Verified");
     }
 
     const secFlagKeys = Object.keys(sec).filter(k =>
@@ -77,18 +76,18 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
 
     // ── Risk level ────────────────────────────────────────────────────────────
     let riskEmoji: string;
-    if (flags.some(f => f.includes("HONEYPOT")))            riskEmoji = "🚨 CRITICAL";
-    else if (flags.length >= 3)                              riskEmoji = "🔴 HIGH RISK";
-    else if (flags.length >= 1)                              riskEmoji = "🟡 MEDIUM RISK";
-    else                                                     riskEmoji = "🟢 LOW RISK";
+    if (flags.some(f => f.includes("HONEYPOT"))) riskEmoji = "🚨 CRITICAL";
+    else if (flags.length >= 3)                  riskEmoji = "🔴 HIGH RISK";
+    else if (flags.length >= 1)                  riskEmoji = "🟡 MEDIUM RISK";
+    else                                         riskEmoji = "🟢 LOW RISK";
 
     // ── Token metadata ────────────────────────────────────────────────────────
-    const isContract   = !!tKey;
-    const tokenName    = token?.token_name   ?? "—";
-    const tokenSymbol  = token?.token_symbol ? `$${token.token_symbol}` : "—";
-    const holderCount  = token?.holder_count ? parseInt(token.holder_count).toLocaleString() : "—";
-    const buyTaxFmt    = token ? pct(token.buy_tax)  : "—";
-    const sellTaxFmt   = token ? pct(token.sell_tax) : "—";
+    const isContract  = !!tKey;
+    const tokenName   = token?.token_name   ?? "—";
+    const tokenSymbol = token?.token_symbol ? `$${token.token_symbol}` : "—";
+    const holderCount = token?.holder_count ? parseInt(token.holder_count).toLocaleString() : "—";
+    const buyTaxFmt   = token ? pct(token.buy_tax)  : "—";
+    const sellTaxFmt  = token ? pct(token.sell_tax) : "—";
 
     const lpHolders: any[] = token?.lp_holders ?? [];
     const lpLocked = lpHolders
@@ -96,26 +95,21 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       .reduce((acc, h) => acc + parseFloat(h.percent ?? "0") * 100, 0);
 
     // ── Build message ─────────────────────────────────────────────────────────
-    const divider = "━━━━━━━━━━━━━━━━━━━━━━━━";
     let msg = "";
 
-    msg += `🚔 *APE POLICE — POLICE SNAPSHOT*\n`;
-    msg += `${divider}\n\n`;
+    msg += `🚔 *APE POLICE — POLICE SNAPSHOT*\n\n`;
     msg += `📍 *Address:* \`${shortAddr(address)}\`\n`;
     msg += `⛓️ *Chain:* Base Mainnet\n`;
-    msg += `🏷️ *Type:* ${isContract ? `Token Contract` : "Wallet Address"}\n`;
+    msg += `🏷️ *Type:* ${isContract ? "Token Contract" : "Wallet Address"}\n`;
 
     if (isContract && token) {
-      msg += `\n`;
-      msg += `*${tokenName}* (${tokenSymbol})\n`;
+      msg += `\n*${tokenName}* (${tokenSymbol})\n`;
       msg += `👥 Holders: *${holderCount}*\n`;
       msg += `💰 Buy Tax: *${buyTaxFmt}*  |  Sell Tax: *${sellTaxFmt}*\n`;
       msg += `🔒 LP Locked: *${lpLocked.toFixed(0)}%*\n`;
     }
 
-    msg += `\n${divider}\n`;
-    msg += `*RISK LEVEL: ${riskEmoji}*\n`;
-    msg += `${divider}\n`;
+    msg += `\n*RISK LEVEL: ${riskEmoji}*\n`;
 
     if (flags.length > 0) {
       msg += `\n🚩 *FLAGS DETECTED:*\n`;
@@ -125,8 +119,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       msg += `\n✅ *No flags detected on Base chain.*\n`;
     }
 
-    msg += `\n${divider}\n`;
-    msg += `🔍 [Full Scan](${siteUrl}/agent-scanner)   `;
+    msg += `\n🔍 [Full Scan](${siteUrl}/agent-scanner)   `;
     msg += `🗺️ [Wall of Shame](${siteUrl}/report-scam)   `;
     msg += `🛡️ [Verified Builders](${siteUrl}/verified-builders)`;
 
@@ -150,16 +143,15 @@ export function createBot(): Telegraf | null {
     return null;
   }
 
-  const bot    = new Telegraf(token);
-  const site   = getSiteUrl();
-  const div    = "━━━━━━━━━━━━━━━━━━━━━━━━";
+  const bot  = new Telegraf(token);
+  const site = getSiteUrl();
 
   // ── Global error handler ──────────────────────────────────────────────────
   bot.catch((err: any, ctx: any) => {
     const code = err?.response?.error_code ?? err?.code;
-    if (code === 403) return; // Bot was kicked — silent
+    if (code === 403) return;
     if (code === 401) { console.error("[APOL Bot] Unauthorized (401) — check token."); return; }
-    if (code === 404) return; // Message/chat not found — silent
+    if (code === 404) return;
     if (code === 400 && err?.message?.includes("message is not modified")) return;
     console.error(`[APOL Bot] Unhandled error (${ctx?.updateType}):`, err?.message ?? err);
   });
@@ -184,8 +176,7 @@ export function createBot(): Telegraf | null {
   // ── /help ─────────────────────────────────────────────────────────────────
   bot.help(ctx =>
     ctx.replyWithMarkdown(
-      `🚔 *APE POLICE — HELP DESK*\n` +
-      `${div}\n\n` +
+      `🚔 *APE POLICE — HELP DESK*\n\n` +
       `🔍 /scan [address] — Run a security check on any contract or wallet\n` +
       `🚩 /report — Report a suspected scam or LARP agent\n` +
       `🗺️ /map — View the Wall of Shame\n` +
@@ -202,8 +193,7 @@ export function createBot(): Telegraf | null {
 
     if (!address) {
       return ctx.replyWithMarkdown(
-        `❓ *Usage:* /scan \\[contract address\\]\n\nExample:\n\`/scan 0x1234...abcd\``,
-        { parse_mode: "MarkdownV2" }
+        `❓ *Usage:* /scan [contract address]\n\nExample: \`/scan 0x1234...abcd\``
       );
     }
 
@@ -233,8 +223,7 @@ export function createBot(): Telegraf | null {
   // ── /report ───────────────────────────────────────────────────────────────
   bot.command("report", ctx =>
     ctx.replyWithMarkdown(
-      `🚩 *REPORT A SCAM OR LARP*\n` +
-      `${div}\n\n` +
+      `🚩 *REPORT A SCAM OR LARP*\n\n` +
       `Submit your evidence securely via the APOL Evidence Portal:\n\n` +
       `🔗 [Submit Evidence](${site}/report-scam)\n\n` +
       `_Your report will be reviewed by APOL officers. Confirmed cases are added to the Wall of Shame._`,
@@ -245,8 +234,7 @@ export function createBot(): Telegraf | null {
   // ── /map ──────────────────────────────────────────────────────────────────
   bot.command("map", ctx =>
     ctx.replyWithMarkdown(
-      `🗺️ *WALL OF SHAME*\n` +
-      `${div}\n\n` +
+      `🗺️ *WALL OF SHAME*\n\n` +
       `Live database of confirmed scammers, rug pullers, and LARP agents on Base:\n\n` +
       `🔗 [View Wall of Shame](${site}/report-scam)\n\n` +
       `_Updated in real-time as reports are verified by APOL officers._`,
@@ -257,8 +245,7 @@ export function createBot(): Telegraf | null {
   // ── /verified ─────────────────────────────────────────────────────────────
   bot.command("verified", ctx =>
     ctx.replyWithMarkdown(
-      `🛡️ *APOL VERIFIED BUILDERS*\n` +
-      `${div}\n\n` +
+      `🛡️ *APOL VERIFIED BUILDERS*\n\n` +
       `Projects that have passed the full Ape Police audit:\n\n` +
       `🔗 [View Certified Projects](${site}/verified-builders)\n\n` +
       `_Each listed project has passed contract security review, team vetting, and community scrutiny._`,
