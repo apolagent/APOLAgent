@@ -190,6 +190,109 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
   }
 }
 
+// ─── Wallet Investigation ─────────────────────────────────────────────────────
+
+// GoPlus address_security field → human-readable label mapping
+const WALLET_FLAGS: Record<string, string> = {
+  blacklist_doubt:             "🔴 Blacklist Suspect",
+  honeypot_related_address:    "⛔ Scam / Honeypot Affiliated",
+  sanctioned:                  "⚠️ Sanctioned (Legal Risk)",
+  phishing_activities:         "🎣 Phishing History",
+  stealing_attack:             "🦹 Theft / Stealing",
+  cybercrime:                  "💻 Cybercrime",
+  money_laundering:            "💰 Money Laundering",
+  financial_crime:             "🏦 Financial Crime",
+  darkweb_transactions:        "🕸️ Dark Web Activity",
+  blackmail_activities:        "🚨 Blackmail",
+  malicious_mining_activities: "⛏️ Malicious Mining",
+  mixer:                       "🌀 Mixer / Tumbler Usage",
+  fake_kyc:                    "📋 Fake KYC",
+  gas_abuse:                   "⛽ Gas Abuse",
+  reinit:                      "🔄 Reinit Attack",
+};
+
+async function buildWalletCheck(address: string): Promise<string> {
+  try {
+    const res = await fetch(
+      `${GOPLUS_BASE}/address_security/${encodeURIComponent(address)}?chain_id=${BASE_CHAIN_ID}`,
+      { signal: AbortSignal.timeout(12_000) }
+    );
+
+    const data = (await res.json()) as any;
+    const result = data?.result ?? null;
+
+    // GoPlus returns code 2 or empty result when address not indexed
+    if (!result || data?.code !== 1) {
+      return (
+        `⚠️ *INVESTIGATION STALLED*\n\n` +
+        `No intelligence data found for this address on Base Mainnet.\n` +
+        `Ensure the address is a valid EVM wallet.\n\n` +
+        `\`${address}\``
+      );
+    }
+
+    // ── Collect active flags ──────────────────────────────────────────────────
+    const activeFlags: string[] = [];
+
+    for (const [field, label] of Object.entries(WALLET_FLAGS)) {
+      if (flag(result[field])) activeFlags.push(label);
+    }
+
+    // ── Determine status ──────────────────────────────────────────────────────
+    const isCritical   = flag(result.blacklist_doubt) || flag(result.sanctioned);
+    const isSuspicious = activeFlags.length > 0;
+
+    let status: string;
+    if (isCritical)    status = "🔴 BLACKLISTED";
+    else if (isSuspicious) status = "⚠️ SUSPICIOUS";
+    else               status = "✅ CLEAN";
+
+    // ── Verdict sentence ──────────────────────────────────────────────────────
+    let verdict: string;
+    if (flag(result.sanctioned)) {
+      verdict = "This wallet is under legal sanction. Any interaction may carry regulatory consequences.";
+    } else if (flag(result.blacklist_doubt)) {
+      verdict = "This wallet has been flagged for malicious activity. Do not interact.";
+    } else if (flag(result.honeypot_related_address)) {
+      verdict = "This wallet is affiliated with honeypot contracts. Treat as hostile.";
+    } else if (flag(result.phishing_activities)) {
+      verdict = "Phishing activity detected. This wallet has been used to drain other wallets.";
+    } else if (flag(result.stealing_attack)) {
+      verdict = "Theft activity on record. This wallet has been linked to stealing attacks.";
+    } else if (flag(result.money_laundering) || flag(result.financial_crime)) {
+      verdict = "Financial crime indicators present. Exercise extreme caution.";
+    } else if (activeFlags.length > 0) {
+      verdict = "Suspicious activity detected on this wallet. Investigate before interacting.";
+    } else {
+      verdict = "No malicious activity found. Wallet appears clean on Base Mainnet.";
+    }
+
+    // ── Build message ─────────────────────────────────────────────────────────
+    let msg = "";
+    msg += `👮 *APOL WALLET INVESTIGATION*\n\n`;
+    msg += `👤 *Address:* \`${shortAddr(address)}\`\n`;
+    msg += `🚨 *Status:* ${status}\n`;
+
+    if (activeFlags.length > 0) {
+      msg += `\n🚩 *Red Flags Found:*\n`;
+      activeFlags.forEach(f => (msg += `  ${f}\n`));
+    } else {
+      msg += `\n✅ *No red flags detected.*\n`;
+    }
+
+    msg += `\n*Verdict:* _${verdict}_`;
+
+    return msg;
+
+  } catch (err: any) {
+    console.error("[APOL Bot] Wallet check error:", err?.message ?? err);
+    return (
+      `❌ *Wallet Check Failed*\n\n` +
+      `Could not reach the intelligence database. Please try again in a moment.`
+    );
+  }
+}
+
 // ─── Bot Factory ─────────────────────────────────────────────────────────────
 
 export function createBot(): Telegraf | null {
@@ -219,7 +322,8 @@ export function createBot(): Telegraf | null {
       `Protecting the Base trenches.\n\n` +
       `Use /scan [address] to check a contract or /report to flag a larp.\n\n` +
       `*AVAILABLE COMMANDS*\n` +
-      `🔍 /scan [contract] — Security check\n` +
+      `🔍 /scan [contract] — Token security check\n` +
+      `👮 /checkwallet [address] — Wallet investigation\n` +
       `🚩 /report — Submit scam evidence\n` +
       `🗺️ /map — Wall of Shame\n` +
       `🛡️ /verified — Certified projects\n` +
@@ -233,7 +337,8 @@ export function createBot(): Telegraf | null {
   bot.help(ctx =>
     ctx.replyWithMarkdown(
       `🚔 *APE POLICE — HELP DESK*\n\n` +
-      `🔍 /scan [address] — Run a security check on any contract or wallet\n` +
+      `🔍 /scan [address] — Token contract security check (GoPlus + DexScreener)\n` +
+      `👮 /checkwallet [address] — Malicious wallet investigation (GoPlus)\n` +
       `🚩 /report — Report a suspected scam or LARP agent\n` +
       `🗺️ /map — View the Wall of Shame\n` +
       `🛡️ /verified — Browse APOL-certified projects\n\n` +
@@ -274,6 +379,40 @@ export function createBot(): Telegraf | null {
     }
 
     return ctx.replyWithMarkdown(snapshot, { disable_web_page_preview: true });
+  });
+
+  // ── /checkwallet [address] ────────────────────────────────────────────────
+  bot.command("checkwallet", async ctx => {
+    const parts   = (ctx.message.text ?? "").trim().split(/\s+/);
+    const address = parts[1]?.trim();
+
+    if (!address) {
+      return ctx.replyWithMarkdown(
+        `❓ *Usage:* /checkwallet [wallet address]\n\nExample: \`/checkwallet 0x1234...abcd\``
+      );
+    }
+
+    if (!isEvmAddress(address)) {
+      return ctx.replyWithMarkdown(
+        `⚠️ *Invalid address.*\n\nPlease provide a valid EVM address starting with \`0x\` (42 chars).`
+      );
+    }
+
+    let loadingMsgId: number | null = null;
+    try {
+      const loading = await ctx.replyWithMarkdown(
+        `🔄 *Investigating* \`${shortAddr(address)}\`\n_Checking APOL intelligence records..._`
+      );
+      loadingMsgId = loading.message_id;
+    } catch { /* non-fatal */ }
+
+    const report = await buildWalletCheck(address);
+
+    if (loadingMsgId !== null) {
+      try { await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsgId); } catch { /* non-fatal */ }
+    }
+
+    return ctx.replyWithMarkdown(report, { disable_web_page_preview: true });
   });
 
   // ── /report ───────────────────────────────────────────────────────────────
