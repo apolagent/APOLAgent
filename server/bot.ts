@@ -6,12 +6,13 @@ const GOPLUS_BASE = "https://api.gopluslabs.io/api/v1";
 const BASE_CHAIN_ID = "8453";
 
 function getSiteUrl(): string {
+  if (process.env.DOMAIN_URL) return process.env.DOMAIN_URL.replace(/\/$/, "");
   const domains = process.env.REPLIT_DOMAINS;
   if (domains) {
     const primary = domains.split(",")[0].trim();
     return `https://${primary}`;
   }
-  return "https://ape-police.replit.app";
+  return "https://apepolice.online";
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
