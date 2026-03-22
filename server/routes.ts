@@ -63,6 +63,17 @@ const GOPLUS_CHAIN: Record<string, string> = {
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
+
+  // ── Health check (for uptime monitors) ──────────────────────────────────────
+  app.get("/health", (_req, res) => {
+    res.json({
+      status: "ok",
+      service: "APE POLICE",
+      timestamp: new Date().toISOString(),
+      bot: !!process.env.APOL_BOT_TOKEN ? "active" : "disabled",
+    });
+  });
+
   app.get("/api/scam-reports", async (req, res) => {
     try {
       const reports = await storage.getScamReports();

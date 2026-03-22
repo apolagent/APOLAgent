@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
+import { createBot } from "./bot";
 
 const app = express();
 
@@ -98,4 +99,19 @@ app.use((req, res, next) => {
       log(`serving on port ${port}`);
     },
   );
+
+  // ── Telegram Bot ────────────────────────────────────────────────────────────
+  const bot = createBot();
+  if (bot) {
+    bot.launch({ dropPendingUpdates: true }).then(() => {
+      log("Telegram bot polling started", "bot");
+    }).catch((err: any) => {
+      log(`Telegram bot failed to start: ${err?.message ?? err}`, "bot");
+    });
+
+    // Graceful shutdown
+    const shutdown = () => { bot.stop("SIGTERM"); };
+    process.once("SIGTERM", shutdown);
+    process.once("SIGINT",  shutdown);
+  }
 })();
