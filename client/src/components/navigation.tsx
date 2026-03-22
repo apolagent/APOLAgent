@@ -174,11 +174,7 @@ function WalletButton({ compact = false }: { compact?: boolean }) {
         style={base}
       >
         <Wallet size={11} />
-        {isConnecting
-          ? "Connecting..."
-          : providers.length === 0
-            ? "Install MetaMask"
-            : "Connect"}
+        {isConnecting ? "Connecting..." : "Connect"}
         {providers.length > 1 && !isConnecting && (
           <ChevronDown size={10} style={{ marginLeft: "2px" }} />
         )}
@@ -262,39 +258,29 @@ export default function Navigation() {
         </div>
 
         {/* Mobile / tablet bar */}
-        <div className="flex lg:hidden items-center h-14">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex lg:hidden items-center justify-between h-14">
+          <div className="flex items-center gap-2">
             <img
               src="/ape-police-logo.png"
               alt="APE POLICE logo"
               className="w-7 h-7 object-cover rounded-full border border-[#00ff00]/40 flex-shrink-0"
             />
-            <span className="font-meme text-base truncate" style={{ color: G }}>APE POLICE</span>
+            <span className="font-meme text-base" style={{ color: G }}>APE POLICE</span>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <WalletButton compact />
-            <button
-              style={{ ...actionBtnStyle, background: G, border: `1px solid ${G}`, color: "#000", padding: "5px 10px", fontWeight: 900 }}
-              data-testid="link-buy-apol-mobile"
-            >
-              Buy $APOL
-            </button>
-            <button
-              className="text-white p-1"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              data-testid="button-mobile-menu"
-              style={{ background: "none", border: "none", cursor: "pointer" }}
-            >
-              {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
-          </div>
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            data-testid="button-mobile-menu"
+            style={{ background: "none", border: "none", cursor: "pointer", padding: "4px" }}
+          >
+            {isMobileMenuOpen ? <X size={22} color="#fff" /> : <Menu size={22} color="#fff" />}
+          </button>
         </div>
       </div>
 
       {/* Mobile dropdown */}
       {isMobileMenuOpen && (
         <div style={{ background: "#000000", borderTop: "1px solid rgba(0,255,0,0.2)" }}>
-          <div className="px-4 pt-2 pb-4 flex flex-col gap-1">
+          <div className="px-4 pt-3 pb-5 flex flex-col gap-1">
             {navLinks.map(({ id, label }) => (
               <button
                 key={id}
@@ -305,13 +291,22 @@ export default function Navigation() {
                 {label}
               </button>
             ))}
-            <div style={{ borderTop: "1px solid rgba(0,255,0,0.1)", marginTop: "6px", paddingTop: "8px", display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div style={{ borderTop: "1px solid rgba(0,255,0,0.1)", marginTop: "8px", paddingTop: "10px", display: "flex", flexDirection: "column", gap: "10px" }}>
               <Link href="/agent-scanner" onClick={() => setIsMobileMenuOpen(false)}>
                 <span className="flex items-center gap-2 py-1 text-xs uppercase tracking-widest cursor-pointer" style={{ color: G, fontFamily: "'JetBrains Mono', monospace" }}>
                   <Bot size={13} />
                   Scan Agent
                 </span>
               </Link>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <WalletButton />
+                <button
+                  style={{ ...actionBtnStyle, background: G, border: `1px solid ${G}`, color: "#000", padding: "7px 16px", fontWeight: 900 }}
+                  data-testid="link-buy-apol-mobile"
+                >
+                  Buy $APOL
+                </button>
+              </div>
             </div>
           </div>
         </div>
