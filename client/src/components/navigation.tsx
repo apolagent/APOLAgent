@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
-import { Menu, X, Bot, Wallet, AlertTriangle, ChevronDown, Shield } from "lucide-react";
+import { Menu, X, Bot, Wallet, AlertTriangle, ChevronDown } from "lucide-react";
 import { useWalletContext, type EIP6963ProviderDetail } from "@/hooks/use-wallet";
 
 const G = "#00ff00";
@@ -241,12 +241,6 @@ export default function Navigation() {
 
           {/* Right actions */}
           <div className="flex items-center gap-2 justify-self-end">
-            <Link href="/verified-builders">
-              <span style={actionBtnStyle} data-testid="link-nav-verified-builders">
-                <Shield size={11} />
-                Verified
-              </span>
-            </Link>
             <Link href="/agent-scanner">
               <span style={actionBtnStyle} data-testid="link-nav-agent-scanner">
                 <Bot size={11} />
@@ -302,12 +296,6 @@ export default function Navigation() {
                 <span className="flex items-center gap-2 py-1 text-xs uppercase tracking-widest cursor-pointer" style={{ color: G, fontFamily: "'JetBrains Mono', monospace" }}>
                   <Bot size={13} />
                   Scan Agent
-                </span>
-              </Link>
-              <Link href="/verified-builders" onClick={() => setIsMobileMenuOpen(false)}>
-                <span className="flex items-center gap-2 py-1 text-xs uppercase tracking-widest cursor-pointer" style={{ color: G, fontFamily: "'JetBrains Mono', monospace" }} data-testid="link-mobile-verified-builders">
-                  <Shield size={13} />
-                  Verified Builders
                 </span>
               </Link>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>

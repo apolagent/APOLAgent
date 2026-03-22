@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Trophy, AlertTriangle, ShieldCheck, ScanLine, Shield } from "lucide-react";
+import { Trophy, AlertTriangle, ShieldCheck, ScanLine, Shield } from "lucide-react";
 import { Link } from "wouter";
 
 export default function ChannelSection() {
@@ -47,10 +47,12 @@ export default function ChannelSection() {
 
             {/* Action buttons */}
             <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
-              <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 neon-glow flex items-center justify-center space-x-2">
-                <MessageSquare className="w-5 h-5" />
-                <span>Join the Channel</span>
-              </Button>
+              <Link href="/verified-builders">
+                <Button className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 neon-glow flex items-center justify-center space-x-2 w-full sm:w-auto" data-testid="button-verified-builders-channel">
+                  <ShieldCheck className="w-5 h-5" />
+                  <span>Verified Builders</span>
+                </Button>
+              </Link>
               <Link href="/nominate-hero">
                 <Button className="bg-yellow-500 hover:bg-yellow-600 text-slate-900 font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center space-x-2 w-full sm:w-auto">
                   <Trophy className="w-5 h-5" />
