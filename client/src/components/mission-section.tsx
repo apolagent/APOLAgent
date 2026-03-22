@@ -24,7 +24,7 @@ export default function MissionSection() {
         {/* Header */}
         <div className="mb-10">
           <p className="text-xs text-slate-500 uppercase tracking-widest mb-3">Mission Statement</p>
-          <h2 className="font-meme text-4xl md:text-5xl gradient-text uppercase mb-6" data-testid="text-mission-title">
+          <h2 className="font-meme text-2xl sm:text-3xl md:text-5xl gradient-text uppercase mb-6" data-testid="text-mission-title">
             Protocol Mission
           </h2>
           <p className="text-slate-300 text-sm leading-relaxed max-w-2xl">

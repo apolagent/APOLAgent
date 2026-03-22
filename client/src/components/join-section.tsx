@@ -52,10 +52,10 @@ export default function JoinSection() {
 
         {/* Header */}
         <div className="text-center mb-16">
-          <h2 className="font-meme text-5xl md:text-6xl gradient-text mb-6">
+          <h2 className="font-meme text-2xl sm:text-3xl md:text-5xl lg:text-6xl gradient-text mb-6">
             Communications &amp; Access
           </h2>
-          <p className="text-lg text-gray-400 max-w-xl mx-auto">
+          <p className="text-sm md:text-base text-gray-400 max-w-xl mx-auto">
             Secure a connection to the APOL Intelligence Network.
           </p>
         </div>

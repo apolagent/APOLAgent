@@ -11,10 +11,10 @@ export default function ChannelSection() {
           {/* Left column */}
           <div>
             <p className="text-xs text-slate-500 uppercase tracking-widest mb-4">Intelligence Channel</p>
-            <h2 className="font-meme text-4xl md:text-6xl gradient-text mb-2">
+            <h2 className="font-meme text-2xl sm:text-3xl md:text-4xl lg:text-6xl gradient-text mb-2">
               $APOL Agent:
             </h2>
-            <p className="font-meme text-xl md:text-2xl text-slate-400 mb-6">
+            <p className="font-meme text-sm md:text-lg text-slate-400 mb-6">
               Autonomous Market Integrity
             </p>
             <div className="space-y-4 mb-8">

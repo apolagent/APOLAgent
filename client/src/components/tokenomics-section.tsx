@@ -45,7 +45,7 @@ export default function TokenomicsSection() {
 
         {/* Header */}
         <div className="text-center mb-12">
-          <h2 className="font-meme text-5xl md:text-6xl gradient-text mb-4">
+          <h2 className="font-meme text-2xl sm:text-3xl md:text-5xl lg:text-6xl gradient-text mb-4">
             Network Specifications
           </h2>
           <p className="text-slate-400 text-sm uppercase tracking-widest">$APOL · {CHAIN}</p>
@@ -56,11 +56,11 @@ export default function TokenomicsSection() {
           {rows.map((row, i) => (
             <div
               key={row.key}
-              className="flex items-center gap-4 px-6 py-4 text-sm"
+              className="flex items-center gap-3 px-4 sm:px-6 py-3 sm:py-4 text-sm"
               style={{ borderBottom: i < rows.length - 1 ? "1px solid rgba(255,255,255,0.06)" : undefined }}
             >
               {/* Label */}
-              <span className="text-slate-500 text-xs font-semibold uppercase tracking-widest w-36 flex-shrink-0">
+              <span className="text-slate-500 text-xs font-semibold uppercase tracking-widest w-24 sm:w-36 flex-shrink-0">
                 {row.key}
               </span>
 

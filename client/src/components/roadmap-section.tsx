@@ -93,10 +93,10 @@ export default function RoadmapSection() {
     <section id="roadmap" className="py-20 bg-gradient-to-r from-blue-900 to-slate-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
-          <h2 className="font-meme text-5xl md:text-6xl gradient-text mb-4">
+          <h2 className="font-meme text-2xl sm:text-3xl md:text-5xl lg:text-6xl gradient-text mb-4">
             Operational Milestones
           </h2>
-          <p className="text-xl text-white">Deployment phases</p>
+          <p className="text-sm md:text-base text-white/60">Deployment phases</p>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
           {roadmapPhases.map((phase) => {

@@ -16,7 +16,7 @@ export default function VerifiedByApolSection() {
       id="get-verified"
       style={{ padding: "80px 0", background: "transparent" }}
     >
-      <div style={{ maxWidth: "900px", margin: "0 auto", padding: "0 24px" }}>
+      <div style={{ maxWidth: "900px", margin: "0 auto", padding: "0 16px" }}>
 
         {/* Section label */}
         <div style={{
@@ -48,7 +48,7 @@ export default function VerifiedByApolSection() {
 
           {/* Left — copy */}
           <div style={{
-            padding: "40px 36px",
+            padding: "clamp(20px, 5vw, 40px) clamp(16px, 4vw, 36px)",
             borderRight: "1px solid rgba(0,255,0,0.15)",
             display: "flex", flexDirection: "column", gap: "20px",
           }}>
@@ -93,7 +93,7 @@ export default function VerifiedByApolSection() {
 
           {/* Right — CTA */}
           <div style={{
-            padding: "40px 36px",
+            padding: "clamp(20px, 5vw, 40px) clamp(16px, 4vw, 36px)",
             display: "flex", flexDirection: "column",
             justifyContent: "center", alignItems: "flex-start", gap: "24px",
             background: "rgba(0,255,0,0.025)",
@@ -109,7 +109,7 @@ export default function VerifiedByApolSection() {
                 Audit Fee
               </p>
               <p style={{
-                fontSize: "42px", fontWeight: 900, color: G, margin: 0,
+                fontSize: "clamp(26px, 6vw, 42px)", fontWeight: 900, color: G, margin: 0,
                 fontFamily: "'JetBrains Mono', monospace", lineHeight: 1,
               }}>
                 0.05 ETH
@@ -168,6 +168,10 @@ export default function VerifiedByApolSection() {
           #get-verified [style*="border-right"] {
             border-right: none !important;
             border-bottom: 1px solid rgba(0,255,0,0.15) !important;
+          }
+          #get-verified [style*="padding: \"40px 36px\""],
+          #get-verified > div > div > div {
+            padding: 24px 20px !important;
           }
         }
       `}</style>
