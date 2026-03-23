@@ -105,16 +105,19 @@ app.use((req, res, next) => {
   if (bot) {
     bot.launch({ dropPendingUpdates: true }).then(() => {
       log("Telegram bot polling started", "bot");
-      return bot.telegram.setMyCommands([
-        { command: "scan",        description: "Detailed CA investigation (Taxes, Liquidity, Honeypot)" },
-        { command: "scanx",       description: "X/Twitter social forensics & LARP detection" },
-        { command: "scanagent",   description: "Verify AI Agent authenticity and security" },
-        { command: "checkwallet", description: "Forensic wallet audit (Age, Funding, Volume)" },
-        { command: "map",         description: "Access the APOL Wall of Shame" },
-        { command: "verified",    description: "View APOL Certified Hero Projects" },
-      ]);
-    }).then(() => {
-      log("Telegram command menu registered", "bot");
+      // Register command menu — independent of polling, with its own retry
+      const registerCommands = () =>
+        bot.telegram.setMyCommands([
+          { command: "scan",        description: "Detailed CA investigation (Taxes, Liquidity, Honeypot)" },
+          { command: "scanx",       description: "X/Twitter social forensics & LARP detection" },
+          { command: "scanagent",   description: "Verify AI Agent authenticity and security" },
+          { command: "checkwallet", description: "Forensic wallet audit (Age, Funding, Volume)" },
+          { command: "map",         description: "Access the APOL Wall of Shame" },
+          { command: "verified",    description: "View APOL Certified Hero Projects" },
+        ])
+          .then(() => log("Telegram command menu registered", "bot"))
+          .catch(() => setTimeout(registerCommands, 10_000)); // retry after 10s on failure
+      registerCommands();
     }).catch((err: any) => {
       log(`Telegram bot failed to start: ${err?.message ?? err}`, "bot");
     });
