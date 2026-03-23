@@ -671,6 +671,214 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
   }
 }
 
+// ─── Social Forensics ────────────────────────────────────────────────────────
+
+const RAPIDAPI_HOST = "twitter-api45.p.rapidapi.com";
+
+function parseXUsername(input: string): string {
+  let u = input.trim();
+  // Strip leading @ if present
+  u = u.replace(/^@/, "");
+  // Strip full URL: https://twitter.com/username or https://x.com/username
+  u = u.replace(/^(?:https?:\/\/)?(?:www\.)?(?:twitter|x)\.com\//, "");
+  // Strip trailing path and query
+  u = u.split("/")[0].split("?")[0].split(" ")[0];
+  return u;
+}
+
+async function buildSocialScan(input: string, siteUrl: string): Promise<string> {
+  try {
+    const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
+
+    if (!RAPIDAPI_KEY) {
+      return (
+        `🐦 *APOL X INVESTIGATION — OFFLINE*\n\n` +
+        `The social forensics module is not yet configured.\n` +
+        `Admin must add the \`RAPIDAPI_KEY\` secret to enable /scanx.\n\n` +
+        `_Subscribe free at rapidapi.com → search "Twitter API v2" (twitter-api45)_`
+      );
+    }
+
+    const username = parseXUsername(input);
+    if (!username || username.length < 1 || username.length > 50) {
+      return (
+        `⚠️ *Invalid Username*\n\n` +
+        `Usage: /scanx @username or /scanx https://x.com/username`
+      );
+    }
+
+    const headers = {
+      "x-rapidapi-key":  RAPIDAPI_KEY,
+      "x-rapidapi-host": RAPIDAPI_HOST,
+    };
+
+    // ── Fetch profile + timeline in parallel ──────────────────────────────────
+    const [userRes, timelineRes] = await Promise.all([
+      fetch(
+        `https://${RAPIDAPI_HOST}/user.php?screenname=${encodeURIComponent(username)}`,
+        { headers, signal: AbortSignal.timeout(12_000) }
+      ),
+      fetch(
+        `https://${RAPIDAPI_HOST}/timeline.php?screenname=${encodeURIComponent(username)}`,
+        { headers, signal: AbortSignal.timeout(12_000) }
+      ),
+    ]);
+
+    const user:     any = await userRes.json();
+    const timeline: any = await timelineRes.json();
+
+    if (user?.error || user?.status === "error" || (!user?.name && !user?.followers_count)) {
+      return (
+        `⚠️ *Account Not Found*\n\n` +
+        `No X profile found for _"${username}"_.\n` +
+        `Ensure the handle is correct and the account is public.`
+      );
+    }
+
+    // ── Parse profile ─────────────────────────────────────────────────────────
+    const displayName  = user.name            ?? username;
+    const followers    = parseInt(user.followers_count ?? "0");
+    const following    = parseInt(user.friends_count   ?? "0");
+    const isVerified   = !!(user.verified || user.is_blue_verified || user.ext_is_blue_verified);
+    const totalTweets  = parseInt(user.statuses_count  ?? "0");
+    const bio          = user.description ?? "";
+
+    // Account age
+    let joinedDate = "Unknown";
+    let ageDays    = 0;
+    if (user.created_at) {
+      const createdAt = new Date(user.created_at);
+      if (!isNaN(createdAt.getTime())) {
+        joinedDate = createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        ageDays    = Math.floor((Date.now() - createdAt.getTime()) / 86_400_000);
+      }
+    }
+
+    // ── Engagement analysis (last 5 tweets) ───────────────────────────────────
+    const tweets: any[] = Array.isArray(timeline?.timeline)
+      ? timeline.timeline.slice(0, 5)
+      : [];
+
+    const avgLikes    = tweets.length > 0
+      ? Math.round(tweets.reduce((s, t) => s + (parseInt(t.favorite_count  ?? "0")), 0) / tweets.length)
+      : 0;
+    const avgRetweets = tweets.length > 0
+      ? Math.round(tweets.reduce((s, t) => s + (parseInt(t.retweet_count ?? "0")), 0) / tweets.length)
+      : 0;
+
+    const followRatio     = following > 0 ? (followers / following).toFixed(2) : "∞";
+    const engagementPct   = followers > 0
+      ? ((avgLikes + avgRetweets) / followers * 100)
+      : 0;
+
+    // ── Risk flags ────────────────────────────────────────────────────────────
+    const flags: string[] = [];
+
+    if (ageDays > 0 && ageDays < 30) {
+      flags.push("⛔ HIGH RISK FRESH ACCOUNT — Profile less than 30 days old");
+    } else if (ageDays > 0 && ageDays < 90) {
+      flags.push("⚠️ New account — less than 90 days old");
+    }
+
+    if (followers > 10_000 && tweets.length > 0 && avgLikes < 10) {
+      flags.push("⛔ BOTTED FOLLOWERS — 10K+ followers but avg < 10 likes");
+    }
+
+    if (following > followers * 3 && followers < 2_000) {
+      flags.push("⚠️ Follow-back pattern — following far exceeds followers");
+    }
+
+    if (totalTweets < 5 && followers > 500) {
+      flags.push("⚠️ Ghost account — very few posts for follower count");
+    }
+
+    if (engagementPct > 20 && followers > 500) {
+      flags.push("⚠️ Unusually high engagement — verify authenticity");
+    }
+
+    // ── Engagement rating ─────────────────────────────────────────────────────
+    let engagementRating: string;
+    if (tweets.length === 0) {
+      engagementRating = "Data Pending";
+    } else if (engagementPct >= 2.0) {
+      engagementRating = `High ✅ (avg ${avgLikes}❤️ / ${avgRetweets}🔁)`;
+    } else if (engagementPct >= 0.3) {
+      engagementRating = `Average (avg ${avgLikes}❤️ / ${avgRetweets}🔁)`;
+    } else {
+      engagementRating = `Low ⚠️ (avg ${avgLikes}❤️ / ${avgRetweets}🔁)`;
+    }
+
+    // ── Verdict ───────────────────────────────────────────────────────────────
+    const critFlags = flags.filter(f => f.startsWith("⛔")).length;
+    const warnFlags = flags.filter(f => f.startsWith("⚠️")).length;
+
+    let verdict: string;
+    if (critFlags >= 1) {
+      verdict = "⛔ WARNING: BOT ACTIVITY DETECTED";
+    } else if (warnFlags >= 2) {
+      verdict = "⚠️ CAUTION: Multiple Suspicious Patterns";
+    } else if (warnFlags === 1) {
+      verdict = "⚠️ CAUTION: Suspicious Patterns Detected";
+    } else if (ageDays > 365 && followers > 1_000 && engagementPct >= 0.3) {
+      verdict = "✅ Likely Authentic";
+    } else if (ageDays < 180 || followers < 100) {
+      verdict = "⚠️ Inconclusive — Insufficient History";
+    } else {
+      verdict = "✅ No Red Flags Detected";
+    }
+
+    // ── Linked CA from DexScreener ────────────────────────────────────────────
+    let linkedCA = "Not Found";
+    try {
+      const dexSearch: any = await fetch(
+        `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(username)}`,
+        { signal: AbortSignal.timeout(8_000) }
+      ).then(r => r.json());
+
+      const basePairs: any[] = (dexSearch?.pairs ?? []).filter((p: any) => p.chainId === "base");
+      const match = basePairs.find((p: any) =>
+        (p.info?.socials ?? []).some((s: any) =>
+          s.type === "twitter" && s.url.toLowerCase().includes(username.toLowerCase())
+        )
+      );
+      if (match) {
+        linkedCA = `${match.baseToken.symbol} — \`${match.baseToken.address}\``;
+      }
+    } catch { /* non-fatal */ }
+
+    // ── Build message ─────────────────────────────────────────────────────────
+    let msg = "";
+    msg += `🐦 *X INVESTIGATION: @${username}*\n\n`;
+    msg += `👤 *Name:* ${displayName}\n`;
+    if (bio) msg += `📝 *Bio:* _${bio.replace(/\n/g, " ").slice(0, 120)}_\n`;
+    msg += `📅 *Joined:* ${joinedDate} (${ageDays} days ago)\n`;
+    msg += `✅ *Blue Check:* ${isVerified ? "Verified ✅" : "Not Verified"}\n\n`;
+
+    msg += `👥 *Followers:* ${followers.toLocaleString()}\n`;
+    msg += `➡️ *Following:* ${following.toLocaleString()}\n`;
+    msg += `📊 *Follow Ratio:* ${followRatio}:1\n`;
+    msg += `📈 *Engagement:* ${engagementRating}\n\n`;
+
+    if (flags.length > 0) {
+      msg += `🚨 *RISK FLAGS:*\n`;
+      flags.forEach(f => (msg += `  ${f}\n`));
+      msg += "\n";
+    } else {
+      msg += `✅ *No risk flags detected.*\n\n`;
+    }
+
+    msg += `⛓️ *Linked CA:* ${linkedCA}\n\n`;
+    msg += `🚨 *Social Verdict:* _${verdict}_\n\n`;
+    msg += `🔍 [Full Report](${siteUrl}/agent-scanner)`;
+
+    return msg;
+
+  } catch (err: any) {
+    console.error("[APOL Bot] Social scan error:", err?.message ?? err);
+    return `❌ *Social Scan Failed*\n\nCould not reach the X intelligence feed. Please try again in a moment.`;
+  }
+}
+
 // ─── Bot Factory ─────────────────────────────────────────────────────────────
 
 export function createBot(): Telegraf | null {
@@ -701,6 +909,7 @@ export function createBot(): Telegraf | null {
       `Use /scan [address] to check a contract or /report to flag a larp.\n\n` +
       `*AVAILABLE COMMANDS*\n` +
       `🔍 /scan [contract] — Token security check\n` +
+      `🐦 /scanx [username] — X/Twitter social forensics\n` +
       `🤖 /scanagent [name or CA] — AI agent audit\n` +
       `👮 /checkwallet [address] — Wallet investigation\n` +
       `🚩 /report — Submit scam evidence\n` +
@@ -717,6 +926,7 @@ export function createBot(): Telegraf | null {
     ctx.replyWithMarkdown(
       `🚔 *APE POLICE — HELP DESK*\n\n` +
       `🔍 /scan [address] — Token contract security check (GoPlus + DexScreener)\n` +
+      `🐦 /scanx [@username] — X/Twitter social forensics & LARP detection\n` +
       `🤖 /scanagent [name or CA] — AI agent intelligence audit (AgentGuard)\n` +
       `👮 /checkwallet [address] — Malicious wallet investigation (GoPlus)\n` +
       `🚩 /report — Report a suspected scam or LARP agent\n` +
@@ -819,6 +1029,39 @@ export function createBot(): Telegraf | null {
     } catch { /* non-fatal */ }
 
     const report = await buildAgentScan(input, site);
+
+    if (loadingMsgId !== null) {
+      try { await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsgId); } catch { /* non-fatal */ }
+    }
+
+    return ctx.replyWithMarkdown(report, { disable_web_page_preview: true });
+  });
+
+  // ── /scanx ────────────────────────────────────────────────────────────────
+  bot.command("scanx", async ctx => {
+    const parts = (ctx.message.text ?? "").trim().split(/\s+/);
+    const input = parts.slice(1).join(" ").trim();
+
+    if (!input) {
+      return ctx.replyWithMarkdown(
+        `❓ *Usage:* /scanx [@username or profile link]\n\n` +
+        `Examples:\n` +
+        `\`/scanx @VitalikButerin\`\n` +
+        `\`/scanx https://x.com/apol_base\`\n\n` +
+        `_Runs a social forensics investigation: account age, follower quality, engagement, LARP detection._`
+      );
+    }
+
+    let loadingMsgId: number | null = null;
+    try {
+      const preview = parseXUsername(input);
+      const loading = await ctx.replyWithMarkdown(
+        `🐦 *Investigating @${preview}*\n_Running APOL social forensics..._`
+      );
+      loadingMsgId = loading.message_id;
+    } catch { /* non-fatal */ }
+
+    const report = await buildSocialScan(input, site);
 
     if (loadingMsgId !== null) {
       try { await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsgId); } catch { /* non-fatal */ }

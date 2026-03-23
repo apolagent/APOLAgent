@@ -107,8 +107,9 @@ app.use((req, res, next) => {
       log("Telegram bot polling started", "bot");
       return bot.telegram.setMyCommands([
         { command: "scan",        description: "Detailed CA investigation (Taxes, Liquidity, Honeypot)" },
-        { command: "checkwallet", description: "Forensic wallet audit (Age, Funding, Volume)" },
+        { command: "scanx",       description: "X/Twitter social forensics & LARP detection" },
         { command: "scanagent",   description: "Verify AI Agent authenticity and security" },
+        { command: "checkwallet", description: "Forensic wallet audit (Age, Funding, Volume)" },
         { command: "map",         description: "Access the APOL Wall of Shame" },
         { command: "verified",    description: "View APOL Certified Hero Projects" },
       ]);
