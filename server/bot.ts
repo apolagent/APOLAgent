@@ -673,7 +673,7 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
 
 // ─── Social Forensics ────────────────────────────────────────────────────────
 
-const RAPIDAPI_HOST = "twitter-api45.p.rapidapi.com";
+const RAPIDAPI_HOST = "twitter241.p.rapidapi.com";
 
 function parseXUsername(input: string): string {
   let u = input.trim();
@@ -695,7 +695,7 @@ async function buildSocialScan(input: string, siteUrl: string): Promise<string> 
         `🐦 *APOL X INVESTIGATION — OFFLINE*\n\n` +
         `The social forensics module is not yet configured.\n` +
         `Admin must add the \`RAPIDAPI_KEY\` secret to enable /scanx.\n\n` +
-        `_Subscribe free at rapidapi.com → search "Twitter API v2" (twitter-api45)_`
+        `_Subscribe free at rapidapi.com → search "Twttr API" (twitter241)_`
       );
     }
 
@@ -707,32 +707,41 @@ async function buildSocialScan(input: string, siteUrl: string): Promise<string> 
       );
     }
 
-    const headers = {
+    const headers: Record<string, string> = {
       "x-rapidapi-key":  RAPIDAPI_KEY,
       "x-rapidapi-host": RAPIDAPI_HOST,
     };
 
-    // ── Fetch profile + timeline in parallel ──────────────────────────────────
-    const [userRes, timelineRes] = await Promise.all([
-      fetch(
-        `https://${RAPIDAPI_HOST}/user.php?screenname=${encodeURIComponent(username)}`,
-        { headers, signal: AbortSignal.timeout(12_000) }
-      ),
-      fetch(
-        `https://${RAPIDAPI_HOST}/timeline.php?screenname=${encodeURIComponent(username)}`,
-        { headers, signal: AbortSignal.timeout(12_000) }
-      ),
-    ]);
+    // ── Step 1: Fetch user profile by username ────────────────────────────────
+    const userRes = await fetch(
+      `https://${RAPIDAPI_HOST}/user?username=${encodeURIComponent(username)}`,
+      { headers, signal: AbortSignal.timeout(12_000) }
+    );
+    const user: any = await userRes.json();
 
-    const user:     any = await userRes.json();
-    const timeline: any = await timelineRes.json();
-
-    if (user?.error || user?.status === "error" || (!user?.name && !user?.followers_count)) {
+    if (!user?.name && !user?.followers_count) {
       return (
         `⚠️ *Account Not Found*\n\n` +
         `No X profile found for _"${username}"_.\n` +
         `Ensure the handle is correct and the account is public.`
       );
+    }
+
+    // ── Step 2: Fetch recent tweets by user ID ────────────────────────────────
+    const userId = user.id_str ?? user.id ?? "";
+    let tweets: any[] = [];
+    if (userId) {
+      try {
+        const tweetsRes = await fetch(
+          `https://${RAPIDAPI_HOST}/tweets?user_id=${encodeURIComponent(userId)}&count=5`,
+          { headers, signal: AbortSignal.timeout(12_000) }
+        );
+        const tweetsData: any = await tweetsRes.json();
+        tweets = Array.isArray(tweetsData?.results) ? tweetsData.results.slice(0, 5)
+               : Array.isArray(tweetsData?.timeline) ? tweetsData.timeline.slice(0, 5)
+               : Array.isArray(tweetsData) ? tweetsData.slice(0, 5)
+               : [];
+      } catch { /* non-fatal — continue without tweet data */ }
     }
 
     // ── Parse profile ─────────────────────────────────────────────────────────
@@ -755,15 +764,13 @@ async function buildSocialScan(input: string, siteUrl: string): Promise<string> 
     }
 
     // ── Engagement analysis (last 5 tweets) ───────────────────────────────────
-    const tweets: any[] = Array.isArray(timeline?.timeline)
-      ? timeline.timeline.slice(0, 5)
-      : [];
+    const recentTweets: any[] = tweets;
 
-    const avgLikes    = tweets.length > 0
-      ? Math.round(tweets.reduce((s, t) => s + (parseInt(t.favorite_count  ?? "0")), 0) / tweets.length)
+    const avgLikes    = recentTweets.length > 0
+      ? Math.round(recentTweets.reduce((s, t) => s + (parseInt(t.favorite_count  ?? "0")), 0) / recentTweets.length)
       : 0;
-    const avgRetweets = tweets.length > 0
-      ? Math.round(tweets.reduce((s, t) => s + (parseInt(t.retweet_count ?? "0")), 0) / tweets.length)
+    const avgRetweets = recentTweets.length > 0
+      ? Math.round(recentTweets.reduce((s, t) => s + (parseInt(t.retweet_count ?? "0")), 0) / recentTweets.length)
       : 0;
 
     const followRatio     = following > 0 ? (followers / following).toFixed(2) : "∞";
@@ -798,7 +805,7 @@ async function buildSocialScan(input: string, siteUrl: string): Promise<string> 
 
     // ── Engagement rating ─────────────────────────────────────────────────────
     let engagementRating: string;
-    if (tweets.length === 0) {
+    if (recentTweets.length === 0) {
       engagementRating = "Data Pending";
     } else if (engagementPct >= 2.0) {
       engagementRating = `High ✅ (avg ${avgLikes}❤️ / ${avgRetweets}🔁)`;
