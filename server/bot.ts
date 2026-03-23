@@ -442,72 +442,102 @@ async function buildWalletCheck(address: string): Promise<string> {
     const baseTxData     = (await baseTxRes.json())      as any;
     const gpResult       = threatData?.result ?? null;
 
-    // ── Step 2: Find genesis tx — merge Base-filtered + all-chain results ────
-    const mergedChains: any[] = [
-      ...(baseChainsData?.active_chains ?? []),
-      ...(allChainsData?.active_chains  ?? []),
-    ];
+    // ── Step 2: Find BASE-SPECIFIC genesis (first tx on Base chain) ──────────
+    const baseChainEntry = (baseChainsData?.active_chains ?? [])
+      .find((c: any) => c.chain === "base" || c.chain_id === "0x2105");
+    let genesisTxHash    = baseChainEntry?.first_transaction?.transaction_hash ?? null;
+    let genesisTimestamp = baseChainEntry?.first_transaction?.block_timestamp ?? null;
 
-    // Deduplicate by chain_id, keep whichever has a populated first_transaction
-    const chainMap = new Map<string, any>();
-    for (const c of mergedChains) {
-      const id = c.chain_id;
-      const existing = chainMap.get(id);
-      if (!existing) { chainMap.set(id, c); continue; }
-      // Prefer the entry with actual first_transaction data
-      if (!existing.first_transaction?.transaction_hash && c.first_transaction?.transaction_hash) {
-        chainMap.set(id, c);
-      }
-    }
-    const activeChains = Array.from(chainMap.values())
-      .filter(c => c.first_transaction?.block_timestamp)
-      .sort((a, b) =>
-        new Date(a.first_transaction.block_timestamp).getTime() -
-        new Date(b.first_transaction.block_timestamp).getTime()
-      );
-
-    const genesisChain    = activeChains[0] ?? null;
-    const genesisInfo     = genesisChain?.first_transaction ?? null;
-    let genesisTxHash     = genesisInfo?.transaction_hash ?? null;
-    let genesisChainId    = genesisChain?.chain_id ?? "0x2105";
-    let genesisChainName  = genesisChain?.chain ?? "base";
-    let genesisTimestamp  = genesisInfo?.block_timestamp ?? null;
-
-    // ── Step 2b: Fallback — if getWalletActiveChains returned no genesis data,
-    //    use the first Base tx from the Moralis transaction list ───────────────
+    // Fallback: Moralis Base tx list (ASC order — first entry is oldest)
     const baseTxs: any[] = baseTxData?.result ?? [];
     if (!genesisTxHash && baseTxs.length > 0) {
-      const firstBaseTx = baseTxs[0];
-      genesisTxHash    = firstBaseTx.hash;
-      genesisChainId   = "0x2105";
-      genesisChainName = "base";
-      genesisTimestamp = firstBaseTx.block_timestamp;
+      genesisTxHash    = baseTxs[0].hash;
+      genesisTimestamp = baseTxs[0].block_timestamp;
     }
 
-    // ── Step 2c: Last resort fallback — Blockscout pagination ─────────────────
-    if (!genesisTxHash) {
+    // Last resort: Blockscout pagination
+    if (!genesisTimestamp) {
       const oldestTx = await fetchOldestTx(address);
       if (oldestTx?.timestamp) {
         genesisTimestamp = oldestTx.timestamp;
-        genesisChainId   = "0x2105";
-        genesisChainName = "base";
-        // Blockscout doesn't give tx hash in the fetchOldestTx — keep null
       }
     }
 
-    // ── Step 3: Fetch genesis transaction details for funding source label ─────
-    let genesisTx: any = null;
-    if (genesisTxHash) {
+    // ── Step 2b: Find BASE funder — first INCOMING tx on Base ─────────────────
+    const addrLow = address.toLowerCase();
+    const firstIncoming = baseTxs.find(
+      (tx: any) => (tx.to_address ?? "").toLowerCase() === addrLow
+    );
+    let funderTxHash  = firstIncoming?.hash ?? null;
+    let funderAddr    = firstIncoming?.from_address ?? null;
+    let funderTs      = firstIncoming?.block_timestamp ?? null;
+
+    // If no incoming in baseTxs, check genesis tx details
+    if (!funderAddr && genesisTxHash) {
       try {
         const txRes = await fetch(
-          `${MORALIS}/transaction/${encodeURIComponent(genesisTxHash)}?chain=${genesisChainId}`,
+          `${MORALIS}/transaction/${encodeURIComponent(genesisTxHash)}?chain=0x2105`,
           { headers: mHdrs, signal: AbortSignal.timeout(12_000) }
         );
-        genesisTx = txRes.ok ? await txRes.json() : null;
+        if (txRes.ok) {
+          const txData = await txRes.json() as any;
+          if ((txData?.to_address ?? "").toLowerCase() === addrLow) {
+            funderAddr  = txData.from_address;
+            funderTxHash = genesisTxHash;
+            funderTs     = txData.block_timestamp ?? genesisTimestamp;
+          }
+        }
       } catch { /* non-fatal */ }
     }
 
-    // ── Step 4: Wallet age from genesis ───────────────────────────────────────
+    // ── Step 3: Resolve funder identity (Moralis label + Blockscout ENS) ──────
+    let moralisLabel: string | null = null;
+    let moralisEntity: string | null = null;
+    let funderEns: string | null = null;
+
+    if (funderAddr) {
+      // Fetch Moralis tx details for label (if we have the funding tx hash)
+      if (funderTxHash) {
+        try {
+          const txRes = await fetch(
+            `${MORALIS}/transaction/${encodeURIComponent(funderTxHash)}?chain=0x2105`,
+            { headers: mHdrs, signal: AbortSignal.timeout(10_000) }
+          );
+          if (txRes.ok) {
+            const txData = await txRes.json() as any;
+            moralisLabel  = txData.from_address_label  ?? null;
+            moralisEntity = txData.from_address_entity ?? null;
+          }
+        } catch { /* non-fatal */ }
+      }
+
+      // Also check Blockscout for ENS name of funder
+      try {
+        const ensRes = await fetch(
+          `https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(funderAddr)}`,
+          { signal: AbortSignal.timeout(8_000) }
+        );
+        if (ensRes.ok) {
+          const ensData = await ensRes.json() as any;
+          funderEns = ensData?.ens_domain_name ?? null;
+        }
+      } catch { /* non-fatal */ }
+    }
+
+    // Build display label — prefer ENS name, then Moralis label, then classify
+    const funderDisplayName = funderEns || moralisLabel || moralisEntity || null;
+    const { display: fundingDisplay, risk: fundingRisk } = funderAddr
+      ? (funderDisplayName
+          ? classifyFundingSource(funderAddr, funderDisplayName, moralisEntity)
+          : classifyFundingSource(funderAddr, moralisLabel, moralisEntity))
+      : { display: "⚠️ Unknown", risk: "unknown" as const };
+
+    // Override display if we have ENS and classifyFundingSource returned Unknown
+    const finalFundingDisplay = (funderEns && fundingDisplay.includes("Unknown"))
+      ? `🏦 FUNDED BY: ${funderEns}`
+      : fundingDisplay;
+
+    // ── Step 4: Base wallet age from genesis ─────────────────────────────────
     let firstSeenDate  = "ERROR: API TIMEOUT";
     let walletAgeDays  = "ERROR: API TIMEOUT";
     let walletAgeLabel = "ERROR: API TIMEOUT";
@@ -522,21 +552,10 @@ async function buildWalletCheck(address: string): Promise<string> {
       }
     }
 
-    // ── Step 5: Classify funding source ──────────────────────────────────────
-    const genesisFromAddr   = (genesisTx?.from_address as string) ?? "";
-    const moralisLabel      = (genesisTx?.from_address_label  as string | null) ?? null;
-    const moralisEntity     = (genesisTx?.from_address_entity as string | null) ?? null;
-
-    const { display: fundingDisplay, risk: fundingRisk } = genesisFromAddr
-      ? classifyFundingSource(genesisFromAddr, moralisLabel, moralisEntity)
-      : { display: "⚠️ Unknown/Bridge", risk: "unknown" as const };
-
     // ── Step 6: Base Mainnet activity + inflow / outflow ─────────────────────
-    // baseTxs already declared in Step 2b
     const hasMoreBase     = !!baseTxData?.cursor;
     const baseTxCount     = baseTxs.length;
 
-    const addrLow = address.toLowerCase();
     let inf  = BigInt(0);
     let outf = BigInt(0);
     for (const tx of baseTxs) {
@@ -602,16 +621,16 @@ async function buildWalletCheck(address: string): Promise<string> {
       verdict = "Genesis funding from a mixer — high-probability sybil or rug profile.";
     } else if (baseTxCount > 0 && baseTxCount < 5) {
       verdict = "Fresh wallet with minimal history. Insufficient data to confirm legitimacy.";
-    } else if (activeChains.length === 0) {
-      verdict = "No on-chain activity found. Wallet has not been used.";
+    } else if (baseTxCount === 0 && !genesisTimestamp) {
+      verdict = "No on-chain activity found on Base. Wallet has not been used.";
     } else {
       verdict = "No malicious activity detected. Wallet appears clean.";
     }
 
     // ── Step 10: Build the report ─────────────────────────────────────────────
-    const explorer    = chainExplorer(genesisChainId);
+    const baseExplorer = chainExplorer("0x2105");
     const genesisTxLink = genesisTxHash
-      ? `[${genesisTxHash.slice(0, 10)}...${genesisTxHash.slice(-6)}](${explorer.txUrl}${genesisTxHash})`
+      ? `[${genesisTxHash.slice(0, 10)}...${genesisTxHash.slice(-6)}](${baseExplorer.txUrl}${genesisTxHash})`
       : "N/A";
 
     let msg = "";
@@ -620,15 +639,15 @@ async function buildWalletCheck(address: string): Promise<string> {
     msg += `🏷️ *Type:* ${isContract ? "Smart Contract" : "EOA (Wallet)"}\n`;
     msg += `🚨 *Status:* ${status}\n\n`;
 
-    msg += `📅 *GENESIS (First Transaction)*\n`;
+    msg += `📅 *GENESIS (First Base Transaction)*\n`;
     msg += `Date: ${firstSeenDate}\n`;
     msg += `Age: ${walletAgeDays} (${walletAgeLabel})\n`;
-    msg += `Chain: ${genesisChainName.toUpperCase()}\n`;
+    msg += `Chain: BASE\n`;
     msg += `Hash: ${genesisTxLink}\n\n`;
 
-    msg += `💰 *FUNDING SOURCE*\n`;
-    msg += `${fundingDisplay}\n`;
-    if (genesisFromAddr) msg += `From: \`${shortAddr(genesisFromAddr)}\`\n`;
+    msg += `💰 *FUNDING SOURCE (Base)*\n`;
+    msg += `${finalFundingDisplay}\n`;
+    if (funderAddr) msg += `From: \`${shortAddr(funderAddr)}\`\n`;
     msg += `\n`;
 
     msg += `📊 *ACTIVITY (Base Mainnet)*\n`;
