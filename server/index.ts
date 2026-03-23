@@ -101,11 +101,11 @@ app.use((req, res, next) => {
   );
 
   // ── Telegram Bot ────────────────────────────────────────────────────────────
+  const isProduction = process.env.NODE_ENV === "production" || !!process.env.REPL_DEPLOYMENT;
   const bot = createBot();
-  if (bot) {
+  if (bot && isProduction) {
     bot.launch({ dropPendingUpdates: true }).then(() => {
       log("Telegram bot polling started", "bot");
-      // Register command menu — independent of polling, with its own retry
       const registerCommands = () =>
         bot.telegram.setMyCommands([
           { command: "scan",        description: "Detailed CA investigation (Taxes, Liquidity, Honeypot)" },
@@ -116,15 +116,16 @@ app.use((req, res, next) => {
           { command: "verified",    description: "View APOL Certified Hero Projects" },
         ])
           .then(() => log("Telegram command menu registered", "bot"))
-          .catch(() => setTimeout(registerCommands, 10_000)); // retry after 10s on failure
+          .catch(() => setTimeout(registerCommands, 10_000));
       registerCommands();
     }).catch((err: any) => {
       log(`Telegram bot failed to start: ${err?.message ?? err}`, "bot");
     });
 
-    // Graceful shutdown
     const shutdown = () => { bot.stop("SIGTERM"); };
     process.once("SIGTERM", shutdown);
     process.once("SIGINT",  shutdown);
+  } else if (bot) {
+    log("Bot skipped in dev — only runs in production to avoid conflicts", "bot");
   }
 })();
