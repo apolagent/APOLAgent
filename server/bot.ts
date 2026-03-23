@@ -389,39 +389,85 @@ async function buildWalletCheck(address: string): Promise<string> {
       return `❌ *Configuration Error*\n\nMORALIS_API_KEY is not set. Contact the bot administrator.`;
     }
 
-    // ── Step 1: Fetch in parallel ─────────────────────────────────────────────
-    //    A) Moralis getWalletActiveChains — finds TRUE genesis across ALL chains
-    //    B) APOL AGENT threat intelligence — blacklist/sanctions check
-    //    C) Blockscout — Base balance (live ETH price)
-    //    D) Moralis Base transactions (ASC) — inflow/outflow on Base
-    const [chainsRes, threatRes, bsAddrRes, baseTxRes] = await Promise.all([
-      fetch(`${MORALIS}/wallets/${encodeURIComponent(address)}/chains`,
+    // ── Step 1: Fetch 5 sources in parallel ─────────────────────────────────
+    //    A) Moralis getWalletActiveChains WITH ?chains[]=base (gets Base-specific genesis)
+    //    B) Moralis getWalletActiveChains unfiltered (gets all-chain genesis)
+    //    C) Threat intelligence — blacklist/sanctions check
+    //    D) Blockscout — Base balance + contract type
+    //    E) Moralis Base transactions (ASC) — inflow/outflow
+    const encodedAddr = encodeURIComponent(address);
+    const [baseChainsRes, allChainsRes, threatRes, bsAddrRes, baseTxRes] = await Promise.all([
+      fetch(`${MORALIS}/wallets/${encodedAddr}/chains?chains[]=base`,
         { headers: mHdrs, signal: AbortSignal.timeout(15_000) }),
-      fetch(`${GOPLUS_BASE}/address_security/${encodeURIComponent(address)}?chain_id=${BASE_CHAIN_ID}`,
+      fetch(`${MORALIS}/wallets/${encodedAddr}/chains`,
+        { headers: mHdrs, signal: AbortSignal.timeout(15_000) }),
+      fetch(`${GOPLUS_BASE}/address_security/${encodedAddr}?chain_id=${BASE_CHAIN_ID}`,
         { signal: AbortSignal.timeout(12_000) }),
-      fetch(`https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(address)}`,
+      fetch(`https://base.blockscout.com/api/v2/addresses/${encodedAddr}`,
         { signal: AbortSignal.timeout(12_000) }),
-      fetch(`${MORALIS}/${encodeURIComponent(address)}?chain=0x2105&order=ASC&limit=100`,
+      fetch(`${MORALIS}/${encodedAddr}?chain=0x2105&order=ASC&limit=100`,
         { headers: mHdrs, signal: AbortSignal.timeout(15_000) }),
     ]);
 
-    const chainsData  = (await chainsRes.json())  as any;
-    const threatData  = (await threatRes.json())  as any;
-    const bsAddr      = (await bsAddrRes.json())  as any;
-    const baseTxData  = (await baseTxRes.json())  as any;
-    const gpResult    = threatData?.result ?? null;
+    const baseChainsData = (await baseChainsRes.json()) as any;
+    const allChainsData  = (await allChainsRes.json())  as any;
+    const threatData     = (await threatRes.json())      as any;
+    const bsAddr         = (await bsAddrRes.json())      as any;
+    const baseTxData     = (await baseTxRes.json())      as any;
+    const gpResult       = threatData?.result ?? null;
 
-    // ── Step 2: Find global genesis tx (oldest across ALL chains) ─────────────
-    const activeChains: any[] = chainsData?.active_chains ?? [];
-    activeChains.sort((a, b) =>
-      new Date(a.first_transaction?.block_timestamp ?? 0).getTime() -
-      new Date(b.first_transaction?.block_timestamp ?? 0).getTime()
-    );
-    const genesisChain = activeChains[0] ?? null;
-    const genesisInfo  = genesisChain?.first_transaction ?? null;
-    const genesisTxHash   = genesisInfo?.transaction_hash ?? null;
-    const genesisChainId  = genesisChain?.chain_id ?? "0x1";
-    const genesisChainName = genesisChain?.chain ?? "unknown";
+    // ── Step 2: Find genesis tx — merge Base-filtered + all-chain results ────
+    const mergedChains: any[] = [
+      ...(baseChainsData?.active_chains ?? []),
+      ...(allChainsData?.active_chains  ?? []),
+    ];
+
+    // Deduplicate by chain_id, keep whichever has a populated first_transaction
+    const chainMap = new Map<string, any>();
+    for (const c of mergedChains) {
+      const id = c.chain_id;
+      const existing = chainMap.get(id);
+      if (!existing) { chainMap.set(id, c); continue; }
+      // Prefer the entry with actual first_transaction data
+      if (!existing.first_transaction?.transaction_hash && c.first_transaction?.transaction_hash) {
+        chainMap.set(id, c);
+      }
+    }
+    const activeChains = Array.from(chainMap.values())
+      .filter(c => c.first_transaction?.block_timestamp)
+      .sort((a, b) =>
+        new Date(a.first_transaction.block_timestamp).getTime() -
+        new Date(b.first_transaction.block_timestamp).getTime()
+      );
+
+    const genesisChain    = activeChains[0] ?? null;
+    const genesisInfo     = genesisChain?.first_transaction ?? null;
+    let genesisTxHash     = genesisInfo?.transaction_hash ?? null;
+    let genesisChainId    = genesisChain?.chain_id ?? "0x2105";
+    let genesisChainName  = genesisChain?.chain ?? "base";
+    let genesisTimestamp  = genesisInfo?.block_timestamp ?? null;
+
+    // ── Step 2b: Fallback — if getWalletActiveChains returned no genesis data,
+    //    use the first Base tx from the Moralis transaction list ───────────────
+    const baseTxs: any[] = baseTxData?.result ?? [];
+    if (!genesisTxHash && baseTxs.length > 0) {
+      const firstBaseTx = baseTxs[0];
+      genesisTxHash    = firstBaseTx.hash;
+      genesisChainId   = "0x2105";
+      genesisChainName = "base";
+      genesisTimestamp = firstBaseTx.block_timestamp;
+    }
+
+    // ── Step 2c: Last resort fallback — Blockscout pagination ─────────────────
+    if (!genesisTxHash) {
+      const oldestTx = await fetchOldestTx(address);
+      if (oldestTx?.timestamp) {
+        genesisTimestamp = oldestTx.timestamp;
+        genesisChainId   = "0x2105";
+        genesisChainName = "base";
+        // Blockscout doesn't give tx hash in the fetchOldestTx — keep null
+      }
+    }
 
     // ── Step 3: Fetch genesis transaction details for funding source label ─────
     let genesisTx: any = null;
@@ -436,32 +482,31 @@ async function buildWalletCheck(address: string): Promise<string> {
     }
 
     // ── Step 4: Wallet age from genesis ───────────────────────────────────────
-    let firstSeenDate = "ERROR: API TIMEOUT";
+    let firstSeenDate  = "ERROR: API TIMEOUT";
     let walletAgeDays  = "ERROR: API TIMEOUT";
     let walletAgeLabel = "ERROR: API TIMEOUT";
 
-    if (genesisInfo?.block_timestamp) {
-      const ageResult = fmtAge(genesisInfo.block_timestamp);
+    if (genesisTimestamp) {
+      const ageResult = fmtAge(genesisTimestamp);
       if (ageResult) {
-        const createdAt = new Date(genesisInfo.block_timestamp);
+        const createdAt = new Date(genesisTimestamp);
         firstSeenDate  = createdAt.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
         walletAgeDays  = `${ageResult.days.toLocaleString()} days`;
         walletAgeLabel = ageResult.label;
       }
-      // else block_timestamp was malformed — keep ERROR: API TIMEOUT
     }
 
     // ── Step 5: Classify funding source ──────────────────────────────────────
-    const genesisFromAddr   = genesisTx?.from_address as string ?? "";
-    const moralisLabel      = genesisTx?.from_address_label  as string | null ?? null;
-    const moralisEntity     = genesisTx?.from_address_entity as string | null ?? null;
+    const genesisFromAddr   = (genesisTx?.from_address as string) ?? "";
+    const moralisLabel      = (genesisTx?.from_address_label  as string | null) ?? null;
+    const moralisEntity     = (genesisTx?.from_address_entity as string | null) ?? null;
 
     const { display: fundingDisplay, risk: fundingRisk } = genesisFromAddr
       ? classifyFundingSource(genesisFromAddr, moralisLabel, moralisEntity)
-      : { display: "N/A", risk: "unknown" as const };
+      : { display: "⚠️ Unknown/Bridge", risk: "unknown" as const };
 
     // ── Step 6: Base Mainnet activity + inflow / outflow ─────────────────────
-    const baseTxs: any[]  = baseTxData?.result ?? [];
+    // baseTxs already declared in Step 2b
     const hasMoreBase     = !!baseTxData?.cursor;
     const baseTxCount     = baseTxs.length;
 
