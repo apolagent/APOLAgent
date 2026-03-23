@@ -249,19 +249,22 @@ function identifySource(fromAddr: string): string {
   return `Unknown (${shortAddr(fromAddr)})`;
 }
 
-function fmtAge(isoTs: string): string {
+function fmtAge(isoTs: string): { days: number; label: string } | null {
   const d = new Date(isoTs);
-  if (isNaN(d.getTime())) return "Data Pending";
-  const now = Date.now();
-  const diffMs = now - d.getTime();
-  const days = Math.floor(diffMs / 86_400_000);
-  if (days < 1) return "< 1 day (Fresh Wallet)";
-  if (days < 30) return `${days} days`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `~${months} month${months > 1 ? "s" : ""}`;
-  const years = Math.floor(months / 12);
-  const rem = months % 12;
-  return rem > 0 ? `~${years}y ${rem}m` : `~${years} year${years > 1 ? "s" : ""}`;
+  if (isNaN(d.getTime())) return null;
+  const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
+  let label: string;
+  if (days < 1)       label = "< 1 day";
+  else if (days < 30) label = `${days} days`;
+  else {
+    const months = Math.floor(days / 30);
+    const years  = Math.floor(months / 12);
+    const rem    = months % 12;
+    label = years > 0
+      ? (rem > 0 ? `~${years}y ${rem}m` : `~${years} year${years > 1 ? "s" : ""}`)
+      : `~${months} month${months > 1 ? "s" : ""}`;
+  }
+  return { days, label };
 }
 
 async function fetchOldestTx(address: string): Promise<{ timestamp: string; from: string } | null> {
@@ -373,7 +376,7 @@ function classifyFundingSource(fromAddr: string, moralisLabel: string | null, mo
     }
   }
 
-  return { display: `⚠️ ANONYMOUS/FRESH WALLET`, risk: "unknown" };
+  return { display: `⚠️ Unknown/Bridge`, risk: "unknown" };
 }
 
 async function buildWalletCheck(address: string): Promise<string> {
@@ -433,13 +436,19 @@ async function buildWalletCheck(address: string): Promise<string> {
     }
 
     // ── Step 4: Wallet age from genesis ───────────────────────────────────────
-    let firstSeenDate = "N/A";
-    let walletAge     = "N/A";
+    let firstSeenDate = "ERROR: API TIMEOUT";
+    let walletAgeDays  = "ERROR: API TIMEOUT";
+    let walletAgeLabel = "ERROR: API TIMEOUT";
 
     if (genesisInfo?.block_timestamp) {
-      const createdAt = new Date(genesisInfo.block_timestamp);
-      firstSeenDate   = createdAt.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-      walletAge       = fmtAge(genesisInfo.block_timestamp);
+      const ageResult = fmtAge(genesisInfo.block_timestamp);
+      if (ageResult) {
+        const createdAt = new Date(genesisInfo.block_timestamp);
+        firstSeenDate  = createdAt.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+        walletAgeDays  = `${ageResult.days.toLocaleString()} days`;
+        walletAgeLabel = ageResult.label;
+      }
+      // else block_timestamp was malformed — keep ERROR: API TIMEOUT
     }
 
     // ── Step 5: Classify funding source ──────────────────────────────────────
@@ -542,7 +551,7 @@ async function buildWalletCheck(address: string): Promise<string> {
 
     msg += `📅 *GENESIS (First Transaction)*\n`;
     msg += `Date: ${firstSeenDate}\n`;
-    msg += `Age: ${walletAge}\n`;
+    msg += `Age: ${walletAgeDays} (${walletAgeLabel})\n`;
     msg += `Chain: ${genesisChainName.toUpperCase()}\n`;
     msg += `Hash: ${genesisTxLink}\n\n`;
 
