@@ -717,9 +717,14 @@ async function buildSocialScan(input: string, siteUrl: string): Promise<string> 
       `https://${RAPIDAPI_HOST}/user?username=${encodeURIComponent(username)}`,
       { headers, signal: AbortSignal.timeout(12_000) }
     );
-    const user: any = await userRes.json();
+    const userRaw: any = await userRes.json();
 
-    if (!user?.name && !user?.followers_count) {
+    // twitter241: result.data.user.result → core (name/created_at) + legacy (counts)
+    const userResult: any = userRaw?.result?.data?.user?.result ?? {};
+    const legacy: any     = userResult?.legacy ?? {};
+    const core: any       = userResult?.core   ?? {};
+
+    if (!legacy?.followers_count && !core?.name) {
       return (
         `⚠️ *Account Not Found*\n\n` +
         `No X profile found for _"${username}"_.\n` +
@@ -728,35 +733,39 @@ async function buildSocialScan(input: string, siteUrl: string): Promise<string> 
     }
 
     // ── Step 2: Fetch recent tweets by user ID ────────────────────────────────
-    const userId = user.id_str ?? user.id ?? "";
+    const userId = userResult?.rest_id ?? "";
     let tweets: any[] = [];
     if (userId) {
       try {
         const tweetsRes = await fetch(
-          `https://${RAPIDAPI_HOST}/tweets?user_id=${encodeURIComponent(userId)}&count=5`,
+          `https://${RAPIDAPI_HOST}/user-tweets?user_id=${encodeURIComponent(userId)}&count=5`,
           { headers, signal: AbortSignal.timeout(12_000) }
         );
         const tweetsData: any = await tweetsRes.json();
-        tweets = Array.isArray(tweetsData?.results) ? tweetsData.results.slice(0, 5)
-               : Array.isArray(tweetsData?.timeline) ? tweetsData.timeline.slice(0, 5)
-               : Array.isArray(tweetsData) ? tweetsData.slice(0, 5)
-               : [];
+        // twitter241 GraphQL timeline format
+        const instructions: any[] = tweetsData?.result?.timeline?.instructions ?? [];
+        const entries: any[] = instructions.find((i: any) => i?.type === "TimelineAddEntries")?.entries ?? [];
+        tweets = entries
+          .map((e: any) => e?.content?.itemContent?.tweet_results?.result?.legacy)
+          .filter(Boolean)
+          .slice(0, 5);
       } catch { /* non-fatal — continue without tweet data */ }
     }
 
     // ── Parse profile ─────────────────────────────────────────────────────────
-    const displayName  = user.name            ?? username;
-    const followers    = parseInt(user.followers_count ?? "0");
-    const following    = parseInt(user.friends_count   ?? "0");
-    const isVerified   = !!(user.verified || user.is_blue_verified || user.ext_is_blue_verified);
-    const totalTweets  = parseInt(user.statuses_count  ?? "0");
-    const bio          = user.description ?? "";
+    // twitter241: name/screen_name/created_at live in core; counts in legacy
+    const displayName  = core.name              ?? username;
+    const followers    = parseInt(legacy.followers_count ?? "0");
+    const following    = parseInt(legacy.friends_count   ?? "0");
+    const isVerified   = !!(userResult.is_blue_verified  || legacy.verified);
+    const totalTweets  = parseInt(legacy.statuses_count  ?? "0");
+    const bio          = legacy.description ?? "";
 
-    // Account age
+    // Account age (Twitter format: "Mon Jun 28 17:54:05 +0000 2011")
     let joinedDate = "Unknown";
     let ageDays    = 0;
-    if (user.created_at) {
-      const createdAt = new Date(user.created_at);
+    if (core.created_at) {
+      const createdAt = new Date(core.created_at);
       if (!isNaN(createdAt.getTime())) {
         joinedDate = createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
         ageDays    = Math.floor((Date.now() - createdAt.getTime()) / 86_400_000);
