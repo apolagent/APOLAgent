@@ -432,6 +432,245 @@ async function buildWalletCheck(address: string): Promise<string> {
   }
 }
 
+// ─── Agent Intelligence Scan ─────────────────────────────────────────────────
+
+async function resolveAgentAddress(input: string): Promise<{ address: string; name: string; symbol: string } | null> {
+  // If it's already a valid address, return it directly
+  if (isEvmAddress(input)) {
+    return { address: input, name: "", symbol: "" };
+  }
+
+  // Search DexScreener by name/ticker, pick best Base chain match by liquidity
+  try {
+    const res = await fetch(
+      `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(input)}`,
+      { signal: AbortSignal.timeout(10_000) }
+    );
+    const data = (await res.json()) as any;
+    const pairs: any[] = data?.pairs ?? [];
+    const base = pairs
+      .filter((p: any) => p.chainId === "base")
+      .sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
+
+    if (!base[0]) return null;
+    return {
+      address: base[0].baseToken.address,
+      name:    base[0].baseToken.name,
+      symbol:  base[0].baseToken.symbol,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
+  try {
+    // ── Resolve address (accept name or CA) ───────────────────────────────────
+    const resolved = await resolveAgentAddress(input);
+    if (!resolved) {
+      return (
+        `⚠️ *AGENT NOT FOUND*\n\n` +
+        `No agent matching _"${input}"_ found on Base Mainnet.\n` +
+        `Try using the contract address directly.`
+      );
+    }
+    const { address } = resolved;
+
+    // ── Fetch GoPlus token security + DexScreener in parallel ─────────────────
+    const [goplusRes, dexRes] = await Promise.all([
+      fetch(
+        `${GOPLUS_BASE}/token_security/${BASE_CHAIN_ID}?contract_addresses=${encodeURIComponent(address)}`,
+        { signal: AbortSignal.timeout(12_000) }
+      ),
+      fetch(
+        `https://api.dexscreener.com/latest/dex/tokens/${address}`,
+        { signal: AbortSignal.timeout(12_000) }
+      ),
+    ]);
+
+    const goplusData = (await goplusRes.json()) as any;
+    const dexData    = (await dexRes.json()) as any;
+
+    const tKey  = Object.keys(goplusData?.result ?? {})[0];
+    const token = tKey ? (goplusData.result[tKey] as any) : null;
+
+    const allPairs: any[] = dexData?.pairs ?? [];
+    const basePairs = allPairs
+      .filter((p: any) => p.chainId === "base")
+      .sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
+    const topPair = basePairs[0] ?? null;
+
+    if (!token && !topPair) {
+      return (
+        `⚠️ *AGENT NOT FOUND*\n\n` +
+        `Contract \`${address}\` not found on Base Mainnet.\n` +
+        `Ensure the CA is correct.`
+      );
+    }
+
+    // ── Identity ──────────────────────────────────────────────────────────────
+    const agentName   = resolved.name   || token?.token_name   || topPair?.baseToken?.name   || "Unknown Agent";
+    const agentSymbol = resolved.symbol || token?.token_symbol || topPair?.baseToken?.symbol || "?";
+
+    // ── Market data ───────────────────────────────────────────────────────────
+    const liqUsd     = topPair?.liquidity?.usd ?? null;
+    const priceRaw   = parseFloat(topPair?.priceUsd ?? "0");
+    const liqFmt     = liqUsd !== null ? fmtUsd(liqUsd) : "Data Pending";
+    const priceFmt   = priceRaw > 0
+      ? (priceRaw < 0.0001 ? `$${priceRaw.toExponential(3)}` : `$${priceRaw.toPrecision(5)}`)
+      : "Data Pending";
+    const holderRaw  = parseInt(token?.holder_count ?? "0");
+    const holderFmt  = holderRaw > 0 ? holderRaw.toLocaleString() : "Data Pending";
+
+    // Social links from DexScreener
+    const website  = topPair?.info?.websites?.[0]?.url ?? null;
+    const twitter  = topPair?.info?.socials?.find((s: any) => s.type === "twitter")?.url ?? null;
+    const telegram = topPair?.info?.socials?.find((s: any) => s.type === "telegram")?.url ?? null;
+
+    // ── Contract security flags ────────────────────────────────────────────────
+    const isHoneypot      = token ? flag(token.is_honeypot)              : false;
+    const isVerified      = token ? flag(token.is_open_source)           : false;
+    const isMintable      = token ? flag(token.is_mintable)              : false;
+    const hasBlacklist    = token ? flag(token.is_blacklist)             : false;
+    const ownerRecovery   = token ? flag(token.can_take_back_ownership)  : false;
+    const ownerBal        = token ? flag(token.owner_change_balance)     : false;
+    const hasCooldown     = token ? flag(token.trading_cooldown)         : false;
+    const antiWhale       = token ? flag(token.anti_whale_modifiable)    : false;
+    const buyTax          = parseFloat(token?.buy_tax  ?? "0");
+    const sellTax         = parseFloat(token?.sell_tax ?? "0");
+    const highTax         = buyTax > 0.05 || sellTax > 0.05;
+
+    // ── LP lock ───────────────────────────────────────────────────────────────
+    const lpHolders: any[] = token?.lp_holders ?? [];
+    const lpBurnedPct = lpHolders
+      .filter(h => (h.tag ?? "").toLowerCase().includes("burn") ||
+        (h.address ?? "").toLowerCase() === "0x000000000000000000000000000000000000dead")
+      .reduce((acc, h) => acc + parseFloat(h.percent ?? "0") * 100, 0);
+    const lpLockedPct = lpHolders
+      .filter(h => flag(h.is_locked))
+      .reduce((acc, h) => acc + parseFloat(h.percent ?? "0") * 100, 0);
+    const lpSecure = lpBurnedPct >= 50 || lpLockedPct >= 50;
+
+    // ── AI Threat Assessment ──────────────────────────────────────────────────
+    // Prompt Injection Risk: can the agent's logic be covertly altered?
+    let promptRisk: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+    let promptDetail: string;
+    if (isHoneypot) {
+      promptRisk = "CRITICAL"; promptDetail = "Honeypot trap detected — agent blocks all exits";
+    } else if (!isVerified && (ownerRecovery || ownerBal)) {
+      promptRisk = "HIGH"; promptDetail = "Unverified code + privileged owner — logic override possible";
+    } else if (!isVerified) {
+      promptRisk = "MEDIUM"; promptDetail = "Source not verified — hidden logic cannot be ruled out";
+    } else if (ownerRecovery || ownerBal) {
+      promptRisk = "MEDIUM"; promptDetail = "Owner can alter contract state after deployment";
+    } else {
+      promptRisk = "LOW"; promptDetail = "No hidden logic or owner override detected";
+    }
+
+    // Data Exfiltration Risk: can the agent drain funds or trap users?
+    let exfilRisk: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+    let exfilDetail: string;
+    if (isHoneypot) {
+      exfilRisk = "CRITICAL"; exfilDetail = "Funds sent in cannot be withdrawn — active drain mechanism";
+    } else if (isMintable && !lpSecure) {
+      exfilRisk = "HIGH"; exfilDetail = "Unlimited mint + unlocked liquidity enables coordinated rug";
+    } else if (hasBlacklist && highTax) {
+      exfilRisk = "HIGH"; exfilDetail = "Blacklist + elevated tax — users can be trapped and drained";
+    } else if (!lpSecure && token) {
+      exfilRisk = "MEDIUM"; exfilDetail = "Liquidity not locked — operator can pull pool at any time";
+    } else if (isMintable || hasBlacklist) {
+      exfilRisk = "MEDIUM"; exfilDetail = "Elevated operator privileges present";
+    } else {
+      exfilRisk = "LOW"; exfilDetail = "No fund drain mechanisms detected";
+    }
+
+    // ── Final verdict ─────────────────────────────────────────────────────────
+    const criticalCount  = [promptRisk, exfilRisk].filter(r => r === "CRITICAL").length;
+    const highCount      = [promptRisk, exfilRisk].filter(r => r === "HIGH").length;
+    const noContract     = !token;
+    const tinyLiquidity  = liqUsd !== null && liqUsd < 5_000;
+
+    let verdict: string;
+    let verdictLine: string;
+
+    if (isHoneypot || criticalCount >= 1) {
+      verdict = "⛔ LARP / THREAT";
+      verdictLine = isHoneypot
+        ? "Honeypot confirmed. This agent is a financial trap."
+        : "Critical backdoor risk. Do not interact with this agent.";
+    } else if (highCount >= 1 || (tinyLiquidity && noContract)) {
+      verdict = "⛔ LARP / THREAT";
+      verdictLine = tinyLiquidity && noContract
+        ? "No contract data and negligible liquidity. Likely a LARP operation."
+        : "High-severity attack vectors detected. This agent fails the APE POLICE audit.";
+    } else if (promptRisk === "MEDIUM" || exfilRisk === "MEDIUM" || !isVerified) {
+      verdict = "⚠️ CAUTION ADVISED";
+      verdictLine = "Moderate risks present. Not certified — due diligence required before interaction.";
+    } else if (!token) {
+      verdict = "⚠️ CAUTION ADVISED";
+      verdictLine = "Insufficient contract data to certify. Verify the CA and try again.";
+    } else {
+      verdict = "✅ CERTIFIED UNIT";
+      verdictLine = "Contract is clean, source verified, and no backdoors detected. Agent passes APE POLICE audit.";
+    }
+
+    const riskEmoji = (r: string) =>
+      r === "CRITICAL" ? "🔴 CRITICAL" :
+      r === "HIGH"     ? "🔴 HIGH"     :
+      r === "MEDIUM"   ? "🟡 MEDIUM"   : "🟢 LOW";
+
+    const verifiedFmt   = token ? (isVerified ? "Verified ✅" : "Unverified ⚠️") : "Data Pending";
+    const mintFmt       = token ? (isMintable ? "Active ⚠️"   : "Disabled ✅")   : "Data Pending";
+    const ownerFmt      = token
+      ? (ownerRecovery || ownerBal ? "Privileged ⚠️" : "Renounced / Safe ✅")
+      : "Data Pending";
+    const taxFmt        = token
+      ? `Buy ${pct(token.buy_tax)} / Sell ${pct(token.sell_tax)}`
+      : "Data Pending";
+
+    // ── Build message ─────────────────────────────────────────────────────────
+    let msg = "";
+    msg += `🤖 *APOL — AGENT INTELLIGENCE SCAN*\n\n`;
+    msg += `🏷️ *Agent:* ${agentName} ($${agentSymbol})\n`;
+    msg += `📍 *Contract:* \`${shortAddr(address)}\`\n`;
+    msg += `⛓️ *Chain:* Base Mainnet\n\n`;
+
+    msg += `🔬 *AGENT CONTRACT ANALYSIS*\n`;
+    msg += `Source Code: ${verifiedFmt}\n`;
+    msg += `Mint Authority: ${mintFmt}\n`;
+    msg += `Owner Controls: ${ownerFmt}\n`;
+    msg += `Tax: ${taxFmt}\n\n`;
+
+    msg += `🧠 *AI THREAT ASSESSMENT*\n`;
+    msg += `Prompt Injection Risk: ${riskEmoji(promptRisk)}\n`;
+    msg += `_${promptDetail}_\n\n`;
+    msg += `Data Exfiltration Risk: ${riskEmoji(exfilRisk)}\n`;
+    msg += `_${exfilDetail}_\n\n`;
+
+    msg += `💧 *MARKET INTEL*\n`;
+    msg += `Liquidity: ${liqFmt}\n`;
+    msg += `Price: ${priceFmt}\n`;
+    msg += `Holders: ${holderFmt}\n`;
+
+    if (website || twitter || telegram) {
+      msg += `\n🔗 *SOCIALS*\n`;
+      if (website)  msg += `Web: ${website}\n`;
+      if (twitter)  msg += `Twitter: ${twitter}\n`;
+      if (telegram) msg += `Telegram: ${telegram}\n`;
+    }
+
+    msg += `\n*VERDICT: ${verdict}*\n`;
+    msg += `_${verdictLine}_\n\n`;
+    msg += `🔍 [Full Deep Dive](${siteUrl}/agent-scanner)`;
+
+    return msg;
+
+  } catch (err: any) {
+    console.error("[APOL Bot] Agent scan error:", err?.message ?? err);
+    return `❌ *Agent Scan Failed*\n\nCould not reach the intelligence database. Please try again in a moment.`;
+  }
+}
+
 // ─── Bot Factory ─────────────────────────────────────────────────────────────
 
 export function createBot(): Telegraf | null {
@@ -462,6 +701,7 @@ export function createBot(): Telegraf | null {
       `Use /scan [address] to check a contract or /report to flag a larp.\n\n` +
       `*AVAILABLE COMMANDS*\n` +
       `🔍 /scan [contract] — Token security check\n` +
+      `🤖 /scanagent [name or CA] — AI agent audit\n` +
       `👮 /checkwallet [address] — Wallet investigation\n` +
       `🚩 /report — Submit scam evidence\n` +
       `🗺️ /map — Wall of Shame\n` +
@@ -477,6 +717,7 @@ export function createBot(): Telegraf | null {
     ctx.replyWithMarkdown(
       `🚔 *APE POLICE — HELP DESK*\n\n` +
       `🔍 /scan [address] — Token contract security check (GoPlus + DexScreener)\n` +
+      `🤖 /scanagent [name or CA] — AI agent intelligence audit (AgentGuard)\n` +
       `👮 /checkwallet [address] — Malicious wallet investigation (GoPlus)\n` +
       `🚩 /report — Report a suspected scam or LARP agent\n` +
       `🗺️ /map — View the Wall of Shame\n` +
@@ -546,6 +787,38 @@ export function createBot(): Telegraf | null {
     } catch { /* non-fatal */ }
 
     const report = await buildWalletCheck(address);
+
+    if (loadingMsgId !== null) {
+      try { await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsgId); } catch { /* non-fatal */ }
+    }
+
+    return ctx.replyWithMarkdown(report, { disable_web_page_preview: true });
+  });
+
+  // ── /scanagent ────────────────────────────────────────────────────────────
+  bot.command("scanagent", async ctx => {
+    const parts = (ctx.message.text ?? "").trim().split(/\s+/);
+    const input = parts.slice(1).join(" ").trim();
+
+    if (!input) {
+      return ctx.replyWithMarkdown(
+        `❓ *Usage:* /scanagent [Agent Name or CA]\n\n` +
+        `Examples:\n` +
+        `\`/scanagent AIXBT\`\n` +
+        `\`/scanagent 0x4F9Fd6Be4a90f2620860d680c0d4d5Fb53d1A825\`\n\n` +
+        `_Scans the AI agent's contract for Prompt Injection & Data Exfiltration risks._`
+      );
+    }
+
+    let loadingMsgId: number | null = null;
+    try {
+      const loading = await ctx.replyWithMarkdown(
+        `🤖 *Scanning agent:* _${input}_\n_Running APOL AgentGuard intelligence..._`
+      );
+      loadingMsgId = loading.message_id;
+    } catch { /* non-fatal */ }
+
+    const report = await buildAgentScan(input, site);
 
     if (loadingMsgId !== null) {
       try { await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsgId); } catch { /* non-fatal */ }
