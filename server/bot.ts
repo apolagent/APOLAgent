@@ -211,83 +211,222 @@ const WALLET_FLAGS: Record<string, string> = {
   reinit:                      "🔄 Reinit Attack",
 };
 
+// Known funding source labels keyed by partial address match or name
+const KNOWN_SOURCES: Array<{ match: string; label: string }> = [
+  { match: "0xd3a5b", label: "Binance (CEX)" },
+  { match: "0x3f5ce", label: "Binance (CEX)" },
+  { match: "0x28c6c0", label: "Binance (CEX)" },
+  { match: "0xa9d1e", label: "Binance (CEX)" },
+  { match: "0x564286", label: "Binance (CEX)" },
+  { match: "0xa910f9", label: "Coinbase (CEX)" },
+  { match: "0x503828", label: "Coinbase (CEX)" },
+  { match: "0x71660c", label: "Coinbase (CEX)" },
+  { match: "0x77696c", label: "Coinbase (CEX)" },
+  { match: "0xd68a82", label: "Coinbase (CEX)" },
+  { match: "0x66f820", label: "Kraken (CEX)" },
+  { match: "0x2910d8", label: "Kraken (CEX)" },
+  { match: "0x0a869d", label: "OKX (CEX)" },
+  { match: "0x98ec05", label: "OKX (CEX)" },
+  { match: "0xd882cf", label: "Huobi (CEX)" },
+  { match: "0xadb2b4", label: "Tornado Cash (Mixer)" },
+  { match: "0x910cbd", label: "Tornado Cash (Mixer)" },
+  { match: "0x12d66f", label: "Tornado Cash (Mixer)" },
+  { match: "0x47ce0c", label: "Tornado Cash (Mixer)" },
+  { match: "0x23773e", label: "Tornado Cash (Mixer)" },
+  { match: "0x4736dc", label: "FixedFloat (Mixer/Swap)" },
+  { match: "0xba5ede", label: "Stargate Bridge" },
+  { match: "0x4200000000000000000000000000000000000010", label: "Base Bridge (Official)" },
+  { match: "0x49048044d57e1c92a77f79988d21fa8faf74e97", label: "Base Bridge (Official)" },
+  { match: "0x8498b2", label: "Base Bridge (Official)" },
+  { match: "0x99c9fc", label: "Optimism Bridge" },
+];
+
+function identifySource(fromAddr: string): string {
+  const lower = fromAddr.toLowerCase();
+  for (const { match, label } of KNOWN_SOURCES) {
+    if (lower.startsWith(match.toLowerCase())) return label;
+  }
+  return `Unknown (${shortAddr(fromAddr)})`;
+}
+
+function fmtAge(isoTs: string): string {
+  const d = new Date(isoTs);
+  if (isNaN(d.getTime())) return "Data Pending";
+  const now = Date.now();
+  const diffMs = now - d.getTime();
+  const days = Math.floor(diffMs / 86_400_000);
+  if (days < 1) return "< 1 day (Fresh Wallet)";
+  if (days < 30) return `${days} days`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `~${months} month${months > 1 ? "s" : ""}`;
+  const years = Math.floor(months / 12);
+  const rem = months % 12;
+  return rem > 0 ? `~${years}y ${rem}m` : `~${years} year${years > 1 ? "s" : ""}`;
+}
+
+async function fetchOldestTx(address: string): Promise<{ timestamp: string; from: string } | null> {
+  const BLOCKSCOUT = "https://base.blockscout.com/api/v2";
+  const sig = AbortSignal.timeout(14_000);
+
+  // Paginate through transactions (50 per page) up to 5 pages to find oldest
+  let nextParams: Record<string, string> | null = null;
+  let lastItem: any = null;
+
+  for (let page = 0; page < 5; page++) {
+    let url = `${BLOCKSCOUT}/addresses/${encodeURIComponent(address)}/transactions`;
+    if (nextParams) {
+      const qs = new URLSearchParams(nextParams).toString();
+      url += `?${qs}`;
+    }
+    try {
+      const res = await fetch(url, { signal: sig });
+      const data = (await res.json()) as any;
+      const items: any[] = data?.items ?? [];
+      if (items.length > 0) lastItem = items[items.length - 1];
+      if (!data?.next_page_params) break;
+      nextParams = data.next_page_params;
+    } catch {
+      break;
+    }
+  }
+
+  if (!lastItem) return null;
+  return {
+    timestamp: lastItem.timestamp,
+    from: lastItem.from?.hash ?? "",
+  };
+}
+
 async function buildWalletCheck(address: string): Promise<string> {
   try {
-    const res = await fetch(
-      `${GOPLUS_BASE}/address_security/${encodeURIComponent(address)}?chain_id=${BASE_CHAIN_ID}`,
-      { signal: AbortSignal.timeout(12_000) }
-    );
+    const BLOCKSCOUT = "https://base.blockscout.com/api/v2";
 
-    const data = (await res.json()) as any;
-    const result = data?.result ?? null;
+    // ── Fetch GoPlus + Blockscout address info in parallel ────────────────────
+    const [goplusRes, bsAddrRes] = await Promise.all([
+      fetch(
+        `${GOPLUS_BASE}/address_security/${encodeURIComponent(address)}?chain_id=${BASE_CHAIN_ID}`,
+        { signal: AbortSignal.timeout(12_000) }
+      ),
+      fetch(
+        `${BLOCKSCOUT}/addresses/${encodeURIComponent(address)}`,
+        { signal: AbortSignal.timeout(12_000) }
+      ),
+    ]);
 
-    // GoPlus returns code 2 or empty result when address not indexed
-    if (!result || data?.code !== 1) {
-      return (
-        `⚠️ *INVESTIGATION STALLED*\n\n` +
-        `No intelligence data found for this address on Base Mainnet.\n` +
-        `Ensure the address is a valid EVM wallet.\n\n` +
-        `\`${address}\``
-      );
-    }
+    const goplusData = (await goplusRes.json()) as any;
+    const bsAddr     = (await bsAddrRes.json()) as any;
+    const gpResult   = goplusData?.result ?? null;
 
-    // ── Collect active flags ──────────────────────────────────────────────────
+    // ── On-chain data from Blockscout ─────────────────────────────────────────
+    const isContract  = bsAddr?.is_contract ?? false;
+    const coinBalance = bsAddr?.coin_balance ? parseFloat(bsAddr.coin_balance) / 1e18 : null;
+    const exchangeRate = bsAddr?.exchange_rate ? parseFloat(bsAddr.exchange_rate) : null;
+    const txCount     = bsAddr?.tx_count ?? null;
+
+    const ethBal  = coinBalance !== null ? `${coinBalance.toFixed(4)} ETH` : "Data Pending";
+    const usdBal  = coinBalance !== null && exchangeRate
+      ? ` (≈${fmtUsd(coinBalance * exchangeRate)})`
+      : "";
+    const txTotal = txCount !== null ? txCount.toLocaleString() : "Data Pending";
+
+    // Activity classification
+    let activityLevel: string;
+    if (txCount === null)      activityLevel = "Data Pending";
+    else if (txCount < 5)      activityLevel = "⚠️ Fresh / Low Activity (Rug Risk Profile)";
+    else if (txCount < 50)     activityLevel = "Low Activity";
+    else if (txCount < 500)    activityLevel = "Moderate Activity";
+    else                       activityLevel = "High Activity (Established Wallet)";
+
+    // ── Fetch oldest tx for wallet age + funding source ───────────────────────
+    const oldestTx = await fetchOldestTx(address);
+
+    const walletAge = oldestTx?.timestamp ? fmtAge(oldestTx.timestamp) : "Data Pending";
+    const firstSeenDate = oldestTx?.timestamp
+      ? new Date(oldestTx.timestamp).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+      : "Data Pending";
+    const fundingSource = oldestTx?.from ? identifySource(oldestTx.from) : "Data Pending";
+
+    // ── GoPlus threat flags ───────────────────────────────────────────────────
     const activeFlags: string[] = [];
-
-    for (const [field, label] of Object.entries(WALLET_FLAGS)) {
-      if (flag(result[field])) activeFlags.push(label);
+    if (gpResult) {
+      for (const [field, label] of Object.entries(WALLET_FLAGS)) {
+        if (flag(gpResult[field])) activeFlags.push(label as string);
+      }
     }
 
-    // ── Determine status ──────────────────────────────────────────────────────
-    const isCritical   = flag(result.blacklist_doubt) || flag(result.sanctioned);
+    // ── Status ────────────────────────────────────────────────────────────────
+    const isCritical   = gpResult && (flag(gpResult.blacklist_doubt) || flag(gpResult.sanctioned));
     const isSuspicious = activeFlags.length > 0;
 
     let status: string;
-    if (isCritical)    status = "🔴 BLACKLISTED";
+    if (isCritical)        status = "🔴 BLACKLISTED";
     else if (isSuspicious) status = "⚠️ SUSPICIOUS";
-    else               status = "✅ CLEAN";
+    else                   status = "✅ CLEAN";
 
-    // ── Verdict sentence ──────────────────────────────────────────────────────
+    // ── Verdict ───────────────────────────────────────────────────────────────
     let verdict: string;
-    if (flag(result.sanctioned)) {
+    if (!gpResult) {
+      verdict = "No threat data on record. On-chain forensics above are sourced from Base Mainnet.";
+    } else if (flag(gpResult.sanctioned)) {
       verdict = "This wallet is under legal sanction. Any interaction may carry regulatory consequences.";
-    } else if (flag(result.blacklist_doubt)) {
+    } else if (flag(gpResult.blacklist_doubt)) {
       verdict = "This wallet has been flagged for malicious activity. Do not interact.";
-    } else if (flag(result.honeypot_related_address)) {
+    } else if (flag(gpResult.honeypot_related_address)) {
       verdict = "This wallet is affiliated with honeypot contracts. Treat as hostile.";
-    } else if (flag(result.phishing_activities)) {
-      verdict = "Phishing activity detected. This wallet has been used to drain other wallets.";
-    } else if (flag(result.stealing_attack)) {
+    } else if (flag(gpResult.phishing_activities)) {
+      verdict = "Phishing activity on record. This wallet has been used to drain others.";
+    } else if (flag(gpResult.stealing_attack)) {
       verdict = "Theft activity on record. This wallet has been linked to stealing attacks.";
-    } else if (flag(result.money_laundering) || flag(result.financial_crime)) {
+    } else if (flag(gpResult.money_laundering) || flag(gpResult.financial_crime)) {
       verdict = "Financial crime indicators present. Exercise extreme caution.";
     } else if (activeFlags.length > 0) {
-      verdict = "Suspicious activity detected on this wallet. Investigate before interacting.";
+      verdict = "Suspicious activity detected. Investigate further before interacting.";
+    } else if (txCount !== null && txCount < 5 && fundingSource.includes("Mixer")) {
+      verdict = "Fresh wallet funded by a mixer. High probability of coordinated sybil or rug operation.";
+    } else if (txCount !== null && txCount < 5) {
+      verdict = "Low activity wallet. Insufficient history to confirm legitimacy — proceed with caution.";
     } else {
       verdict = "No malicious activity found. Wallet appears clean on Base Mainnet.";
     }
 
-    // ── Build message ─────────────────────────────────────────────────────────
+    // ── Build forensic report ─────────────────────────────────────────────────
     let msg = "";
-    msg += `👮 *APOL WALLET INVESTIGATION*\n\n`;
+    msg += `🔬 *APOL FORENSIC WALLET REPORT*\n\n`;
     msg += `👤 *Address:* \`${shortAddr(address)}\`\n`;
-    msg += `🚨 *Status:* ${status}\n`;
+    msg += `⛓️ *Chain:* Base Mainnet\n`;
+    msg += `🏷️ *Type:* ${isContract ? "Smart Contract" : "EOA (Wallet)"}\n`;
+    msg += `🚨 *Status:* ${status}\n\n`;
+
+    msg += `📅 *WALLET AGE*\n`;
+    msg += `First Seen: ${firstSeenDate}\n`;
+    msg += `Age: ${walletAge}\n\n`;
+
+    msg += `💰 *FUNDING SOURCE*\n`;
+    msg += `Genesis Funder: ${fundingSource}\n\n`;
+
+    msg += `📊 *ACTIVITY LEVEL*\n`;
+    msg += `Total Transactions: ${txTotal}\n`;
+    msg += `Level: ${activityLevel}\n\n`;
+
+    msg += `💼 *CURRENT BALANCE*\n`;
+    msg += `ETH: ${ethBal}${usdBal}\n\n`;
 
     if (activeFlags.length > 0) {
-      msg += `\n🚩 *Red Flags Found:*\n`;
+      msg += `🚩 *THREAT FLAGS:*\n`;
       activeFlags.forEach(f => (msg += `  ${f}\n`));
+      msg += `\n`;
     } else {
-      msg += `\n✅ *No red flags detected.*\n`;
+      msg += `✅ *No threat flags on record.*\n\n`;
     }
 
-    msg += `\n*Verdict:* _${verdict}_`;
+    msg += `🛡️ *VERDICT:* _${verdict}_`;
 
     return msg;
 
   } catch (err: any) {
-    console.error("[APOL Bot] Wallet check error:", err?.message ?? err);
+    console.error("[APOL Bot] Wallet forensic error:", err?.message ?? err);
     return (
-      `❌ *Wallet Check Failed*\n\n` +
+      `❌ *Forensic Report Failed*\n\n` +
       `Could not reach the intelligence database. Please try again in a moment.`
     );
   }
