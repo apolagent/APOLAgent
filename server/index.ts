@@ -105,6 +105,15 @@ app.use((req, res, next) => {
   if (bot) {
     bot.launch({ dropPendingUpdates: true }).then(() => {
       log("Telegram bot polling started", "bot");
+      return bot.telegram.setMyCommands([
+        { command: "scan",        description: "Detailed CA investigation (Taxes, Liquidity, Honeypot)" },
+        { command: "checkwallet", description: "Forensic wallet audit (Age, Funding, Volume)" },
+        { command: "scanagent",   description: "Verify AI Agent authenticity and security" },
+        { command: "map",         description: "Access the APOL Wall of Shame" },
+        { command: "verified",    description: "View APOL Certified Hero Projects" },
+      ]);
+    }).then(() => {
+      log("Telegram command menu registered", "bot");
     }).catch((err: any) => {
       log(`Telegram bot failed to start: ${err?.message ?? err}`, "bot");
     });
