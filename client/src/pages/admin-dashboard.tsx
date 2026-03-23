@@ -89,7 +89,7 @@ function AuditPanel({ data, onClose }: { data: AuditData | "loading" | "error"; 
       }}>
         <Loader2 size={20} color={G} style={{ animation: "spin 1s linear infinite", margin: "0 auto 10px", display: "block" }} />
         <p style={{ margin: 0, fontSize: "11px", color: "rgba(255,255,255,0.5)" }}>
-          Querying GoPlus + honeypot.is — running simulated buy/sell...
+          APOL AGENT — running simulated buy/sell scan...
         </p>
       </div>
     );

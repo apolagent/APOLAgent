@@ -297,153 +297,196 @@ async function fetchOldestTx(address: string): Promise<{ timestamp: string; from
   };
 }
 
+// Chain explorer base URLs (for genesis TX links across all chains)
+function chainExplorer(chainId: string): { name: string; txUrl: string; addrUrl: string } {
+  switch (chainId) {
+    case "0x1":    return { name: "Ethereum",  txUrl: "https://etherscan.io/tx/",    addrUrl: "https://etherscan.io/address/" };
+    case "0x2105": return { name: "Base",      txUrl: "https://basescan.org/tx/",    addrUrl: "https://basescan.org/address/" };
+    case "0x89":   return { name: "Polygon",   txUrl: "https://polygonscan.com/tx/", addrUrl: "https://polygonscan.com/address/" };
+    case "0x38":   return { name: "BSC",       txUrl: "https://bscscan.com/tx/",     addrUrl: "https://bscscan.com/address/" };
+    case "0xa":    return { name: "Optimism",  txUrl: "https://optimistic.etherscan.io/tx/", addrUrl: "https://optimistic.etherscan.io/address/" };
+    case "0xa4b1": return { name: "Arbitrum",  txUrl: "https://arbiscan.io/tx/",     addrUrl: "https://arbiscan.io/address/" };
+    default:       return { name: "Chain "+chainId, txUrl: "https://basescan.org/tx/", addrUrl: "https://basescan.org/address/" };
+  }
+}
+
+// Known bridge address fragments for fallback classification
+const BRIDGE_ADDRESSES: Array<{ match: string; name: string }> = [
+  { match: "0x4200000000000000000000000000000000000010", name: "Base Bridge" },
+  { match: "0x49048044d57e1c92a77f79988d21fa8faf74e97",  name: "Base Bridge" },
+  { match: "0xba5ede",  name: "Stargate Bridge" },
+  { match: "0x99c9fc",  name: "Optimism Bridge" },
+  { match: "0x8b0a4",  name: "Across Protocol" },
+  { match: "0x5523f2fc", name: "Orbiter Finance" },
+  { match: "0xe4edb2", name: "Orbiter Finance" },
+  { match: "0xd9d16a", name: "Synapse Bridge" },
+  { match: "0x1116898", name: "Hop Protocol" },
+];
+
+function classifyFundingSource(fromAddr: string, moralisLabel: string | null, moralisEntity: string | null): {
+  display: string;
+  risk: "low" | "medium" | "high" | "unknown";
+} {
+  const label = moralisLabel ?? moralisEntity ?? "";
+
+  if (label) {
+    const low = label.toLowerCase();
+    if (low.includes("binance") || low.includes("coinbase") || low.includes("kraken") ||
+        low.includes("okx") || low.includes("huobi") || low.includes("bybit") ||
+        low.includes("kucoin") || low.includes("gemini") || low.includes("crypto.com")) {
+      return { display: `🏦 FUNDED BY: ${label}`, risk: "low" };
+    }
+    if (low.includes("tornado") || low.includes("mixer") || low.includes("tumbler") ||
+        low.includes("fixedfloat") || low.includes("blender") || low.includes("wasabi")) {
+      return { display: `⛔ FUNDED BY: ${label} (Mixer)`, risk: "high" };
+    }
+    if (low.includes("bridge") || low.includes("stargate") || low.includes("across") ||
+        low.includes("hop") || low.includes("synapse") || low.includes("orbiter") ||
+        low.includes("celer") || low.includes("relay")) {
+      return { display: `🌉 FUNDED VIA: ${label}`, risk: "medium" };
+    }
+    // Named entity but not CEX/mixer/bridge
+    return { display: `🏦 FUNDED BY: ${label}`, risk: "unknown" };
+  }
+
+  // No label — check our bridge fragment list
+  const addrLow = fromAddr.toLowerCase();
+  for (const { match, name } of BRIDGE_ADDRESSES) {
+    if (addrLow.startsWith(match.toLowerCase()) || addrLow === match.toLowerCase()) {
+      return { display: `🌉 FUNDED VIA: ${name}`, risk: "medium" };
+    }
+  }
+
+  // Check our existing CEX/bridge table
+  const known = identifySource(fromAddr);
+  if (!known.startsWith("Unknown")) {
+    const low = known.toLowerCase();
+    if (low.includes("cex") || low.includes("coinbase") || low.includes("binance") ||
+        low.includes("kraken") || low.includes("okx")) {
+      return { display: `🏦 FUNDED BY: ${known.replace(" (CEX)", "")}`, risk: "low" };
+    }
+    if (low.includes("mixer") || low.includes("tornado")) {
+      return { display: `⛔ FUNDED VIA: ${known} (Mixer)`, risk: "high" };
+    }
+    if (low.includes("bridge")) {
+      return { display: `🌉 FUNDED VIA: ${known}`, risk: "medium" };
+    }
+  }
+
+  return { display: `⚠️ ANONYMOUS/FRESH WALLET`, risk: "unknown" };
+}
+
 async function buildWalletCheck(address: string): Promise<string> {
   try {
-    const MORALIS_KEY = process.env.MORALIS_API_KEY;
-    const MORALIS_BASE = "https://deep-index.moralis.io/api/v2";
-    // Base mainnet chain id in hex
-    const BASE_HEX = "0x2105";
-    const moralisHeaders: Record<string, string> = MORALIS_KEY
-      ? { "X-API-Key": MORALIS_KEY }
-      : {};
+    const MORALIS_KEY = process.env.MORALIS_API_KEY ?? "";
+    const MORALIS     = "https://deep-index.moralis.io/api/v2";
+    const mHdrs       = { "X-API-Key": MORALIS_KEY };
 
-    // ── Fetch in parallel: GoPlus threat flags + Moralis transactions (ASC) + Blockscout address ──
-    const [goplusRes, moralisTxRes, bsAddrRes] = await Promise.all([
-      fetch(
-        `${GOPLUS_BASE}/address_security/${encodeURIComponent(address)}?chain_id=${BASE_CHAIN_ID}`,
-        { signal: AbortSignal.timeout(12_000) }
-      ),
-      MORALIS_KEY
-        ? fetch(
-            `${MORALIS_BASE}/${encodeURIComponent(address)}?chain=${BASE_HEX}&order=ASC&limit=100`,
-            { headers: moralisHeaders, signal: AbortSignal.timeout(15_000) }
-          )
-        : Promise.resolve(null),
-      fetch(
-        `https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(address)}`,
-        { signal: AbortSignal.timeout(12_000) }
-      ),
+    if (!MORALIS_KEY) {
+      return `❌ *Configuration Error*\n\nMORALIS_API_KEY is not set. Contact the bot administrator.`;
+    }
+
+    // ── Step 1: Fetch in parallel ─────────────────────────────────────────────
+    //    A) Moralis getWalletActiveChains — finds TRUE genesis across ALL chains
+    //    B) APOL AGENT threat intelligence — blacklist/sanctions check
+    //    C) Blockscout — Base balance (live ETH price)
+    //    D) Moralis Base transactions (ASC) — inflow/outflow on Base
+    const [chainsRes, threatRes, bsAddrRes, baseTxRes] = await Promise.all([
+      fetch(`${MORALIS}/wallets/${encodeURIComponent(address)}/chains`,
+        { headers: mHdrs, signal: AbortSignal.timeout(15_000) }),
+      fetch(`${GOPLUS_BASE}/address_security/${encodeURIComponent(address)}?chain_id=${BASE_CHAIN_ID}`,
+        { signal: AbortSignal.timeout(12_000) }),
+      fetch(`https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(address)}`,
+        { signal: AbortSignal.timeout(12_000) }),
+      fetch(`${MORALIS}/${encodeURIComponent(address)}?chain=0x2105&order=ASC&limit=100`,
+        { headers: mHdrs, signal: AbortSignal.timeout(15_000) }),
     ]);
 
-    const goplusData = (await goplusRes.json()) as any;
-    const bsAddr     = (await bsAddrRes.json()) as any;
-    const gpResult   = goplusData?.result ?? null;
+    const chainsData  = (await chainsRes.json())  as any;
+    const threatData  = (await threatRes.json())  as any;
+    const bsAddr      = (await bsAddrRes.json())  as any;
+    const baseTxData  = (await baseTxRes.json())  as any;
+    const gpResult    = threatData?.result ?? null;
 
-    // ── Blockscout: contract type + balance + exchange rate ───────────────────
+    // ── Step 2: Find global genesis tx (oldest across ALL chains) ─────────────
+    const activeChains: any[] = chainsData?.active_chains ?? [];
+    activeChains.sort((a, b) =>
+      new Date(a.first_transaction?.block_timestamp ?? 0).getTime() -
+      new Date(b.first_transaction?.block_timestamp ?? 0).getTime()
+    );
+    const genesisChain = activeChains[0] ?? null;
+    const genesisInfo  = genesisChain?.first_transaction ?? null;
+    const genesisTxHash   = genesisInfo?.transaction_hash ?? null;
+    const genesisChainId  = genesisChain?.chain_id ?? "0x1";
+    const genesisChainName = genesisChain?.chain ?? "unknown";
+
+    // ── Step 3: Fetch genesis transaction details for funding source label ─────
+    let genesisTx: any = null;
+    if (genesisTxHash) {
+      try {
+        const txRes = await fetch(
+          `${MORALIS}/transaction/${encodeURIComponent(genesisTxHash)}?chain=${genesisChainId}`,
+          { headers: mHdrs, signal: AbortSignal.timeout(12_000) }
+        );
+        genesisTx = txRes.ok ? await txRes.json() : null;
+      } catch { /* non-fatal */ }
+    }
+
+    // ── Step 4: Wallet age from genesis ───────────────────────────────────────
+    let firstSeenDate = "N/A";
+    let walletAge     = "N/A";
+
+    if (genesisInfo?.block_timestamp) {
+      const createdAt = new Date(genesisInfo.block_timestamp);
+      firstSeenDate   = createdAt.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+      walletAge       = fmtAge(genesisInfo.block_timestamp);
+    }
+
+    // ── Step 5: Classify funding source ──────────────────────────────────────
+    const genesisFromAddr   = genesisTx?.from_address as string ?? "";
+    const moralisLabel      = genesisTx?.from_address_label  as string | null ?? null;
+    const moralisEntity     = genesisTx?.from_address_entity as string | null ?? null;
+
+    const { display: fundingDisplay, risk: fundingRisk } = genesisFromAddr
+      ? classifyFundingSource(genesisFromAddr, moralisLabel, moralisEntity)
+      : { display: "N/A", risk: "unknown" as const };
+
+    // ── Step 6: Base Mainnet activity + inflow / outflow ─────────────────────
+    const baseTxs: any[]  = baseTxData?.result ?? [];
+    const hasMoreBase     = !!baseTxData?.cursor;
+    const baseTxCount     = baseTxs.length;
+
+    const addrLow = address.toLowerCase();
+    let inf  = BigInt(0);
+    let outf = BigInt(0);
+    for (const tx of baseTxs) {
+      const val = BigInt(tx.value ?? "0");
+      if ((tx.to_address   ?? "").toLowerCase() === addrLow) inf  += val;
+      if ((tx.from_address ?? "").toLowerCase() === addrLow) outf += val;
+    }
+    const inflowEth  = inf  > 0n ? (Number(inf)  / 1e18) : null;
+    const outflowEth = outf > 0n ? (Number(outf) / 1e18) : null;
+
+    const txCountDisplay = baseTxCount > 0
+      ? (hasMoreBase ? `${baseTxCount}+ txs` : `${baseTxCount} txs`)
+      : "No Base activity found";
+
+    let activityLevel: string;
+    if (baseTxCount === 0)    activityLevel = "No Base activity";
+    else if (baseTxCount < 5)  activityLevel = "⚠️ Very Low — Fresh Profile";
+    else if (baseTxCount < 20) activityLevel = "Low";
+    else if (baseTxCount < 100)activityLevel = "Moderate";
+    else                       activityLevel = "High (Established Wallet)";
+
+    // ── Step 7: Balance from Blockscout ──────────────────────────────────────
     const isContract   = bsAddr?.is_contract ?? false;
     const coinBalance  = bsAddr?.coin_balance ? parseFloat(bsAddr.coin_balance) / 1e18 : null;
     const exchangeRate = bsAddr?.exchange_rate ? parseFloat(bsAddr.exchange_rate) : null;
     const ethBal       = coinBalance !== null ? `${coinBalance.toFixed(4)} ETH` : "N/A";
     const usdBal       = coinBalance !== null && exchangeRate
-      ? ` (≈${fmtUsd(coinBalance * exchangeRate)})`
-      : "";
+      ? ` (≈${fmtUsd(coinBalance * exchangeRate)})` : "";
 
-    // ── Moralis: genesis tx + inflow/outflow + tx count ───────────────────────
-    let genesisTx:    any    = null;
-    let txCount:      number = 0;
-    let inflowEth:    number | null = null;
-    let outflowEth:   number | null = null;
-    let hasMorePages: boolean = false;
-
-    if (MORALIS_KEY && moralisTxRes) {
-      const moralisData = (await (moralisTxRes as Response).json()) as any;
-      const txs: any[] = moralisData?.result ?? [];
-      txCount    = txs.length;
-      hasMorePages = !!moralisData?.cursor;
-      genesisTx  = txs[0] ?? null;
-
-      // Compute inflow / outflow from first page (real ETH, no synthetic data)
-      const addrLow = address.toLowerCase();
-      let inf  = BigInt(0);
-      let outf = BigInt(0);
-      for (const tx of txs) {
-        const val = BigInt(tx.value ?? "0");
-        if ((tx.to_address   ?? "").toLowerCase() === addrLow) inf  += val;
-        if ((tx.from_address ?? "").toLowerCase() === addrLow) outf += val;
-      }
-      // Only report if non-zero — never fake numbers
-      if (inf > 0n)  inflowEth  = Number(inf)  / 1e18;
-      if (outf > 0n) outflowEth = Number(outf) / 1e18;
-    }
-
-    // ── Wallet age from genesis tx timestamp ──────────────────────────────────
-    let firstSeenDate = "N/A";
-    let walletAge     = "N/A";
-    let genesisTxHash = "N/A";
-
-    if (genesisTx?.block_timestamp) {
-      const createdAt = new Date(genesisTx.block_timestamp);
-      firstSeenDate = createdAt.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-      walletAge     = fmtAge(genesisTx.block_timestamp);
-      genesisTxHash = genesisTx.hash ?? "N/A";
-    }
-
-    // ── Funding source: Moralis entity label → risk classification ────────────
-    let fundingSource     = "N/A";
-    let fundingRisk       = "";
-    let genesisFromAddr   = "";
-
-    if (genesisTx?.from_address) {
-      genesisFromAddr = genesisTx.from_address as string;
-
-      // Moralis provides entity labels for many known addresses
-      const entity    = genesisTx.from_address_entity as string | null;
-      const label     = genesisTx.from_address_label  as string | null;
-      const entityStr = entity ?? label ?? "";
-
-      if (entityStr) {
-        // Classify by entity name
-        const low = entityStr.toLowerCase();
-        if (low.includes("binance") || low.includes("coinbase") || low.includes("kraken") ||
-            low.includes("okx") || low.includes("huobi") || low.includes("bybit") ||
-            low.includes("kucoin") || low.includes("gemini")) {
-          fundingSource = `${entityStr} (CEX — KYC Funded) ✅`;
-          fundingRisk   = "low";
-        } else if (low.includes("tornado") || low.includes("mixer") || low.includes("tumbler") ||
-                   low.includes("fixedfloat") || low.includes("blender")) {
-          fundingSource = `${entityStr} (Mixer — High Risk) ⛔`;
-          fundingRisk   = "high";
-        } else if (low.includes("bridge") || low.includes("stargate") || low.includes("across") ||
-                   low.includes("hop ") || low.includes("synapse")) {
-          fundingSource = `${entityStr} (Bridge) ⚠️`;
-          fundingRisk   = "medium";
-        } else {
-          fundingSource = `${entityStr}`;
-          fundingRisk   = "unknown";
-        }
-      } else {
-        // Fall back to our own known-address list
-        const knownLabel = identifySource(genesisFromAddr);
-        const low = knownLabel.toLowerCase();
-        if (low.includes("cex") || low.includes("coinbase") || low.includes("binance")) {
-          fundingSource = `${knownLabel} (KYC Funded) ✅`;
-          fundingRisk   = "low";
-        } else if (low.includes("mixer") || low.includes("tornado")) {
-          fundingSource = `${knownLabel} (High Risk) ⛔`;
-          fundingRisk   = "high";
-        } else if (low.includes("bridge")) {
-          fundingSource = `${knownLabel} (Bridge) ⚠️`;
-          fundingRisk   = "medium";
-        } else {
-          fundingSource = `Unknown Wallet (${shortAddr(genesisFromAddr)})`;
-          fundingRisk   = "unknown";
-        }
-      }
-    }
-
-    // ── Activity level (from Moralis count — note: may be capped at 100) ─────
-    const txCountDisplay = txCount > 0
-      ? (hasMorePages ? `${txCount}+ (paginated)` : txCount.toLocaleString())
-      : "N/A";
-
-    let activityLevel: string;
-    if (txCount === 0)    activityLevel = "N/A — No transactions found on Base Mainnet";
-    else if (txCount < 5) activityLevel = "⚠️ Very Low — Fresh Wallet Profile";
-    else if (txCount < 20) activityLevel = "Low Activity";
-    else if (txCount < 100) activityLevel = "Moderate Activity";
-    else                  activityLevel = "High Activity (Established Wallet)";
-
-    // ── GoPlus threat flags ───────────────────────────────────────────────────
+    // ── Step 8: APOL AGENT threat intelligence flags ──────────────────────────
     const activeFlags: string[] = [];
     if (gpResult) {
       for (const [field, label] of Object.entries(WALLET_FLAGS)) {
@@ -451,7 +494,6 @@ async function buildWalletCheck(address: string): Promise<string> {
       }
     }
 
-    // ── Status ────────────────────────────────────────────────────────────────
     const isCritical   = gpResult && (flag(gpResult.blacklist_doubt) || flag(gpResult.sanctioned));
     const isSuspicious = activeFlags.length > 0 || fundingRisk === "high";
 
@@ -460,56 +502,58 @@ async function buildWalletCheck(address: string): Promise<string> {
     else if (isSuspicious) status = "⚠️ SUSPICIOUS";
     else                   status = "✅ CLEAN";
 
-    // ── Verdict ───────────────────────────────────────────────────────────────
+    // ── Step 9: Verdict ───────────────────────────────────────────────────────
     let verdict: string;
     if (flag(gpResult?.sanctioned)) {
       verdict = "This wallet is under legal sanction. Any interaction may carry regulatory consequences.";
     } else if (flag(gpResult?.blacklist_doubt)) {
-      verdict = "This wallet has been flagged for malicious activity. Do not interact.";
+      verdict = "Flagged for malicious activity. Do not interact.";
     } else if (flag(gpResult?.honeypot_related_address)) {
-      verdict = "This wallet is affiliated with honeypot contracts. Treat as hostile.";
+      verdict = "Affiliated with honeypot contracts. Treat as hostile.";
     } else if (flag(gpResult?.phishing_activities)) {
-      verdict = "Phishing activity on record. This wallet has been used to drain others.";
+      verdict = "Phishing activity on record. This wallet has drained others.";
     } else if (flag(gpResult?.stealing_attack)) {
-      verdict = "Theft activity on record. This wallet has been linked to stealing attacks.";
+      verdict = "Linked to theft attacks. Do not send funds.";
     } else if (flag(gpResult?.money_laundering) || flag(gpResult?.financial_crime)) {
       verdict = "Financial crime indicators present. Exercise extreme caution.";
     } else if (activeFlags.length > 0) {
       verdict = "Suspicious activity detected. Investigate further before interacting.";
     } else if (fundingRisk === "high") {
-      verdict = "Genesis funding from a mixer. High-probability sybil or rug coordination profile.";
-    } else if (txCount < 5 && txCount > 0) {
+      verdict = "Genesis funding from a mixer — high-probability sybil or rug profile.";
+    } else if (baseTxCount > 0 && baseTxCount < 5) {
       verdict = "Fresh wallet with minimal history. Insufficient data to confirm legitimacy.";
-    } else if (txCount === 0 || !MORALIS_KEY) {
-      verdict = "No Base Mainnet transaction history found. Verify CA on Basescan.";
+    } else if (activeChains.length === 0) {
+      verdict = "No on-chain activity found. Wallet has not been used.";
     } else {
-      verdict = "No malicious activity detected. Wallet appears clean on Base Mainnet.";
+      verdict = "No malicious activity detected. Wallet appears clean.";
     }
 
-    // ── Build report ──────────────────────────────────────────────────────────
+    // ── Step 10: Build the report ─────────────────────────────────────────────
+    const explorer    = chainExplorer(genesisChainId);
+    const genesisTxLink = genesisTxHash
+      ? `[${genesisTxHash.slice(0, 10)}...${genesisTxHash.slice(-6)}](${explorer.txUrl}${genesisTxHash})`
+      : "N/A";
+
     let msg = "";
-    msg += `🔬 *APOL FORENSIC WALLET REPORT*\n\n`;
+    msg += `🔬 *APOL AGENT — WALLET FORENSICS*\n\n`;
     msg += `👤 *Address:* \`${shortAddr(address)}\`\n`;
-    msg += `⛓️ *Chain:* Base Mainnet\n`;
     msg += `🏷️ *Type:* ${isContract ? "Smart Contract" : "EOA (Wallet)"}\n`;
     msg += `🚨 *Status:* ${status}\n\n`;
 
-    msg += `📅 *WALLET AGE*\n`;
-    msg += `First Seen: ${firstSeenDate}\n`;
+    msg += `📅 *GENESIS (First Transaction)*\n`;
+    msg += `Date: ${firstSeenDate}\n`;
     msg += `Age: ${walletAge}\n`;
-    if (genesisTxHash !== "N/A") {
-      msg += `Genesis TX: \`${genesisTxHash.slice(0, 18)}...\`\n`;
-    }
-    msg += `\n`;
+    msg += `Chain: ${genesisChainName.toUpperCase()}\n`;
+    msg += `Hash: ${genesisTxLink}\n\n`;
 
     msg += `💰 *FUNDING SOURCE*\n`;
-    msg += `Genesis Funder: ${fundingSource}\n`;
-    if (genesisFromAddr) msg += `From Address: \`${shortAddr(genesisFromAddr)}\`\n`;
+    msg += `${fundingDisplay}\n`;
+    if (genesisFromAddr) msg += `From: \`${shortAddr(genesisFromAddr)}\`\n`;
     msg += `\n`;
 
     msg += `📊 *ACTIVITY (Base Mainnet)*\n`;
     msg += `Transactions: ${txCountDisplay}\n`;
-    msg += `Activity Level: ${activityLevel}\n`;
+    msg += `Level: ${activityLevel}\n`;
     const infStr  = inflowEth  !== null ? `${inflowEth.toFixed(4)} ETH`  : "N/A";
     const outfStr = outflowEth !== null ? `${outflowEth.toFixed(4)} ETH` : "N/A";
     msg += `Inflow: ${infStr}   Outflow: ${outfStr}\n\n`;
@@ -518,11 +562,11 @@ async function buildWalletCheck(address: string): Promise<string> {
     msg += `${ethBal}${usdBal}\n\n`;
 
     if (activeFlags.length > 0) {
-      msg += `🚩 *THREAT FLAGS:*\n`;
+      msg += `🚩 *THREAT INTEL:*\n`;
       activeFlags.forEach(f => (msg += `  ${f}\n`));
       msg += `\n`;
     } else {
-      msg += `✅ *No GoPlus threat flags on record.*\n\n`;
+      msg += `✅ *No threat flags on record.*\n\n`;
     }
 
     msg += `🛡️ *VERDICT:* _${verdict}_\n\n`;
@@ -532,7 +576,7 @@ async function buildWalletCheck(address: string): Promise<string> {
 
   } catch (err: any) {
     console.error("[APOL Bot] Wallet forensic error:", err?.message ?? err);
-    return `❌ *Forensic Report Failed*\n\nCould not reach the intelligence database. Please try again in a moment.`;
+    return `❌ *Forensic Report Failed*\n\nCould not reach intelligence database. Please try again in a moment.`;
   }
 }
 
@@ -1045,10 +1089,10 @@ export function createBot(): Telegraf | null {
   bot.help(ctx =>
     ctx.replyWithMarkdown(
       `🚔 *APE POLICE — HELP DESK*\n\n` +
-      `🔍 /scan [address] — Token contract security check (GoPlus + DexScreener)\n` +
+      `🔍 /scan [address] — Token contract security scan\n` +
       `🐦 /scanx [@username] — X/Twitter social forensics & LARP detection\n` +
-      `🤖 /scanagent [name or CA] — AI agent intelligence audit (AgentGuard)\n` +
-      `👮 /checkwallet [address] — Malicious wallet investigation (GoPlus)\n` +
+      `🤖 /scanagent [name or CA] — AI agent intelligence audit\n` +
+      `👮 /checkwallet [address] — Wallet forensics & threat investigation\n` +
       `🚩 /report — Report a suspected scam or LARP agent\n` +
       `🗺️ /map — View the Wall of Shame\n` +
       `🛡️ /verified — Browse APOL-certified projects\n\n` +

@@ -25,7 +25,7 @@ const KB: { patterns: RegExp[]; answer: string }[] = [
   },
   {
     patterns: [/check.*address|address.*check|blacklist|detective/i],
-    answer: "DETECTIVE SERVICE :: Enter any wallet or contract address on the Report a Scam page. Select chain (ETH, BTC, SOL, Base). Execute scan. Risk flags returned from GoPlus threat database.",
+    answer: "DETECTIVE SERVICE :: Enter any wallet or contract address on the Report a Scam page. Select chain (ETH, BTC, SOL, Base). Execute scan. Risk flags returned from APOL AGENT threat intelligence.",
   },
   {
     patterns: [/nominate|hero|good.*dev|honest/i],
