@@ -42,6 +42,30 @@ function fmtUsd(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
+function fmtPrice(n: number): string {
+  if (n <= 0 || isNaN(n)) return "Data Pending";
+  if (n >= 1)    return `$${n.toFixed(2)}`;
+  if (n >= 0.01) return `$${n.toFixed(4)}`;
+  if (n >= 0.0001) return `$${n.toFixed(6)}`;
+  const s = n.toFixed(18);
+  const match = s.match(/^0\.(0+)([1-9]\d*)/);
+  if (match) {
+    const zeros = match[1].length;
+    const sig = match[2].slice(0, 4).replace(/0+$/, "");
+    return `$0.0{${zeros}}${sig}`;
+  }
+  return `$${n.toFixed(10).replace(/0+$/, "")}`;
+}
+
+function fmtMcap(price: number, supply: number | null): string {
+  if (!supply || supply <= 0 || price <= 0 || isNaN(price) || isNaN(supply)) return "Data Pending";
+  const mcap = price * supply;
+  if (mcap >= 1_000_000_000) return `$${(mcap / 1_000_000_000).toFixed(2)}B`;
+  if (mcap >= 1_000_000)     return `$${(mcap / 1_000_000).toFixed(2)}M`;
+  if (mcap >= 1_000)         return `$${(mcap / 1_000).toFixed(1)}K`;
+  return `$${mcap.toFixed(2)}`;
+}
+
 // ─── Police Snapshot Scanner ─────────────────────────────────────────────────
 
 async function buildSnapshot(address: string, siteUrl: string): Promise<string> {
@@ -118,11 +142,12 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     else if (!token && !topPair) lpStatus = `Data Pending`;
     else                        lpStatus = `Unlocked ⚠️`;
 
-    // ── Price from DexScreener ────────────────────────────────────────────────
+    // ── Price + Market Cap from DexScreener ─────────────────────────────────
     const priceRaw  = parseFloat(topPair?.priceUsd ?? "0");
-    const priceStr  = priceRaw > 0
-      ? (priceRaw < 0.0001 ? `$${priceRaw.toExponential(3)}` : `$${priceRaw.toPrecision(5)}`)
-      : "Data Pending";
+    const priceStr  = fmtPrice(priceRaw);
+    const totalSupply = token?.total_supply ? parseFloat(token.total_supply) / (10 ** parseInt(token.decimals ?? "18")) : null;
+    const fdvRaw    = topPair?.fdv ?? null;
+    const mcapStr   = fdvRaw ? fmtUsd(fdvRaw) : fmtMcap(priceRaw, totalSupply);
 
     // ── Risk flags (GoPlus simulation data) ───────────────────────────────────
     const flags: string[] = [];
@@ -159,6 +184,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
 
     msg += `*${tokenName}* (${tokenSymbol})\n`;
     msg += `💲 Price: *${priceStr}*\n`;
+    msg += `📊 Market Cap: *${mcapStr}*\n`;
     msg += `💧 Liquidity: *${liqFormatted}*\n`;
     msg += `🔒 LP Status: *${lpStatus}*\n`;
     msg += `👥 Holders: *${holderCount}*\n`;
@@ -718,9 +744,10 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     const liqUsd     = topPair?.liquidity?.usd ?? null;
     const priceRaw   = parseFloat(topPair?.priceUsd ?? "0");
     const liqFmt     = liqUsd !== null ? fmtUsd(liqUsd) : "Data Pending";
-    const priceFmt   = priceRaw > 0
-      ? (priceRaw < 0.0001 ? `$${priceRaw.toExponential(3)}` : `$${priceRaw.toPrecision(5)}`)
-      : "Data Pending";
+    const priceFmt   = fmtPrice(priceRaw);
+    const totalSupply = token?.total_supply ? parseFloat(token.total_supply) / (10 ** parseInt(token.decimals ?? "18")) : null;
+    const fdvRaw     = topPair?.fdv ?? null;
+    const mcapFmt    = fdvRaw ? fmtUsd(fdvRaw) : fmtMcap(priceRaw, totalSupply);
     const holderRaw  = parseInt(token?.holder_count ?? "0");
     const holderFmt  = holderRaw > 0 ? holderRaw.toLocaleString() : "Data Pending";
 
@@ -852,6 +879,7 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     msg += `💧 *MARKET INTEL*\n`;
     msg += `Liquidity: ${liqFmt}\n`;
     msg += `Price: ${priceFmt}\n`;
+    msg += `Market Cap: ${mcapFmt}\n`;
     msg += `Holders: ${holderFmt}\n`;
 
     if (website || twitter || telegram) {
