@@ -186,7 +186,7 @@ function AdvancedResults({ result }: { result: AgentResult }) {
       <div style={{ background: "rgba(0,255,0,0.07)", borderBottom: `1px solid rgba(0,255,0,0.25)`, padding: "14px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <img src="/ape-police-logo.png" alt="APOL" style={{ width: 28, height: 28, borderRadius: "50%", border: `1px solid ${G}` }} />
+            <img src="/ape-police-logo.png" alt="APOL" style={{ width: 28, height: 28 }} />
             <div>
               <div style={{ color: G, fontSize: "11px", fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase" }}>
                 Ape Police — Investigation Report
@@ -492,7 +492,7 @@ export default function AgentScanner() {
             </button>
           </Link>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-yellow-400 overflow-hidden">
+            <div className="w-8 h-8 overflow-hidden">
               <img src="/ape-police-logo.png" alt="APE POLICE" className="w-full h-full object-cover" />
             </div>
             <span className="font-meme text-xl gradient-text">APE POLICE</span>
@@ -787,7 +787,7 @@ export default function AgentScanner() {
             {/* Officer verdict */}
             <div className="bg-slate-900 border border-blue-600/30 rounded-xl p-5 flex gap-4">
               <div className="flex-shrink-0">
-                <div className="w-11 h-11 rounded-full bg-yellow-400 overflow-hidden">
+                <div className="w-11 h-11 overflow-hidden">
                   <img src="/ape-police-logo.png" alt="Officer" className="w-full h-full object-cover" />
                 </div>
               </div>

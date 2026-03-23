@@ -219,7 +219,7 @@ export default function Navigation() {
             <img
               src="/ape-police-logo.png"
               alt="APE POLICE logo"
-              className="w-7 h-7 object-cover rounded-full border border-[#00ff00]/40"
+              className="w-7 h-7 object-cover"
             />
             <span className="font-meme text-lg" style={{ color: G }}>APE POLICE</span>
           </div>
@@ -263,7 +263,7 @@ export default function Navigation() {
             <img
               src="/ape-police-logo.png"
               alt="APE POLICE logo"
-              className="w-7 h-7 object-cover rounded-full border border-[#00ff00]/40 flex-shrink-0"
+              className="w-7 h-7 object-cover flex-shrink-0"
             />
             <span className="font-meme text-base" style={{ color: G }}>APE POLICE</span>
           </div>
