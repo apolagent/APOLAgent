@@ -175,8 +175,8 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     }
 
     msg += `\n🔍 [Full Scan](${siteUrl}/agent-scanner)   `;
-    msg += `🗺️ [Wall of Shame](${siteUrl}/report-scam)   `;
-    msg += `🛡️ [Verified Builders](${siteUrl}/verified-builders)`;
+    msg += `🗺️ [Wall of Shame](${siteUrl}/report-scam)\n`;
+    msg += `🔗 [View on Basescan](https://basescan.org/address/${address})`;
 
     return msg;
 
@@ -419,7 +419,8 @@ async function buildWalletCheck(address: string): Promise<string> {
       msg += `✅ *No threat flags on record.*\n\n`;
     }
 
-    msg += `🛡️ *VERDICT:* _${verdict}_`;
+    msg += `🛡️ *VERDICT:* _${verdict}_\n\n`;
+    msg += `🔗 [View on Basescan](https://basescan.org/address/${address})`;
 
     return msg;
 
