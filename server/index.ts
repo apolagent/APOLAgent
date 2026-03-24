@@ -104,23 +104,32 @@ app.use((req, res, next) => {
   const isProduction = process.env.NODE_ENV === "production" || !!process.env.REPL_DEPLOYMENT;
   const bot = createBot();
   if (bot && isProduction) {
-    bot.launch({ dropPendingUpdates: true }).then(() => {
-      log("Telegram bot polling started", "bot");
-      const registerCommands = () =>
-        bot.telegram.setMyCommands([
-          { command: "scan",        description: "Detailed CA investigation (Taxes, Liquidity, Honeypot)" },
-          { command: "scanx",       description: "X/Twitter social forensics & LARP detection" },
-          { command: "scanagent",   description: "Verify AI Agent authenticity and security" },
-          { command: "checkwallet", description: "Forensic wallet audit (Age, Funding, Volume)" },
-          { command: "map",         description: "Access the APOL Wall of Shame" },
-          { command: "verified",    description: "View APOL Certified Hero Projects" },
-        ])
-          .then(() => log("Telegram command menu registered", "bot"))
-          .catch(() => setTimeout(registerCommands, 10_000));
-      registerCommands();
-    }).catch((err: any) => {
-      log(`Telegram bot failed to start: ${err?.message ?? err}`, "bot");
-    });
+    const launchBot = (attempt = 1) => {
+      bot.launch({ dropPendingUpdates: true }).then(() => {
+        log("Telegram bot polling started", "bot");
+        const registerCommands = () =>
+          bot.telegram.setMyCommands([
+            { command: "scan",        description: "Detailed CA investigation (Taxes, Liquidity, Honeypot)" },
+            { command: "scanx",       description: "X/Twitter social forensics & LARP detection" },
+            { command: "scanagent",   description: "Verify AI Agent authenticity and security" },
+            { command: "checkwallet", description: "Forensic wallet audit (Age, Funding, Volume)" },
+            { command: "map",         description: "Access the APOL Wall of Shame" },
+            { command: "verified",    description: "View APOL Certified Hero Projects" },
+          ])
+            .then(() => log("Telegram command menu registered", "bot"))
+            .catch(() => setTimeout(registerCommands, 10_000));
+        registerCommands();
+      }).catch((err: any) => {
+        const msg = err?.message ?? String(err);
+        log(`Telegram bot failed to start (attempt ${attempt}): ${msg}`, "bot");
+        if (msg.includes("409") && attempt <= 5) {
+          const delay = attempt * 3_000;
+          log(`Retrying bot launch in ${delay / 1000}s...`, "bot");
+          setTimeout(() => launchBot(attempt + 1), delay);
+        }
+      });
+    };
+    launchBot();
 
     const shutdown = () => { bot.stop("SIGTERM"); };
     process.once("SIGTERM", shutdown);
