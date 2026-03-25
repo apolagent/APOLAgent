@@ -24,7 +24,7 @@ const roadmapPhases = [
     color: "blue",
     items: [
       { text: "APOL Detective, on-chain wallet scanner", completed: true },
-      { text: "Multi-chain support (ETH, BSC, Base, Solana)", completed: true },
+      { text: "Multi-chain support (ETH, BSC, Base)", completed: true },
       { text: "Agent-LARP Detector, Cognition Score", completed: true, highlight: true },
       { text: "Evidence image upload on reports", completed: true },
     ],

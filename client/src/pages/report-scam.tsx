@@ -32,7 +32,6 @@ const chains = [
   { value: "ethereum", label: "Ethereum (ETH)" },
   { value: "bitcoin", label: "Bitcoin (BTC)" },
   { value: "bsc", label: "BNB Smart Chain (BSC)" },
-  { value: "solana", label: "Solana (SOL)" },
   { value: "polygon", label: "Polygon (MATIC)" },
   { value: "avalanche", label: "Avalanche (AVAX)" },
   { value: "tron", label: "Tron (TRX)" },

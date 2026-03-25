@@ -12,7 +12,7 @@ const pillars = [
   {
     index: "03",
     title: "INTEGRITY",
-    body: "Securing the Base and Solana liquidity corridors.",
+    body: "Securing the Base liquidity corridors.",
   },
 ];
 
