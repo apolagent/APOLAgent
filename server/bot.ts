@@ -1312,7 +1312,7 @@ export function createBot(): Telegraf | null {
         `❓ *Usage:* /scanx [@username or profile link]\n\n` +
         `Examples:\n` +
         `\`/scanx @VitalikButerin\`\n` +
-        `\`/scanx https://x.com/apol_base\`\n\n` +
+        `\`/scanx https://x.com/apolagent\`\n\n` +
         `_Runs a social forensics investigation: account age, follower quality, engagement, LARP detection._`
       );
     }

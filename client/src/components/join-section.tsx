@@ -22,7 +22,7 @@ const cards = [
     cta: "INTELLIGENCE FEED",
     gradient: "from-gray-800 to-black hover:from-gray-700 hover:to-gray-800",
     textColor: "text-white",
-    href: "https://x.com/OnlineAPOL",
+    href: "https://x.com/apolagent",
     external: true,
   },
   {
