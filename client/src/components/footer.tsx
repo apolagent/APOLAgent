@@ -18,15 +18,15 @@ export default function Footer() {
           {/* APOL Logo */}
           <div className="flex justify-center mb-5">
             <img
-              src="/ape-police-logo.png"
-              alt="APE POLICE"
+              src="/apol-agent-logo.png"
+              alt="APOL Agent"
               className="w-14 h-14 object-cover"
             />
           </div>
 
           {/* Main credit */}
           <p className="text-base font-semibold text-white mb-1 tracking-wide">
-            <span className="font-meme gradient-text">APE POLICE</span>
+            <span className="font-meme gradient-text">APOL AGENT</span>
           </p>
           <p className="text-xs uppercase tracking-widest mb-6" style={{ color: "rgba(0,255,0,0.5)" }}>
             Digital Asset Intelligence Network
@@ -34,7 +34,7 @@ export default function Footer() {
 
           {/* Operational disclaimer */}
           <p className="text-xs max-w-2xl mx-auto leading-relaxed" style={{ color: "rgba(255,255,255,0.3)" }}>
-            © 2026 APE POLICE. Providing on-chain forensics and agent verification for the Base ecosystem.
+            © 2026 APOL Agent. Providing on-chain forensics and agent verification for the Base ecosystem.
             Data is aggregated from public streams; users are responsible for all trading decisions.
           </p>
 

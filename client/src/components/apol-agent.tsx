@@ -12,8 +12,8 @@ const KB: { patterns: RegExp[]; answer: string }[] = [
     answer: "APOL Agent online. Query received. Ask anything about $APOL, scam reporting, or agent verification.",
   },
   {
-    patterns: [/what is ape police|what('s| is) this site|about/i],
-    answer: "APE POLICE is a community-operated on-chain watchdog. Functions: scam exposure, builder verification, community intelligence. Powered by the $APOL token on Base.",
+    patterns: [/what is apol agent|what('s| is) this site|about/i],
+    answer: "APOL Agent is an autonomous on-chain forensics protocol. Functions: scam exposure, builder verification, community intelligence. Powered by the $APOL token on Base.",
   },
   {
     patterns: [/\$apol|apol token|tokenomics|supply|tax/i],
@@ -21,7 +21,7 @@ const KB: { patterns: RegExp[]; answer: string }[] = [
   },
   {
     patterns: [/report.*(scam|fraud|rug)|scam report|how.*report/i],
-    answer: "THREAT REPORTING PROTOCOL:\n[01] Navigate to Report a Scam\n[02] Run wallet scan via APE POLICE Detective Service\n[03] Flag address in community database\n[04] Submit community report with evidence",
+    answer: "THREAT REPORTING PROTOCOL:\n[01] Navigate to Report a Scam\n[02] Run wallet scan via APOL Agent Intelligence\n[03] Flag address in community database\n[04] Submit community report with evidence",
   },
   {
     patterns: [/check.*address|address.*check|blacklist|detective/i],
@@ -41,7 +41,7 @@ const KB: { patterns: RegExp[]; answer: string }[] = [
   },
   {
     patterns: [/join|community|telegram|channel/i],
-    answer: "FIELD COMMS :: Join the APE POLICE channel via the Communications & Access section. Active threat monitoring, scam alerts, and contributor recognition.",
+    answer: "FIELD COMMS :: Join the APOL Agent channel via the Communications & Access section. Active threat monitoring, scam alerts, and contributor recognition.",
   },
   {
     patterns: [/roadmap|plan|future|phase/i],
@@ -61,7 +61,7 @@ const KB: { patterns: RegExp[]; answer: string }[] = [
   },
   {
     patterns: [/dyor|research|how.*safe/i],
-    answer: "PRE-INVESTMENT CHECKLIST:\n[01] Verify contract on block explorer\n[02] Run APE POLICE Detective scan\n[03] Confirm team identity\n[04] Check audit status\n[05] Never send crypto to receive crypto",
+    answer: "PRE-INVESTMENT CHECKLIST:\n[01] Verify contract on block explorer\n[02] Run APOL Agent security scan\n[03] Confirm team identity\n[04] Check audit status\n[05] Never send crypto to receive crypto",
   },
   {
     patterns: [/help|what can you do|features|how.*work/i],
@@ -88,7 +88,7 @@ function getAnswer(input: string): string {
 }
 
 const QUICK_QUESTIONS = [
-  "What is APE POLICE?",
+  "What is APOL Agent?",
   "How do I report a scam?",
   "What is $APOL?",
   "How do I nominate a hero?",

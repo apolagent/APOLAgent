@@ -217,11 +217,11 @@ export default function Navigation() {
           {/* Logo */}
           <div className="flex items-center gap-2 justify-self-start">
             <img
-              src="/ape-police-logo.png"
-              alt="APE POLICE logo"
+              src="/apol-agent-logo.png"
+              alt="APOL Agent logo"
               className="w-7 h-7 object-cover"
             />
-            <span className="font-meme text-lg" style={{ color: G }}>APE POLICE</span>
+            <span className="font-meme text-lg" style={{ color: G }}>APOL AGENT</span>
           </div>
 
           {/* Center nav links */}
@@ -261,11 +261,11 @@ export default function Navigation() {
         <div className="flex lg:hidden items-center justify-between h-14">
           <div className="flex items-center gap-2">
             <img
-              src="/ape-police-logo.png"
-              alt="APE POLICE logo"
+              src="/apol-agent-logo.png"
+              alt="APOL Agent logo"
               className="w-7 h-7 object-cover flex-shrink-0"
             />
-            <span className="font-meme text-base" style={{ color: G }}>APE POLICE</span>
+            <span className="font-meme text-base" style={{ color: G }}>APOL AGENT</span>
           </div>
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}

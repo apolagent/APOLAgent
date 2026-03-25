@@ -16,8 +16,8 @@ export default function HeroSection() {
         {/* Official seal */}
         <div className="mb-6 inline-block">
           <img
-            src="/ape-police-logo.png"
-            alt="APE POLICE official seal"
+            src="/apol-agent-logo.png"
+            alt="APOL Agent official seal"
             className="w-36 h-36 md:w-48 md:h-48 mx-auto object-cover"
           />
         </div>

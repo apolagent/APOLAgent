@@ -434,7 +434,7 @@ function AuthScreen({ onAuth }: { onAuth: (token: string) => void }) {
           Restricted Area
         </p>
         <h1 style={{ margin: "0 0 8px", fontSize: "22px", fontWeight: 900, color: "#fff", letterSpacing: "0.04em" }}>
-          APE POLICE ADMIN
+          APOL AGENT ADMIN
         </h1>
         <p style={{ margin: "0 0 32px", fontSize: "12px", color: "rgba(255,255,255,0.55)", lineHeight: "1.7" }}>
           Connect your admin wallet and sign a message to verify ownership. No gas required.
@@ -571,7 +571,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <ShieldAlert size={18} color={G} />
           <span style={{ fontSize: "13px", fontWeight: 900, color: "#fff", letterSpacing: "0.1em" }}>
-            APE POLICE ADMIN
+            APOL AGENT ADMIN
           </span>
           <span style={{
             padding: "2px 8px", border: `1px solid ${G}`,

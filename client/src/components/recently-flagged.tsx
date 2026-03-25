@@ -142,7 +142,7 @@ export default function RecentlyFlagged() {
       </div>
 
       <p className="mt-4 text-center text-xs text-gray-600">
-        Powered by APE POLICE Detective Service
+        Powered by APOL Agent Intelligence
       </p>
     </section>
   );

@@ -589,7 +589,7 @@ export default function GetVerified() {
                     <input
                       value={projectName}
                       onChange={e => setProjectName(e.target.value)}
-                      placeholder="e.g. APE POLICE"
+                      placeholder="e.g. APOL Agent"
                       disabled={isPending}
                       data-testid="input-project-name"
                       style={inputStyle}

@@ -68,7 +68,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/health", (_req, res) => {
     res.json({
       status: "ok",
-      service: "APE POLICE",
+      service: "APOL Agent",
       timestamp: new Date().toISOString(),
       bot: !!process.env.APOL_BOT_TOKEN ? "active" : "disabled",
     });
@@ -221,7 +221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       success: true,
       chainabuseSubmitted: chainabuseOk,
       savedInternally: true,
-      message: "Report submitted and saved to the APE POLICE database.",
+      message: "Report submitted and saved to the APOL Agent database.",
     });
   });
 
@@ -239,7 +239,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   function buildWalletVerdict(flags: string[], riskLevel: string, internalFlag: boolean): string {
     if (flags.length === 0 && !internalFlag) {
       return pickRandom([
-        `Citizen, this wallet appears clean in our security scan. No malicious activity detected. Stay vigilant out there, APE POLICE are always watching. 🦍`,
+        `Citizen, this wallet appears clean in our security scan. No malicious activity detected. Stay vigilant out there, APOL Agent is always watching. 🦍`,
         `All clear on this one, Citizen. Our scan shows no blacklist flags, no sanctions, no criminal activity. Proceed with standard caution. 🦍`,
         `Nothing here, Citizen. Clean as a whistle. Our security scan shows no malicious patterns for this address. 🦍`,
         `Wallet cleared, Citizen. No flags, no sanctions, no phishing history. I've seen a thousand scammers, this one doesn't match any known patterns. 🦍`,
@@ -248,10 +248,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     if (internalFlag && flags.length === 0) {
       return pickRandom([
-        `Fresh off the crime scene, Citizen. Our external scan shows clean but APE POLICE internal intelligence flagged this address in the last 24 hours. Treat as High Risk. 🚨`,
+        `Fresh off the crime scene, Citizen. Our external scan shows clean but APOL Agent internal intelligence flagged this address in the last 24 hours. Treat as High Risk. 🚨`,
         `New to our system but already on our radar. Internal reports link this wallet to suspicious activity in the last 24 hours. 🚨`,
         `Our external scan shows nothing yet, but our community flagged this address recently. New criminals don't have records until they do, Citizen. 🚨`,
-        `Brand new threat detected. No external scan history, but APE POLICE internal sources lit up for this wallet. Stay far away. 🚨`,
+        `Brand new threat detected. No external scan history, but APOL Agent internal sources lit up for this wallet. Stay far away. 🚨`,
         `First offense, Citizen. No external record yet, but our internal intelligence says otherwise. Consider this address hostile. 🚨`,
       ]);
     }
@@ -259,7 +259,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (riskLevel === "High Risk") {
       return pickRandom([
         `Stop right there, Citizen. This wallet is SANCTIONED or flagged for serious criminal activity: ${flagList}. Do NOT interact under any circumstances. 🚨`,
-        `Warrant issued, Citizen. APE POLICE has flagged this address for: ${flagList}. This is a KNOWN THREAT. Back away and do not engage. 🚨`,
+        `Warrant issued, Citizen. APOL Agent has flagged this address for: ${flagList}. This is a KNOWN THREAT. Back away and do not engage. 🚨`,
         `RED ALERT, Citizen. Criminal record confirmed: ${flagList}. I've arrested scammers like this before. Run. 🚨`,
         `I've been on the force a long time, Citizen. This wallet? Pure criminal. Flagged for ${flagList}. Suspect goes straight to the hall of shame. 🚨`,
         `Citizen, our database and security scan both agree, this address is DANGEROUS. Charges: ${flagList}. Do NOT touch this wallet. 🚨`,
@@ -267,7 +267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     return pickRandom([
       `Citizen, this wallet has flags on record: ${flagList}. Approach with caution, this is an active investigation. 🔍`,
-      `Hold it right there, Citizen. APE POLICE flagged this address for: ${flagList}. I'd keep my distance if I were you. 🔍`,
+      `Hold it right there, Citizen. APOL Agent flagged this address for: ${flagList}. I'd keep my distance if I were you. 🔍`,
       `Suspicious activity logged, Citizen. Flags detected: ${flagList}. We're watching this one closely. Don't get caught in the crossfire. 🔍`,
       `This address is on our watchlist, Citizen, flagged for ${flagList}. Tread carefully. You've been officially warned. 🔍`,
       `Our records don't look great for this wallet, Citizen. Flags: ${flagList}. Don't say I didn't warn you. 🔍`,
@@ -279,16 +279,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (greenBadge) {
       return pickRandom([
         `Citizen, I ran a full security scan on ${token}. Open source, no honeypot, taxes in check, no mint function. This one looks legit. Always DYOR before aping in. ✅`,
-        `${token} passes all APE POLICE security checks. No honeypot, no hidden taxes, no unlimited minting. Green badge earned, Citizen. ✅`,
+        `${token} passes all APOL Agent security checks. No honeypot, no hidden taxes, no unlimited minting. Green badge earned, Citizen. ✅`,
         `All systems go on ${token}, Citizen. Our scan shows clean on every metric I track. Liquidity, taxes, mint, all pass. ✅`,
-        `Citizen, ${token} has earned the APE POLICE Green Badge. Verified open source, safe tax structure, no malicious functions detected. ✅`,
+        `Citizen, ${token} has earned the APOL Agent Green Badge. Verified open source, safe tax structure, no malicious functions detected. ✅`,
         `I've checked ${token} top to bottom. No traps. No honeypot. No rug mechanics. This one checks out, Citizen, but stay alert. ✅`,
       ]);
     }
     const issues = redFlags.join("; ");
     if (riskLevel === "High Risk") {
       return pickRandom([
-        `Citizen, ${token} is a TRAP. APE POLICE flagged: ${issues}. Do NOT buy this token. This has rug written all over it. 🚨`,
+        `Citizen, ${token} is a TRAP. APOL Agent flagged: ${issues}. Do NOT buy this token. This has rug written all over it. 🚨`,
         `Stop right there, Citizen. ${token} failed critical security checks: ${issues}. Walk away. This is a known rug pattern. 🚨`,
         `RED ALERT on ${token}. My scan shows: ${issues}. I've seen this a thousand times, stay far away. 🚨`,
         `Warrant issued for ${token}. Security violations: ${issues}. Do not interact with this contract under any circumstances. 🚨`,
@@ -456,14 +456,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         `Inconclusive, Citizen. "${agentName}" has provided no verifiable data for analysis. Real agents leave traces, wallets, logs, on-chain records. Come back with evidence. 📋`,
         `Citizen, "${agentName}" cannot be classified. No on-chain address, no verifiable logs, nothing to analyze. I don't guess. Supply a wallet or logs URL and I'll give you a real verdict. 🦍`,
         `No verdict possible, Citizen. "${agentName}" is a name without a footprint. Until there is a wallet address, a logs endpoint, or a social link I can verify, this agent is not real to me. Evidence first. 🔐`,
-        `Citizen, "${agentName}" remains unclassified. The APE POLICE Patrol requires hard evidence before issuing a Cognition Score. I will not fabricate certainty where none exists. 📊`,
+        `Citizen, "${agentName}" remains unclassified. The APOL Agent Protocol requires hard evidence before issuing a Cognition Score. I will not fabricate certainty where none exists. 📊`,
       ]);
     }
     if (verdict === "Digital Puppet") {
       return pickRandom([
         `Citizen, I've run a full behavioral analysis on "${agentName}". Cognition Score: ${score}%. DIGITAL PUPPET, a human hiding behind an AI label. No autonomous footprint, no verifiable on-chain execution. Don't let this project fool you. 🤖❌`,
         `${score}% Cognition, that's a LARP, Citizen. "${agentName}" shows zero signs of genuine autonomous operation. Human timing, missing traces, unverifiable claims. Pure puppet show. 🎭`,
-        `Citizen, "${agentName}" fails APE POLICE autonomous verification at ${score}%. This is a person pretending to be an AI to hype their project. Classic LARP behavior. Walk away. 🚨`,
+        `Citizen, "${agentName}" fails APOL Agent autonomous verification at ${score}%. This is a person pretending to be an AI to hype their project. Classic LARP behavior. Walk away. 🚨`,
         `RED FLAG, Citizen. "${agentName}" scores only ${score}% on my Cognition Scale. Digital Puppet confirmed. The timing is human, the trace is missing, and the claims are hot air. This is not an AI agent, it's a marketing stunt. 🤡`,
         `Citizen, at ${score}%, "${agentName}" is a Digital Puppet. No autonomous execution, suspicious activity windows, and zero verifiable reasoning logs. LARP classification is final. 📋❌`,
       ]);
@@ -478,11 +478,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ]);
     }
     return pickRandom([
-      `Citizen, "${agentName}" achieves ${score}% on the Cognition Scale, FULLY AUTONOMOUS confirmed. On-chain patterns, timing spread, and claim verification all check out. This looks like a genuine AI agent. APE POLICE credibility stamp, always DYOR though. 🦍✅`,
+      `Citizen, "${agentName}" achieves ${score}% on the Cognition Scale, FULLY AUTONOMOUS confirmed. On-chain patterns, timing spread, and claim verification all check out. This looks like a genuine AI agent. APOL Agent credibility stamp, always DYOR though. 🦍✅`,
       `${score}% Cognition, the real deal, Citizen. "${agentName}" shows consistent 24/7 on-chain execution, public traceability, and claims backed by verifiable wallet activity. This agent checks out. 🤖✅`,
       `Citizen, I've cleared "${agentName}" at ${score}%. Fully Autonomous classification. Round-the-clock activity, verifiable on-chain evidence, and strong traceability. This is what a real AI agent looks like. 🦍`,
-      `Full clearance for "${agentName}", Citizen. ${score}% Cognition, Fully Autonomous. Distributed timing, contract execution, and claim verification all pass. APE POLICE approved. 🔐✅`,
-      `Citizen, "${agentName}" passed every test at ${score}%. Fully Autonomous designation confirmed. If more agents were this transparent and traceable, this space would be a lot safer. APE POLICE respect. 🦍✅`,
+      `Full clearance for "${agentName}", Citizen. ${score}% Cognition, Fully Autonomous. Distributed timing, contract execution, and claim verification all pass. APOL Agent approved. 🔐✅`,
+      `Citizen, "${agentName}" passed every test at ${score}%. Fully Autonomous designation confirmed. If more agents were this transparent and traceable, this space would be a lot safer. APOL Agent respect. 🦍✅`,
     ]);
   }
 

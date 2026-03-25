@@ -137,7 +137,7 @@ export default function ReportScam() {
       ? (result.greenBadge ? "passed all security checks ✅" : `red flags: ${result.redFlags?.join(", ")}`)
       : (result.walletFlags?.length ? `flagged for: ${result.walletFlags.join(", ")}` : "no external flags");
     return encodeURIComponent(
-      `🚨 APOL SECURITY ALERT 🚨\n\n${type} ${short}, ${risk}\nAPOL scan: ${issues}\n\nScanned by @ApePolice, #APOL #CryptoSafety #DYOR`
+      `🚨 APOL SECURITY ALERT 🚨\n\n${type} ${short}, ${risk}\nAPOL scan: ${issues}\n\nScanned by @ApolAgent, #APOL #CryptoSafety #DYOR`
     );
   };
 
@@ -342,7 +342,7 @@ export default function ReportScam() {
                         style={{ boxShadow: "0 0 30px rgba(34,197,94,0.3)" }}
                       >
                         <div className="text-5xl mb-2">✅</div>
-                        <h3 className="text-2xl font-black text-green-400 tracking-widest uppercase">APE POLICE Green Badge</h3>
+                        <h3 className="text-2xl font-black text-green-400 tracking-widest uppercase">APOL AGENT Green Badge</h3>
                         <p className="text-green-300 mt-1 font-semibold">Status: Cleared. All checks passed.</p>
                       </div>
                     ) : (

@@ -186,10 +186,10 @@ function AdvancedResults({ result }: { result: AgentResult }) {
       <div style={{ background: "rgba(0,255,0,0.07)", borderBottom: `1px solid rgba(0,255,0,0.25)`, padding: "14px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <img src="/ape-police-logo.png" alt="APOL" style={{ width: 28, height: 28 }} />
+            <img src="/apol-agent-logo.png" alt="APOL" style={{ width: 28, height: 28 }} />
             <div>
               <div style={{ color: G, fontSize: "11px", fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase" }}>
-                Ape Police — Investigation Report
+                APOL Agent — Investigation Report
               </div>
               <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase" }}>
                 Deep Dive · Priority Scan
@@ -493,9 +493,9 @@ export default function AgentScanner() {
           </Link>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 overflow-hidden">
-              <img src="/ape-police-logo.png" alt="APE POLICE" className="w-full h-full object-cover" />
+              <img src="/apol-agent-logo.png" alt="APOL Agent" className="w-full h-full object-cover" />
             </div>
-            <span className="font-meme text-xl gradient-text">APE POLICE</span>
+            <span className="font-meme text-xl gradient-text">APOL AGENT</span>
           </div>
         </div>
       </div>
@@ -723,10 +723,10 @@ export default function AgentScanner() {
                 <Shield size={40} color={G} strokeWidth={2.5} />
                 <div style={{ flex: 1 }}>
                   <div style={{ color: G, fontSize: "14px", fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase" }}>
-                    APE POLICE CERTIFIED
+                    APOL AGENT CERTIFIED
                   </div>
                   <div style={{ color: "rgba(255,255,255,0.6)", fontSize: "11px", marginTop: "3px", letterSpacing: "0.06em" }}>
-                    This contract has passed a full Ape Police audit and is verified on-chain.
+                    This contract has passed a full APOL Agent audit and is verified on-chain.
                     {apolCertified.project?.projectName && (
                       <span style={{ color: G, marginLeft: "6px" }}>— {apolCertified.project.projectName}</span>
                     )}
@@ -788,7 +788,7 @@ export default function AgentScanner() {
             <div className="bg-slate-900 border border-blue-600/30 rounded-xl p-5 flex gap-4">
               <div className="flex-shrink-0">
                 <div className="w-11 h-11 overflow-hidden">
-                  <img src="/ape-police-logo.png" alt="Officer" className="w-full h-full object-cover" />
+                  <img src="/apol-agent-logo.png" alt="Officer" className="w-full h-full object-cover" />
                 </div>
               </div>
               <div className="flex-1">
@@ -796,7 +796,7 @@ export default function AgentScanner() {
                 <p className="text-slate-200 text-sm leading-relaxed" data-testid="text-apol-verdict">{result.apolVerdict}</p>
                 <button onClick={() => {
                   const scoreText = result.cognitionScore !== null ? `Cognition Score: ${result.cognitionScore}%` : "No verifiable data";
-                  const text = `🦍 APE POLICE Agent-LARP Detection\n\nAgent: ${result.agentName}\n${scoreText}\nVerdict: ${result.verdict}\n\n${result.apolVerdict}\n\nScan at apepolice.io #APOL #LARPDetector`;
+                  const text = `🦍 APOL Agent — LARP Detection\n\nAgent: ${result.agentName}\n${scoreText}\nVerdict: ${result.verdict}\n\n${result.apolVerdict}\n\nScan at apepolice.online #APOL #LARPDetector`;
                   window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank");
                 }} className="mt-3 text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors" data-testid="button-tweet-verdict">
                   Tweet this verdict <ChevronRight className="w-3 h-3" />

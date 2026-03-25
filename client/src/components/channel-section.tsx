@@ -19,7 +19,7 @@ export default function ChannelSection() {
             </p>
             <div className="space-y-4 mb-8">
               <p className="text-base text-slate-300 leading-relaxed">
-                Ape Police provides a real-time verification layer for the agentic economy. By cross-referencing on-chain execution with autonomous reasoning logs, the APOL Agent eliminates market asymmetry and exposes developer LARPs before they impact the retail holder.
+                APOL Agent provides a real-time verification layer for the agentic economy. By cross-referencing on-chain execution with autonomous reasoning logs, the protocol eliminates market asymmetry and exposes developer LARPs before they impact the retail holder.
               </p>
             </div>
 

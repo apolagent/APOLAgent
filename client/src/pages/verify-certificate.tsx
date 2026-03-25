@@ -171,7 +171,7 @@ export default function VerifyCertificate() {
           color: "rgba(255,255,255,0.4)", fontSize: "10px", textDecoration: "none",
           letterSpacing: "0.1em", marginBottom: "32px",
         }}>
-          <ArrowLeft size={12} /> Back to APE POLICE
+          <ArrowLeft size={12} /> Back to APOL Agent
         </Link>
 
         {/* ── Certificate Card ─────────────────────────────────────────── */}
@@ -205,7 +205,7 @@ export default function VerifyCertificate() {
               <ShieldCheck size={32} color={G} />
             </div>
             <p style={{ margin: "0 0 4px", fontSize: "9px", color: "rgba(0,255,0,0.55)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
-              APE POLICE · Official Verification Certificate
+              APOL Agent · Official Verification Certificate
             </p>
             <h1 style={{ margin: "0 0 6px", fontSize: "28px", fontWeight: 900, color: G, letterSpacing: "0.06em" }}>
               APOL VERIFIED
@@ -441,7 +441,7 @@ export default function VerifyCertificate() {
                 Certificate ID: {project.contractAddress.toLowerCase()}
               </p>
               <p style={{ margin: 0, fontSize: "9px", color: "rgba(0,255,0,0.4)", letterSpacing: "0.1em" }}>
-                VERIFIED BY APE POLICE — ON-CHAIN WATCHDOG
+                VERIFIED BY APOL AGENT — AUTONOMOUS ONCHAIN FORENSICS
               </p>
             </div>
           </div>
@@ -452,7 +452,7 @@ export default function VerifyCertificate() {
           marginTop: "20px", fontSize: "10px", color: "rgba(255,255,255,0.3)",
           lineHeight: "1.7", textAlign: "center",
         }}>
-          This certificate reflects the security state at the time of APE POLICE review.
+          This certificate reflects the security state at the time of APOL Agent review.
           Blockchain projects can change after verification. Always conduct your own research before investing.
         </p>
       </div>

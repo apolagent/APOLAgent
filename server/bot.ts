@@ -178,7 +178,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     // ── Build message ─────────────────────────────────────────────────────────
     let msg = "";
 
-    msg += `🚔 *APE POLICE — POLICE SNAPSHOT*\n\n`;
+    msg += `🚔 *APOL AGENT — CONTRACT SNAPSHOT*\n\n`;
     msg += `📍 *Address:* \`${shortAddr(address)}\`\n`;
     msg += `⛓️ *Chain:* Base Mainnet\n\n`;
 
@@ -850,7 +850,7 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
       verdict = "⛔ LARP / THREAT";
       verdictLine = tinyLiquidity && noContract
         ? "No contract data and negligible liquidity. Likely a LARP operation."
-        : "High-severity attack vectors detected. This agent fails the APE POLICE audit.";
+        : "High-severity attack vectors detected. This agent fails the APOL Agent audit.";
     } else if (promptRisk === "MEDIUM" || exfilRisk === "MEDIUM" || !isVerified) {
       verdict = "⚠️ CAUTION ADVISED";
       verdictLine = "Moderate risks present. Not certified — due diligence required before interaction.";
@@ -859,7 +859,7 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
       verdictLine = "Insufficient contract data to certify. Verify the CA and try again.";
     } else {
       verdict = "✅ CERTIFIED UNIT";
-      verdictLine = "Contract is clean, source verified, and no backdoors detected. Agent passes APE POLICE audit.";
+      verdictLine = "Contract is clean, source verified, and no backdoors detected. Agent passes APOL Agent audit.";
     }
 
     const riskEmoji = (r: string) =>
@@ -1189,7 +1189,7 @@ export function createBot(): Telegraf | null {
   // ── /help ─────────────────────────────────────────────────────────────────
   bot.help(ctx =>
     ctx.replyWithMarkdown(
-      `🚔 *APE POLICE — HELP DESK*\n\n` +
+      `🚔 *APOL AGENT — HELP DESK*\n\n` +
       `🔍 /scan [address] — Token contract security scan\n` +
       `🐦 /scanx [@username] — X/Twitter social forensics & LARP detection\n` +
       `🤖 /scanagent [name or CA] — AI agent intelligence audit\n` +
@@ -1361,7 +1361,7 @@ export function createBot(): Telegraf | null {
   bot.command("verified", ctx =>
     ctx.replyWithMarkdown(
       `🛡️ *APOL VERIFIED BUILDERS*\n\n` +
-      `Projects that have passed the full Ape Police audit:\n\n` +
+      `Projects that have passed the full APOL Agent audit:\n\n` +
       `🔗 [View Certified Projects](${site}/verified-builders)\n\n` +
       `_Each listed project has passed contract security review, team vetting, and community scrutiny._`,
       { disable_web_page_preview: true }

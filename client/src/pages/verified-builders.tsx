@@ -91,7 +91,7 @@ export default function VerifiedBuilders() {
             Verified Builders
           </div>
           <div style={{ color: "rgba(255,255,255,0.35)", fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-            Ape Police Certified — Community Vetted Projects
+            APOL Agent Certified — Community Vetted Projects
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -110,11 +110,11 @@ export default function VerifiedBuilders() {
             — Official Registry
           </div>
           <h1 style={{ fontSize: "clamp(24px, 5vw, 42px)", fontWeight: 900, color: "#fff", letterSpacing: "0.04em", lineHeight: 1.1, margin: 0 }}>
-            APE POLICE<br />
+            APOL AGENT<br />
             <span style={{ color: G }}>CERTIFIED PROJECTS</span>
           </h1>
           <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "12px", lineHeight: 1.7, maxWidth: "560px", marginTop: "8px" }}>
-            These projects have submitted to and passed the Ape Police community audit process.
+            These projects have submitted to and passed the APOL Agent community audit process.
             Each verified entry has undergone contract security review, team vetting, and community scrutiny.
           </p>
         </div>
