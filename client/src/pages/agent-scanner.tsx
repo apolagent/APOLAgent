@@ -3,13 +3,29 @@ import { Link } from "wouter";
 import {
   ArrowLeft, Bot, AlertTriangle, CheckCircle,
   XCircle, Loader2, ChevronRight, Search, Brain, HelpCircle, Info,
-  ShieldAlert, Activity, Clock, Shield,
+  Zap, Lock, ExternalLink, ShieldAlert, Activity, Clock, Shield,
   ShieldCheck, Droplets, Users, TrendingUp, FileBarChart2,
 } from "lucide-react";
+import { BrowserProvider, JsonRpcProvider, parseEther } from "ethers";
+import { getSelectedProvider } from "@/hooks/use-wallet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CHAIN, PAYMENT, ensureCorrectNetwork, IS_INNER_CIRCLE_TEST_MODE } from "@/lib/chain-config";
+
+async function waitForReceipt(txHash: string, timeoutMs = 90_000): Promise<boolean> {
+  const rpc = new JsonRpcProvider(CHAIN.rpcUrl);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const receipt = await rpc.getTransactionReceipt(txHash);
+      if (receipt) return receipt.status === 1;
+    } catch {}
+    await new Promise(r => setTimeout(r, 2500));
+  }
+  return true;
+}
 
 
 const G = "#00ff00";
@@ -353,7 +369,11 @@ export default function AgentScanner() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [showSysInfo, setShowSysInfo] = useState(false);
 
-
+  const [deepDivePending, setDeepDivePending] = useState(false);
+  const [deepDiveUnlocked, setDeepDiveUnlocked] = useState(IS_INNER_CIRCLE_TEST_MODE);
+  const [deepDiveTxHash, setDeepDiveTxHash] = useState<string | null>(null);
+  const [deepDiveError, setDeepDiveError] = useState<string | null>(null);
+  const [deepDiveHover, setDeepDiveHover] = useState(false);
 
   const [apolCertified, setApolCertified] = useState<{ certified: boolean; project?: any } | null>(null);
 
@@ -366,6 +386,7 @@ export default function AgentScanner() {
   const handleScan = async () => {
     if (!agentName.trim()) { setScanError("Agent name is required."); return; }
     setIsScanning(true); setScanError(null); setResult(null);
+    setDeepDiveUnlocked(IS_INNER_CIRCLE_TEST_MODE); setDeepDiveTxHash(null); setDeepDiveError(null);
     try {
       const res = await fetch("/api/agent/analyze", {
         method: "POST",
@@ -387,6 +408,44 @@ export default function AgentScanner() {
       setScanError(e.message || "Scan failed. Please try again.");
     } finally {
       setIsScanning(false);
+    }
+  };
+
+  const handleDeepDive = async () => {
+    if (IS_INNER_CIRCLE_TEST_MODE) { setDeepDiveUnlocked(true); return; }
+    const eth = getSelectedProvider();
+    if (!eth) {
+      setDeepDiveError("MetaMask not detected. Install MetaMask to use Deep Dive Scan.");
+      return;
+    }
+    setDeepDivePending(true);
+    setDeepDiveError(null);
+    setDeepDiveTxHash(null);
+    try {
+      const accounts: string[] = await eth.request({ method: "eth_requestAccounts" });
+      await ensureCorrectNetwork(eth);
+      const provider = new BrowserProvider(eth);
+      const signer = await provider.getSigner();
+      const tx = await signer.sendTransaction({
+        to: PAYMENT.platformWallet,
+        value: parseEther(PAYMENT.deepDiveFee),
+      });
+      setDeepDiveTxHash(tx.hash);
+      const success = await waitForReceipt(tx.hash);
+      if (success) {
+        setDeepDiveUnlocked(true);
+        setTimeout(() => document.getElementById("advanced-results")?.scrollIntoView({ behavior: "smooth", block: "start" }), 200);
+      } else {
+        setDeepDiveError("Transaction reverted on-chain. Deep Dive not unlocked.");
+      }
+    } catch (e: any) {
+      if (e.code === 4001 || e.code === "ACTION_REJECTED" || e.message?.includes("rejected")) {
+        setDeepDiveError("Transaction rejected.");
+      } else {
+        setDeepDiveError(e.message || "Transaction failed. Please try again.");
+      }
+    } finally {
+      setDeepDivePending(false);
     }
   };
 
@@ -514,7 +573,87 @@ export default function AgentScanner() {
                   : <><Bot style={{ width: 18, height: 18 }} />Run LARP Detection</>}
               </button>
 
+              {!IS_INNER_CIRCLE_TEST_MODE && (
+                <button
+                  onClick={handleDeepDive}
+                  disabled={deepDivePending || deepDiveUnlocked}
+                  onMouseEnter={() => setDeepDiveHover(true)}
+                  onMouseLeave={() => setDeepDiveHover(false)}
+                  data-testid="button-deep-dive-scan"
+                  style={{
+                    flex: "0 0 auto",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "7px",
+                    padding: "12px 18px",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    letterSpacing: "0.05em",
+                    textTransform: "uppercase",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    background: deepDiveUnlocked ? "rgba(0,255,0,0.1)" : deepDiveHover && !deepDivePending ? G : "#000",
+                    color: deepDiveUnlocked ? G : deepDiveHover && !deepDivePending ? "#000" : G,
+                    border: deepDiveUnlocked ? `1px solid rgba(0,255,0,0.4)` : `1px solid ${G}`,
+                    borderRadius: "0",
+                    cursor: deepDiveUnlocked || deepDivePending ? "default" : "pointer",
+                    transition: "background 0.15s ease, color 0.15s ease",
+                    whiteSpace: "nowrap",
+                    opacity: deepDivePending ? 0.75 : 1,
+                  }}
+                >
+                  {deepDiveUnlocked ? (
+                    <><CheckCircle size={15} />Unlocked</>
+                  ) : deepDivePending ? (
+                    <><Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} />Confirming…</>
+                  ) : (
+                    <><Zap size={15} />Deep Dive Scan ({PAYMENT.deepDiveFee} ETH)</>
+                  )}
+                </button>
+              )}
             </div>
+
+            {!IS_INNER_CIRCLE_TEST_MODE && deepDiveTxHash && !deepDiveUnlocked && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: "8px",
+                padding: "8px 12px", border: "1px solid rgba(0,255,0,0.2)",
+                background: "rgba(0,255,0,0.04)", fontSize: "11px", color: "rgba(0,255,0,0.7)",
+                fontFamily: "'JetBrains Mono', monospace",
+              }} data-testid="div-tx-pending">
+                <Loader2 size={12} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />
+                <span>TX SUBMITTED — Awaiting on-chain confirmation...</span>
+                <a href={`${CHAIN.explorerUrl}/tx/${deepDiveTxHash}`} target="_blank" rel="noopener noreferrer" style={{ color: G, marginLeft: "auto", flexShrink: 0 }}>
+                  <ExternalLink size={12} />
+                </a>
+              </div>
+            )}
+
+            {!IS_INNER_CIRCLE_TEST_MODE && deepDiveUnlocked && deepDiveTxHash && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: "8px",
+                padding: "8px 12px", border: `1px solid rgba(0,255,0,0.4)`,
+                background: "rgba(0,255,0,0.06)", fontSize: "11px", color: G,
+                fontFamily: "'JetBrains Mono', monospace",
+              }} data-testid="div-tx-confirmed">
+                <CheckCircle size={12} style={{ flexShrink: 0 }} />
+                <span>TX CONFIRMED — Advanced Results unlocked below.</span>
+                <a href={`${CHAIN.explorerUrl}/tx/${deepDiveTxHash}`} target="_blank" rel="noopener noreferrer" style={{ color: G, marginLeft: "auto", flexShrink: 0 }}>
+                  <ExternalLink size={12} />
+                </a>
+              </div>
+            )}
+
+            {!IS_INNER_CIRCLE_TEST_MODE && deepDiveError && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: "8px",
+                padding: "8px 12px", border: "1px solid rgba(255,68,68,0.4)",
+                background: "rgba(255,68,68,0.04)", fontSize: "11px", color: "#f87171",
+                fontFamily: "'JetBrains Mono', monospace",
+              }} data-testid="text-deep-dive-error">
+                <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                {deepDiveError}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -636,13 +775,36 @@ export default function AgentScanner() {
             </div>
 
             <div id="advanced-results">
-              <AdvancedResults result={result} />
+              {deepDiveUnlocked ? (
+                <AdvancedResults result={result} />
+              ) : (
+                <div style={{
+                  border: "1px solid rgba(0,255,0,0.2)",
+                  background: "#000",
+                  padding: "32px 20px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "12px",
+                  textAlign: "center",
+                }} data-testid="div-advanced-results-locked">
+                  <Lock size={28} color="rgba(0,255,0,0.65)" />
+                  <p style={{ color: "rgba(0,255,0,0.7)", fontSize: "12px", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 700 }}>
+                    Advanced Forensic Report — Locked
+                  </p>
+                  <p style={{ color: "rgba(255,255,255,0.72)", fontSize: "11px", maxWidth: "320px", lineHeight: "1.6" }}>
+                    Timing pattern matrix, raw log entries, full test narratives, and behavioral fingerprint.
+                    Unlock with Deep Dive Scan ({PAYMENT.deepDiveFee} ETH).
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="text-center pt-1">
               <button onClick={() => {
                 setResult(null); setAgentName(""); setSocialLink(""); setWallet("");
                 setClaimedAbilities(""); setLogsUrl(""); setScanError(null);
+                setDeepDiveUnlocked(IS_INNER_CIRCLE_TEST_MODE); setDeepDiveTxHash(null); setDeepDiveError(null);
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
                 className="text-slate-500 hover:text-white text-sm underline underline-offset-2 transition-colors" data-testid="button-scan-another">

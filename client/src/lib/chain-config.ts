@@ -28,9 +28,14 @@ const CURRENT_NETWORK: keyof typeof NETWORKS = "sepolia";
 /** Active network — all chain references pull from here. */
 export const CHAIN = NETWORKS[CURRENT_NETWORK];
 
+// ── SET TO false FOR PUBLIC LAUNCH TO RE-ACTIVATE THE 0.005 ETH DEEP DIVE PAYWALL ──
+export const IS_INNER_CIRCLE_TEST_MODE = true;
+// ─────────────────────────────────────────────────────────────────────────────
+
 /** Payment configuration — wallet address + fees in ETH. */
 export const PAYMENT = {
   platformWallet: "0x857aca6A8A743C9262d64819D239f509a1Cd0A85",
+  deepDiveFee: "0.005",  // ETH — Deep Dive Scan (bypassed when IS_INNER_CIRCLE_TEST_MODE = true)
   verifyFee:   "0.05",   // ETH — Get Verified submission
 } as const;
 
