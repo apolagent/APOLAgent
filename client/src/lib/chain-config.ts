@@ -31,7 +31,6 @@ export const CHAIN = NETWORKS[CURRENT_NETWORK];
 /** Payment configuration — wallet address + fees in ETH. */
 export const PAYMENT = {
   platformWallet: "0x857aca6A8A743C9262d64819D239f509a1Cd0A85",
-  deepDiveFee: "0.005",  // ETH — Deep Dive Scan
   verifyFee:   "0.05",   // ETH — Get Verified submission
 } as const;
 
