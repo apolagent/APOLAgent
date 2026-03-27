@@ -68,6 +68,26 @@ export default function Footer() {
             >
               Docs
             </Link>
+            <span style={{ color: "rgba(255,255,255,0.2)", margin: "0 10px", fontSize: "10px" }}>|</span>
+            <a
+              href="https://paragraph.com/@apolagent"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="link-paragraph"
+              style={{
+                fontSize: "10px",
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "rgba(255,255,255,0.5)",
+                textDecoration: "none",
+                fontFamily: "JetBrains Mono, monospace",
+                transition: "color 0.15s",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
+              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}
+            >
+              Paragraph
+            </a>
           </div>
 
           {/* Operational disclaimer */}
