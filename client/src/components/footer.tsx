@@ -40,17 +40,17 @@ export default function Footer() {
                 fontSize: "10px",
                 letterSpacing: "0.14em",
                 textTransform: "uppercase",
-                color: "rgba(0,255,0,0.5)",
+                color: "rgba(255,255,255,0.5)",
                 textDecoration: "none",
                 fontFamily: "JetBrains Mono, monospace",
                 transition: "color 0.15s",
               }}
-              onMouseEnter={e => (e.currentTarget.style.color = "#00ff00")}
-              onMouseLeave={e => (e.currentTarget.style.color = "rgba(0,255,0,0.5)")}
+              onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
+              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}
             >
               Whitepaper
             </Link>
-            <span style={{ color: "rgba(0,255,0,0.2)", margin: "0 10px", fontSize: "10px" }}>|</span>
+            <span style={{ color: "rgba(255,255,255,0.2)", margin: "0 10px", fontSize: "10px" }}>|</span>
             <Link
               href="/docs"
               data-testid="link-docs"
@@ -58,13 +58,13 @@ export default function Footer() {
                 fontSize: "10px",
                 letterSpacing: "0.14em",
                 textTransform: "uppercase",
-                color: "rgba(0,255,0,0.5)",
+                color: "rgba(255,255,255,0.5)",
                 textDecoration: "none",
                 fontFamily: "JetBrains Mono, monospace",
                 transition: "color 0.15s",
               }}
-              onMouseEnter={e => (e.currentTarget.style.color = "#00ff00")}
-              onMouseLeave={e => (e.currentTarget.style.color = "rgba(0,255,0,0.5)")}
+              onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
+              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}
             >
               Docs
             </Link>
