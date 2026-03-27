@@ -404,7 +404,7 @@ export default function Whitepaper() {
   }, []);
 
   return (
-    <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#e9ecef" }}>
+    <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#525659" }}>
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
       <style>{`
         .wp-page {
@@ -413,7 +413,7 @@ export default function Whitepaper() {
           background: #ffffff;
           padding: 48px 64px;
           margin: 0 auto 40px;
-          box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+          box-shadow: 0 2px 12px rgba(0,0,0,0.3);
           box-sizing: border-box;
           position: relative;
         }
@@ -425,8 +425,8 @@ export default function Whitepaper() {
         .wp-sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
         .wp-sidebar-scroll::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
         .wp-content::-webkit-scrollbar { width: 10px; }
-        .wp-content::-webkit-scrollbar-track { background: #ddd; }
-        .wp-content::-webkit-scrollbar-thumb { background: #aaa; border-radius: 5px; }
+        .wp-content::-webkit-scrollbar-track { background: #3a3d40; }
+        .wp-content::-webkit-scrollbar-thumb { background: #6b6e72; border-radius: 5px; }
         .wp-content::-webkit-scrollbar-thumb:hover { background: #888; }
         .wp-toc-link { transition: color 0.15s ease; }
         .wp-toc-link:hover { color: #00D1FF !important; }
@@ -461,7 +461,7 @@ export default function Whitepaper() {
       {/* Sidebar - fixed 300px */}
       <div style={{
         position: "fixed", top: 36, left: 0, bottom: 0, width: 300, zIndex: 10,
-        background: "#484848", borderRight: "1px solid #555",
+        background: "#404040", borderRight: "1px solid #4a4a4a",
         display: "flex", flexDirection: "column", overflow: "hidden",
       }}>
         <div style={{ display: "flex", borderBottom: "1px solid #555", flexShrink: 0 }}>
@@ -576,7 +576,7 @@ export default function Whitepaper() {
         style={{
           position: "absolute", top: 36, left: 300, right: 0, bottom: 0,
           overflowY: "auto", overflowX: "auto",
-          background: "#e9ecef",
+          background: "#525659",
           display: "flex", justifyContent: "center",
           padding: "40px",
         }}
