@@ -1,0 +1,43 @@
+I want to build a high-fidelity, dual-scroll Document Reader at /whitepaper. This must be a clean, institutional design. Follow these rules exactly:
+
+1. The Dual-Scroll Architecture:
+
+Root Container: Use display: flex; height: 100vh; overflow: hidden;. This is essential to prevent the whole website from scrolling.
+
+Sidebar (The Box): width: 320px; min-width: 320px; height: 100vh; overflow-y: auto; background: #fdfdfd; border-right: 1px solid #e0e0e0; padding: 30px;.
+
+Main Document Area: flex-grow: 1; height: 100vh; overflow-y: auto; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 60px 0;.
+
+2. The Perfect A4 Pages:
+
+Each page must be a div with class .whitepaper-page.
+
+Size: width: 850px; min-height: 1200px; background: #ffffff; margin-bottom: 50px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); padding: 90px; box-sizing: border-box;.
+
+Typography: All body text must be a high-end Serif font (Times New Roman style), size 16px, line-height: 1.6, and Fully Justified (text-align: justify).
+
+3. Sidebar (Navigation Table):
+
+Header: 'FORENSIC DOCUMENTATION' (11px, bold, grey, tracking: 1px).
+
+List items: Clean, normal-weight (400) text. No bolding.
+
+Links: I. Abstract, II. Forensic Heuristics, III. Mathematical Modeling, IV. Tokenomics, V. Security Verdict.
+
+No symbols like — or > allowed.
+
+4. Institutional Components:
+
+Page IDs: Top right of each page: APOL-SEC-0[Page Number].
+
+LaTeX Formulas: Use KaTeX for Section III: $$RS = \frac{L_{total}}{C_{whale} \times H_{rank}} \times 100$$.
+
+The Footer (Final Page): The last page must end with a full-width dark section. Use the Silverback Mascot and the text: 'APOL AGENT: The Forensic Standard for Base.'
+
+5. Strict Quality Control:
+
+Zero Blank Space: Ensure the document area background matches the bottom of the last page.
+
+No Em-Dashes: Do not use — anywhere in the UI or text.
+
+No Double Scroll: The browser's main window should NOT scroll; only the sidebar and the document area should have their own individual scrollbars
