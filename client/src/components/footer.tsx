@@ -50,6 +50,24 @@ export default function Footer() {
             >
               Whitepaper
             </Link>
+            <span style={{ color: "rgba(0,255,0,0.2)", margin: "0 10px", fontSize: "10px" }}>|</span>
+            <Link
+              href="/docs"
+              data-testid="link-docs"
+              style={{
+                fontSize: "10px",
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "rgba(0,255,0,0.5)",
+                textDecoration: "none",
+                fontFamily: "JetBrains Mono, monospace",
+                transition: "color 0.15s",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.color = "#00ff00")}
+              onMouseLeave={e => (e.currentTarget.style.color = "rgba(0,255,0,0.5)")}
+            >
+              Docs
+            </Link>
           </div>
 
           {/* Operational disclaimer */}
