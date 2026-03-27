@@ -1,13 +1,59 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "wouter";
 import katex from "katex";
+import mermaid from "mermaid";
+import { Chart, ArcElement, Tooltip, Legend, PieController } from "chart.js";
 import { ChevronLeft, ChevronRight, Minus, Plus, Download, Printer, RotateCw, Undo2, Redo2, Menu, Images, List } from "lucide-react";
+
+Chart.register(ArcElement, Tooltip, Legend, PieController);
+
+mermaid.initialize({
+  startOnLoad: false,
+  theme: "base",
+  themeVariables: {
+    primaryColor: "#e0f7ff",
+    primaryBorderColor: "#00D1FF",
+    primaryTextColor: "#111",
+    lineColor: "#00D1FF",
+    secondaryColor: "#f0faff",
+    tertiaryColor: "#fff",
+    fontFamily: "'Times New Roman', serif",
+    fontSize: "13px",
+  },
+});
 
 const serif = "'Times New Roman', Georgia, serif";
 const mono = "'JetBrains Mono', 'Courier New', monospace";
 const sans = "'Segoe UI', 'Inter', -apple-system, sans-serif";
 const ACCENT = "#00D1FF";
 const TOTAL_PAGES = 5;
+
+const hierarchyDef = `graph TD
+    CORE["APOL CORE"] --> OC["On-Chain Layer"]
+    CORE --> BL["Behavioral Layer"]
+    CORE --> EL["Economic Layer"]
+    OC --> OC1["Wallet Clusters"]
+    OC --> OC2["Shadow ID"]
+    OC --> OC3["Funding Trace"]
+    BL --> BL1["Narrative Alignment"]
+    BL --> BL2["Logic Auditing"]
+    BL --> BL3["Agent Autonomy"]
+    EL --> EL1["Liquidity Floor"]
+    EL --> EL2["Whale Concentration"]`;
+
+const forensicDef = `graph TD
+    A["APOL Forensic Engine"] --> B["Wallet Analytics"]
+    A --> C["Behavioral Logic"]
+    A --> D["Economic Resilience"]
+    B --> B1["Transaction Tracing"]
+    B --> B2["Funding Source ID"]
+    B --> B3["Whale Detection"]
+    C --> C1["Timing Analysis"]
+    C --> C2["Bot vs Human"]
+    C --> C3["LARP Detection"]
+    D --> D1["LP Lock Verification"]
+    D --> D2["Tax Analysis"]
+    D --> D3["Holder Distribution"]`;
 
 const tocItems = [
   { label: "I. Abstract", page: 1 },
@@ -39,6 +85,39 @@ function KaTeX({ math }: { math: string }) {
     if (ref.current) katex.render(math, ref.current, { displayMode: true, throwOnError: false });
   }, [math]);
   return <div ref={ref} style={{ margin: "28px 0", textAlign: "center" }} />;
+}
+
+function MermaidChart({ id, definition }: { id: string; definition: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    mermaid.render(id, definition).then(({ svg }) => {
+      if (ref.current) ref.current.innerHTML = svg;
+    });
+  }, [id, definition]);
+  return <div ref={ref} style={{ display: "flex", justifyContent: "center", margin: "20px 0" }} />;
+}
+
+function TokenomicsChart() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<Chart | null>(null);
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    if (chartRef.current) chartRef.current.destroy();
+    chartRef.current = new Chart(canvasRef.current, {
+      type: "pie",
+      data: {
+        labels: ["Public Circulation (100%)"],
+        datasets: [{ data: [100], backgroundColor: ["#0097b2"], borderColor: "#fff", borderWidth: 2 }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        plugins: { legend: { position: "bottom", labels: { color: "#333", font: { family: serif, size: 11 }, padding: 10 } } },
+      },
+    });
+    return () => { chartRef.current?.destroy(); };
+  }, []);
+  return <div style={{ maxWidth: 220, margin: "14px auto" }}><canvas ref={canvasRef} data-testid="chart-tokenomics" /></div>;
 }
 
 const body: React.CSSProperties = {
@@ -100,6 +179,8 @@ function Page2() {
       <PageId num={2} />
       <h2 style={heading}>II. Forensic Heuristics</h2>
       {hr()}
+      <MermaidChart id="fig1-hierarchy" definition={hierarchyDef} />
+      <p style={{ fontSize: 11, color: "#999", textAlign: "center", fontStyle: "italic", fontFamily: serif, margin: "6px 0 24px" }}>Fig. 1: Hierarchical Evaluation Framework. Three-layer forensic taxonomy.</p>
       <p style={body}>
         The APOL forensic engine applies a three-layer heuristic taxonomy to evaluate projects across on-chain,
         behavioral, and economic dimensions. Each layer operates independently, producing isolated risk signals
@@ -222,16 +303,24 @@ function Page4() {
       <PageId num={4} />
       <h2 style={heading}>IV. Tokenomics</h2>
       {hr()}
-      <p style={body}>
-        The $APOL token employs a maximally fair distribution model with zero insider allocation. The entire supply
-        enters public circulation at launch with no team reserves, no marketing tax, and no vesting schedules. This
-        structure eliminates sell pressure from insider unlocks and aligns all stakeholders from genesis.
-      </p>
-      <p style={body}>
-        The immutable 0/0 tax structure ensures that no value is extracted from trades. Liquidity is permanently locked
-        or burned, verifiable on-chain, providing a non-revocable floor for market participants. The hard cap of
-        1,000,000,000 tokens prevents inflationary dilution.
-      </p>
+      <div style={{ display: "flex", gap: 30, marginBottom: 24 }}>
+        <div style={{ flex: 1 }}>
+          <p style={body}>
+            The $APOL token employs a maximally fair distribution model with zero insider allocation. The entire supply
+            enters public circulation at launch with no team reserves, no marketing tax, and no vesting schedules. This
+            structure eliminates sell pressure from insider unlocks and aligns all stakeholders from genesis.
+          </p>
+          <p style={body}>
+            The immutable 0/0 tax structure ensures that no value is extracted from trades. Liquidity is permanently locked
+            or burned, verifiable on-chain, providing a non-revocable floor for market participants. The hard cap of
+            1,000,000,000 tokens prevents inflationary dilution.
+          </p>
+        </div>
+        <div style={{ width: 200, flexShrink: 0 }}>
+          <TokenomicsChart />
+          <p style={{ fontSize: 9, color: "#999", textAlign: "center", fontStyle: "italic", fontFamily: serif }}>Fig. 3: Token Distribution</p>
+        </div>
+      </div>
       <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: serif, fontSize: 14, margin: "28px 0" }}>
         <thead>
           <tr style={{ borderBottom: "2px solid #000" }}>
@@ -256,6 +345,8 @@ function Page4() {
           ))}
         </tbody>
       </table>
+      <MermaidChart id="fig2-forensic" definition={forensicDef} />
+      <p style={{ fontSize: 11, color: "#999", textAlign: "center", fontStyle: "italic", fontFamily: serif, margin: "6px 0 24px" }}>Fig. 2: APOL Forensic Engine. Complete module hierarchy.</p>
       <p style={body}>
         The protocol operates across two complementary interfaces: a web-based forensic terminal and a Telegram bot,
         both powered by a shared backend intelligence engine. The architecture is designed for low-latency forensic
