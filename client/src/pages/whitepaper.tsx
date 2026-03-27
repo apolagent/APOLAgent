@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, Images, List, Download, Printer, ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react";
+import { ArrowLeft, Images, List, Download, Printer, ChevronLeft, ChevronRight } from "lucide-react";
 import katex from "katex";
 import mermaid from "mermaid";
 import { Chart, ArcElement, Tooltip, Legend, PieController } from "chart.js";
@@ -11,17 +11,18 @@ mermaid.initialize({
   startOnLoad: false,
   theme: "base",
   themeVariables: {
-    primaryColor: "#e8f5e9",
-    primaryBorderColor: "#00c853",
+    primaryColor: "#e0f7ff",
+    primaryBorderColor: "#00D1FF",
     primaryTextColor: "#111",
-    lineColor: "#00c853",
-    secondaryColor: "#f1f8e9",
+    lineColor: "#00D1FF",
+    secondaryColor: "#f0faff",
     tertiaryColor: "#fff",
     fontFamily: "'Computer Modern', 'Times New Roman', serif",
     fontSize: "12px",
   },
 });
 
+const ACCENT = "#00D1FF";
 const serif = "'Times New Roman', 'Computer Modern', Georgia, serif";
 const sans = "'Inter', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif";
 const mono = "'JetBrains Mono', 'Courier New', monospace";
@@ -55,7 +56,7 @@ function TokenomicsChart() {
       type: "pie",
       data: {
         labels: ["Public Circulation (100%)"],
-        datasets: [{ data: [100], backgroundColor: ["#2e7d32"], borderColor: "#fff", borderWidth: 2 }],
+        datasets: [{ data: [100], backgroundColor: ["#0097b2"], borderColor: "#fff", borderWidth: 2 }],
       },
       options: {
         responsive: true,
@@ -110,23 +111,21 @@ const tocItems = [
   { page: 4, label: "VII. Protocol Architecture", indent: 0 },
 ];
 
-const bp = "11.5px";
-const bpStyle: React.CSSProperties = { fontSize: bp, lineHeight: 1.7, color: "#333", textAlign: "justify", fontFamily: serif, margin: "0 0 10px", textIndent: "24px" };
-const secHead = (text: string): React.CSSProperties => ({ fontSize: "11px", fontWeight: 700, fontFamily: serif, textTransform: "uppercase", letterSpacing: "0.12em", color: "#111", marginBottom: "4px", textAlign: "center" });
+const bpStyle: React.CSSProperties = { fontSize: "11.5px", lineHeight: 1.7, color: "#333", textAlign: "justify", fontFamily: serif, margin: "0 0 10px", textIndent: "24px" };
+const sHead: React.CSSProperties = { fontSize: "11px", fontWeight: 700, fontFamily: serif, textTransform: "uppercase", letterSpacing: "0.12em", color: "#111", marginBottom: "4px", textAlign: "center" };
 const figCap: React.CSSProperties = { fontSize: "10px", color: "#777", textAlign: "center", fontStyle: "italic", fontFamily: serif, margin: "-8px 0 24px" };
 const defBox: React.CSSProperties = { background: "#f8f8f8", border: "1px solid #e0e0e0", padding: "20px 24px", marginBottom: "20px" };
 const defLabel: React.CSSProperties = { fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#555", fontFamily: mono, marginBottom: "8px" };
 const defP: React.CSSProperties = { fontSize: "10.5px", lineHeight: 1.65, color: "#444", textAlign: "justify", fontFamily: serif, margin: 0 };
-const defVar: React.CSSProperties = { fontSize: "10.5px", lineHeight: 1.65, color: "#555", fontFamily: serif, margin: 0 };
-const varBox: React.CSSProperties = { marginTop: "16px", padding: "12px 16px", background: "#fff", border: "1px solid #e8f5e9", fontSize: "10.5px", fontFamily: serif, color: "#555" };
+const varBox: React.CSSProperties = { marginTop: "16px", padding: "12px 16px", background: "#fff", border: "1px solid #e0f0f5", fontSize: "10.5px", fontFamily: serif, color: "#555" };
 
 const pageStyle: React.CSSProperties = {
-  maxWidth: 816,
+  maxWidth: 900,
   margin: "0 auto 20px",
   background: "#ffffff",
   padding: "56px 72px",
-  boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
-  border: "1px solid #d8d8d8",
+  boxShadow: "0 2px 12px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.06)",
+  border: "1px solid #ddd",
   minHeight: 1056,
 };
 
@@ -136,7 +135,7 @@ function Page1() {
       <div style={{ textAlign: "center", marginBottom: "60px", marginTop: "40px" }}>
         <img src="/apol-agent-logo.png" alt="APOL Agent" style={{ width: 140, height: 140, margin: "0 auto 24px", display: "block" }} />
         <h1 style={{ fontSize: "42px", fontWeight: 700, fontFamily: serif, color: "#111", margin: "0 0 4px", letterSpacing: "0.04em" }} data-testid="text-whitepaper-title">APOL AGENT</h1>
-        <p style={{ fontSize: "11px", fontWeight: 700, fontFamily: mono, color: "#00c853", letterSpacing: "0.2em", margin: "8px 0 0", textTransform: "uppercase" }}>$APOL</p>
+        <p style={{ fontSize: "11px", fontWeight: 700, fontFamily: mono, color: ACCENT, letterSpacing: "0.2em", margin: "8px 0 0", textTransform: "uppercase" }}>$APOL</p>
       </div>
       <div style={{ textAlign: "center", marginBottom: "48px" }}>
         <h2 style={{ fontSize: "22px", fontWeight: 400, fontFamily: serif, color: "#222", lineHeight: 1.4, margin: "0 auto", maxWidth: 520 }}>
@@ -149,7 +148,7 @@ function Page1() {
       </div>
       <div style={{ borderTop: "1px solid #ddd", paddingTop: "32px" }}>
         <div style={{ columns: 2, columnGap: "32px" }}>
-          <h3 style={{ ...secHead(""), marginTop: 0, marginBottom: "8px", columnSpan: "all" } as React.CSSProperties}>I. Abstract</h3>
+          <h3 style={{ ...sHead, marginTop: 0, marginBottom: "8px", columnSpan: "all" } as React.CSSProperties}>I. Abstract</h3>
           <p style={bpStyle}>
             APOL Agent is a decentralized forensic intelligence protocol engineered to operate as an autonomous watchdog
             within the Base blockchain ecosystem. The protocol addresses the systemic opacity in decentralized markets by
@@ -179,7 +178,7 @@ function Page1() {
 function Page2() {
   return (
     <div id="page-2" style={pageStyle}>
-      <h3 style={secHead("")}>II. Hierarchical Evaluation Framework</h3>
+      <h3 style={sHead}>II. Hierarchical Evaluation Framework</h3>
       <MermaidChart id="fig1-hierarchy" definition={hierarchyDef} />
       <p style={figCap}>Fig. 1: Hierarchical Evaluation Framework — Three-layer forensic taxonomy underlying all APOL analysis modules.</p>
       <div style={{ columns: 2, columnGap: "32px", marginBottom: "32px" }}>
@@ -188,31 +187,25 @@ function Page2() {
         <p style={bpStyle}>The <strong>Economic Layer</strong> assesses the Liquidity Floor (L<sub>f</sub>) — the minimum locked capital preventing zero-liquidity exits — and the Whale Concentration Ratio (WCR), measuring the cumulative supply share held by the top non-contract holders.</p>
       </div>
       <div style={{ borderTop: "1px solid #ddd", paddingTop: "28px" }}>
-        <h3 style={secHead("")}>III. Mathematical Foundations</h3>
+        <h3 style={sHead}>III. Mathematical Foundations</h3>
         <div style={{ height: 16 }} />
         <div style={defBox}>
           <p style={defLabel}>Definition 1 — Resilience Score (RS)</p>
           <KaTeX math="RS = \\frac{L_{total}}{C_{whale} \\times H_{rank}} \\times 100" />
           <p style={defP}>The Resilience Score quantifies the probability of a liquidity death-spiral based on holder concentration. A high RS indicates that locked liquidity sufficiently buffers against coordinated whale exits.</p>
-          <div style={varBox}>
-            <strong style={{ color: "#333" }}>Variables:</strong> <em>L<sub>total</sub></em> = total locked liquidity (USD). <em>C<sub>whale</sub></em> = whale concentration ratio (0 &lt; WCR ≤ 1). <em>H<sub>rank</sub></em> = Gini-derived holder distribution rank.
-          </div>
+          <div style={varBox}><strong style={{ color: "#333" }}>Variables:</strong> <em>L<sub>total</sub></em> = total locked liquidity (USD). <em>C<sub>whale</sub></em> = whale concentration ratio (0 &lt; WCR ≤ 1). <em>H<sub>rank</sub></em> = Gini-derived holder distribution rank.</div>
         </div>
         <div style={defBox}>
           <p style={defLabel}>Definition 2 — Community Reward Function</p>
           <KaTeX math="Reward = R \\times R_{circulation} \\times M" />
           <p style={defP}>Governs $APOL distribution for community forensic contributions — scam reports, verified intelligence, and threat flagging. The multiplier M scales with contribution quality.</p>
-          <div style={varBox}>
-            <strong style={{ color: "#333" }}>Variables:</strong> <em>R</em> = base reward rate. <em>R<sub>circulation</sub></em> = circulating supply ratio. <em>M</em> = contribution multiplier (quality-weighted).
-          </div>
+          <div style={varBox}><strong style={{ color: "#333" }}>Variables:</strong> <em>R</em> = base reward rate. <em>R<sub>circulation</sub></em> = circulating supply ratio. <em>M</em> = contribution multiplier (quality-weighted).</div>
         </div>
         <div style={{ ...defBox, marginBottom: 0 }}>
           <p style={defLabel}>Definition 3 — Cognition Score (CS)</p>
           <KaTeX math="CS = \\frac{\\sum_{i=1}^{n} w_i \\cdot T_i}{\\sum_{i=1}^{n} w_i} \\times 100" />
           <p style={defP}>Evaluates whether a purported AI agent exhibits genuine autonomous behavior. Scores ≥71% = "Fully Autonomous"; 31–70% = "Semi-Autonomous"; ≤30% = "Digital Puppet."</p>
-          <div style={varBox}>
-            <strong style={{ color: "#333" }}>Variables:</strong> <em>T<sub>i</sub></em> = individual test score per domain. <em>w<sub>i</sub></em> = forensic significance weight. <em>n</em> = evaluation domains (currently 5).
-          </div>
+          <div style={varBox}><strong style={{ color: "#333" }}>Variables:</strong> <em>T<sub>i</sub></em> = individual test score per domain. <em>w<sub>i</sub></em> = forensic significance weight. <em>n</em> = evaluation domains (currently 5).</div>
         </div>
       </div>
     </div>
@@ -222,7 +215,7 @@ function Page2() {
 function Page3() {
   return (
     <div id="page-3" style={pageStyle}>
-      <h3 style={secHead("")}>IV. Forensic Framework</h3>
+      <h3 style={sHead}>IV. Forensic Framework</h3>
       <p style={{ fontSize: "10px", color: "#777", textAlign: "center", fontFamily: serif, marginBottom: "12px" }}>Analytical domain decomposition and sub-module taxonomy</p>
       <MermaidChart id="fig2-forensic" definition={forensicDef} />
       <p style={figCap}>Fig. 2: APOL Forensic Engine — Complete module hierarchy.</p>
@@ -232,7 +225,7 @@ function Page3() {
         <p style={bpStyle}><strong>Economic Resilience</strong> assesses structural integrity through liquidity lock verification, buy/sell tax analysis, and holder rank distribution to quantify rug-pull risk vectors.</p>
       </div>
       <div style={{ borderTop: "1px solid #ddd", paddingTop: "28px" }}>
-        <h3 style={secHead("")}>V. Threat Classification Matrix</h3>
+        <h3 style={sHead}>V. Threat Classification Matrix</h3>
         <div style={{ height: 16 }} />
         <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: serif, fontSize: "11px", marginBottom: "8px" }}>
           <thead>
@@ -255,7 +248,7 @@ function Page3() {
             ] as const).map(([threat, severity, method, rev], i) => (
               <tr key={i} style={{ borderBottom: "1px solid #ddd" }}>
                 <td style={{ padding: "5px 10px", color: "#222" }}>{threat}</td>
-                <td style={{ padding: "5px 10px", textAlign: "center", fontWeight: 700, fontSize: "9px", fontFamily: mono, color: severity === "CRITICAL" ? "#b71c1c" : severity === "HIGH" ? "#e65100" : severity === "MEDIUM" ? "#f57f17" : "#2e7d32" }}>{severity}</td>
+                <td style={{ padding: "5px 10px", textAlign: "center", fontWeight: 700, fontSize: "9px", fontFamily: mono, color: severity === "CRITICAL" ? "#b71c1c" : severity === "HIGH" ? "#e65100" : severity === "MEDIUM" ? "#f57f17" : "#0097b2" }}>{severity}</td>
                 <td style={{ padding: "5px 10px", color: "#555" }}>{method}</td>
                 <td style={{ padding: "5px 10px", textAlign: "center", color: rev === "No" ? "#b71c1c" : "#555" }}>{rev}</td>
               </tr>
@@ -271,7 +264,7 @@ function Page3() {
 function Page4() {
   return (
     <div id="page-4" style={pageStyle}>
-      <h3 style={secHead("")}>VI. Tokenomics</h3>
+      <h3 style={sHead}>VI. Tokenomics</h3>
       <div style={{ height: 12 }} />
       <div style={{ columns: 2, columnGap: "32px", marginBottom: "20px" }}>
         <p style={bpStyle}>The $APOL token employs a maximally fair distribution model with zero insider allocation. The entire supply enters public circulation at launch with no team reserves, no marketing tax, and no vesting schedules. This structure eliminates sell pressure from insider unlocks and aligns all stakeholders from genesis.</p>
@@ -296,7 +289,7 @@ function Page4() {
         </tbody>
       </table>
       <div style={{ borderTop: "1px solid #ddd", paddingTop: "28px" }}>
-        <h3 style={secHead("")}>VII. Protocol Architecture</h3>
+        <h3 style={sHead}>VII. Protocol Architecture</h3>
         <div style={{ height: 12 }} />
         <div style={{ columns: 2, columnGap: "32px", marginBottom: "24px" }}>
           <p style={bpStyle}>The APOL protocol operates across two complementary interfaces — a web-based forensic terminal and a Telegram bot — both powered by a shared backend intelligence engine. The architecture is designed for low-latency forensic output with minimal trust assumptions.</p>
@@ -333,44 +326,49 @@ function Page4() {
 }
 
 export default function Whitepaper() {
-  const [sidebarMode, setSidebarMode] = useState<"thumbs" | "outline" | null>("thumbs");
+  const [sidebarMode, setSidebarMode] = useState<"thumbs" | "outline">("thumbs");
   const [currentPage, setCurrentPage] = useState(1);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const pageRefs = useRef<(HTMLElement | null)[]>([]);
 
   const scrollToPage = useCallback((p: number) => {
     const el = document.getElementById(`page-${p}`);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (el && scrollRef.current) {
+      const containerTop = scrollRef.current.getBoundingClientRect().top;
+      const elTop = el.getBoundingClientRect().top;
+      scrollRef.current.scrollBy({ top: elTop - containerTop, behavior: "smooth" });
+    }
   }, []);
 
   useEffect(() => {
     const container = scrollRef.current;
     if (!container) return;
     const handleScroll = () => {
-      const pages = Array.from({ length: TOTAL_PAGES }, (_, i) => document.getElementById(`page-${i + 1}`));
-      const scrollTop = container.scrollTop + 120;
-      for (let i = pages.length - 1; i >= 0; i--) {
-        if (pages[i] && pages[i]!.offsetTop <= scrollTop) {
-          setCurrentPage(i + 1);
-          break;
+      const containerRect = container.getBoundingClientRect();
+      for (let i = TOTAL_PAGES; i >= 1; i--) {
+        const el = document.getElementById(`page-${i}`);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          if (rect.top <= containerRect.top + 140) {
+            setCurrentPage(i);
+            return;
+          }
         }
       }
+      setCurrentPage(1);
     };
     container.addEventListener("scroll", handleScroll, { passive: true });
     return () => container.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const sidebarOpen = sidebarMode !== null;
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#2b2b2b", fontFamily: sans, overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", width: "100vw", overflow: "hidden", background: "#1e1e1e", fontFamily: sans }}>
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
 
-      {/* ═══ TOP BAR ═══ */}
       <div style={{
         height: 48,
-        background: "#383838",
-        borderBottom: "1px solid #4a4a4a",
+        minHeight: 48,
+        background: "#2a2a2a",
+        borderBottom: "1px solid #3a3a3a",
         display: "flex",
         alignItems: "center",
         padding: "0 16px",
@@ -383,81 +381,80 @@ export default function Whitepaper() {
             <ArrowLeft style={{ width: 14, height: 14 }} />
           </button>
         </Link>
-        <div style={{ width: 1, height: 24, background: "#555" }} />
+        <div style={{ width: 1, height: 24, background: "#444" }} />
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <img src="/apol-agent-logo.png" alt="" style={{ width: 20, height: 20 }} />
-          <span style={{ color: "#ddd", fontSize: "12px", fontWeight: 600, letterSpacing: "0.04em" }}>APOL AGENT</span>
-          <span style={{ color: "#888", fontSize: "11px" }}>|</span>
-          <span style={{ color: "#999", fontSize: "11px" }}>TECHNICAL WHITEPAPER V1.0</span>
+          <span style={{ color: "#eee", fontSize: "12px", fontWeight: 600, letterSpacing: "0.04em" }}>APOL AGENT</span>
+          <span style={{ color: "#555", fontSize: "11px" }}>|</span>
+          <span style={{ color: "#888", fontSize: "11px" }}>TECHNICAL WHITEPAPER V1.0</span>
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ display: "flex", alignItems: "center", gap: "4px", background: "#2f2f2f", borderRadius: "4px", padding: "2px 4px" }}>
-          <button onClick={() => scrollToPage(Math.max(1, currentPage - 1))} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", padding: "4px", display: "flex" }}><ChevronLeft style={{ width: 14, height: 14 }} /></button>
-          <span style={{ color: "#ddd", fontSize: "12px", fontFamily: mono, minWidth: 80, textAlign: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "4px", background: "#222", borderRadius: "4px", padding: "2px 4px", border: "1px solid #3a3a3a" }}>
+          <button onClick={() => scrollToPage(Math.max(1, currentPage - 1))} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", padding: "4px", display: "flex" }} data-testid="button-page-prev"><ChevronLeft style={{ width: 14, height: 14 }} /></button>
+          <span style={{ color: "#ddd", fontSize: "12px", fontFamily: mono, minWidth: 90, textAlign: "center" }} data-testid="text-page-indicator">
             Page {currentPage} of {TOTAL_PAGES}
           </span>
-          <button onClick={() => scrollToPage(Math.min(TOTAL_PAGES, currentPage + 1))} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", padding: "4px", display: "flex" }}><ChevronRight style={{ width: 14, height: 14 }} /></button>
+          <button onClick={() => scrollToPage(Math.min(TOTAL_PAGES, currentPage + 1))} style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", padding: "4px", display: "flex" }} data-testid="button-page-next"><ChevronRight style={{ width: 14, height: 14 }} /></button>
         </div>
-        <div style={{ width: 1, height: 24, background: "#555" }} />
-        <button onClick={() => window.print()} style={{ display: "flex", alignItems: "center", gap: "5px", background: "none", border: "1px solid #555", color: "#ccc", cursor: "pointer", fontFamily: sans, fontSize: "11px", padding: "5px 12px", borderRadius: "4px" }} data-testid="button-print">
+        <div style={{ width: 1, height: 24, background: "#444" }} />
+        <button onClick={() => window.print()} style={{ display: "flex", alignItems: "center", gap: "5px", background: "none", border: "1px solid #444", color: "#ccc", cursor: "pointer", fontFamily: sans, fontSize: "11px", padding: "5px 12px", borderRadius: "4px" }} data-testid="button-print">
           <Printer style={{ width: 13, height: 13 }} /> Print
         </button>
-        <button onClick={() => window.print()} style={{ display: "flex", alignItems: "center", gap: "5px", background: "#00c853", border: "none", color: "#fff", cursor: "pointer", fontFamily: sans, fontSize: "11px", fontWeight: 600, padding: "5px 12px", borderRadius: "4px" }} data-testid="button-download">
+        <button onClick={() => window.print()} style={{ display: "flex", alignItems: "center", gap: "5px", background: ACCENT, border: "none", color: "#000", cursor: "pointer", fontFamily: sans, fontSize: "11px", fontWeight: 600, padding: "5px 14px", borderRadius: "4px" }} data-testid="button-download">
           <Download style={{ width: 13, height: 13 }} /> Download PDF
         </button>
       </div>
 
-      {/* ═══ BODY ═══ */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
-        {/* ─── ICON TOOLBAR ─── */}
         <div style={{
-          width: 48,
-          background: "#333",
-          borderRight: "1px solid #444",
+          width: 300,
+          minWidth: 300,
+          height: "100%",
+          background: "#f8f9fa",
+          borderRight: "1px solid #ddd",
           display: "flex",
           flexDirection: "column",
-          alignItems: "center",
-          padding: "12px 0",
-          gap: "4px",
           flexShrink: 0,
+          overflow: "hidden",
         }}>
-          <button
-            onClick={() => setSidebarMode(m => m === "thumbs" ? null : "thumbs")}
-            data-testid="button-sidebar-thumbs"
-            style={{
-              width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center",
-              background: sidebarMode === "thumbs" ? "rgba(0,200,83,0.15)" : "transparent",
-              border: "none", borderRadius: "6px", cursor: "pointer", color: sidebarMode === "thumbs" ? "#00c853" : "#999",
-            }}
-          >
-            <Images style={{ width: 18, height: 18 }} />
-          </button>
-          <button
-            onClick={() => setSidebarMode(m => m === "outline" ? null : "outline")}
-            data-testid="button-sidebar-outline"
-            style={{
-              width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center",
-              background: sidebarMode === "outline" ? "rgba(0,200,83,0.15)" : "transparent",
-              border: "none", borderRadius: "6px", cursor: "pointer", color: sidebarMode === "outline" ? "#00c853" : "#999",
-            }}
-          >
-            <List style={{ width: 18, height: 18 }} />
-          </button>
-        </div>
-
-        {/* ─── SIDEBAR PANEL ─── */}
-        {sidebarOpen && (
           <div style={{
-            width: 220,
-            background: "#2f2f2f",
-            borderRight: "1px solid #444",
-            overflowY: "auto",
+            display: "flex",
+            borderBottom: "1px solid #e0e0e0",
+            background: "#f0f1f2",
             flexShrink: 0,
-            padding: "12px 0",
           }}>
+            <button
+              onClick={() => setSidebarMode("thumbs")}
+              data-testid="button-sidebar-thumbs"
+              style={{
+                flex: 1, padding: "10px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
+                background: sidebarMode === "thumbs" ? "#fff" : "transparent",
+                border: "none", borderBottom: sidebarMode === "thumbs" ? `2px solid ${ACCENT}` : "2px solid transparent",
+                cursor: "pointer", color: sidebarMode === "thumbs" ? ACCENT : "#888",
+                fontSize: "11px", fontWeight: 600, fontFamily: sans,
+              }}
+            >
+              <Images style={{ width: 15, height: 15 }} /> Pages
+            </button>
+            <button
+              onClick={() => setSidebarMode("outline")}
+              data-testid="button-sidebar-outline"
+              style={{
+                flex: 1, padding: "10px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
+                background: sidebarMode === "outline" ? "#fff" : "transparent",
+                border: "none", borderBottom: sidebarMode === "outline" ? `2px solid ${ACCENT}` : "2px solid transparent",
+                cursor: "pointer", color: sidebarMode === "outline" ? ACCENT : "#888",
+                fontSize: "11px", fontWeight: 600, fontFamily: sans,
+              }}
+            >
+              <List style={{ width: 15, height: 15 }} /> Outline
+            </button>
+          </div>
+
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px" }}>
             {sidebarMode === "thumbs" ? (
-              <div style={{ padding: "0 12px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {Array.from({ length: TOTAL_PAGES }, (_, i) => (
                   <button
                     key={i}
@@ -466,72 +463,73 @@ export default function Whitepaper() {
                     style={{
                       width: "100%",
                       padding: 0,
-                      marginBottom: "12px",
                       background: "none",
-                      border: currentPage === i + 1 ? "2px solid #00c853" : "2px solid transparent",
+                      border: currentPage === i + 1 ? `2px solid ${ACCENT}` : "2px solid #d0d0d0",
                       borderRadius: "4px",
                       cursor: "pointer",
                       overflow: "hidden",
+                      boxShadow: currentPage === i + 1 ? `0 0 0 1px ${ACCENT}40` : "0 1px 3px rgba(0,0,0,0.06)",
                     }}
                   >
                     <div style={{
                       background: "#fff",
-                      height: 240,
+                      height: 200,
                       display: "flex",
                       flexDirection: "column",
                       alignItems: "center",
                       justifyContent: "center",
-                      gap: "6px",
+                      gap: "5px",
                       padding: "12px",
                     }}>
                       {i === 0 && (
                         <>
-                          <img src="/apol-agent-logo.png" alt="" style={{ width: 32, height: 32 }} />
+                          <img src="/apol-agent-logo.png" alt="" style={{ width: 28, height: 28 }} />
                           <div style={{ fontSize: "8px", fontWeight: 700, fontFamily: serif, color: "#111" }}>APOL AGENT</div>
-                          <div style={{ fontSize: "6px", color: "#777", fontFamily: serif }}>Autonomous Onchain Forensics</div>
-                          <div style={{ width: "60%", height: 1, background: "#ddd", margin: "4px 0" }} />
+                          <div style={{ fontSize: "5.5px", color: "#777", fontFamily: serif }}>Autonomous Onchain Forensics</div>
+                          <div style={{ width: "50%", height: 1, background: "#ddd", margin: "3px 0" }} />
                           <div style={{ fontSize: "5px", color: "#999" }}>I. Abstract</div>
-                          <div style={{ display: "flex", gap: "4px", width: "70%" }}><div style={{ flex: 1, height: 16, background: "#f0f0f0" }} /><div style={{ flex: 1, height: 16, background: "#f0f0f0" }} /></div>
+                          <div style={{ display: "flex", gap: "3px", width: "65%" }}><div style={{ flex: 1, height: 14, background: "#f3f3f3" }} /><div style={{ flex: 1, height: 14, background: "#f3f3f3" }} /></div>
                         </>
                       )}
                       {i === 1 && (
                         <>
-                          <div style={{ fontSize: "6px", fontWeight: 700, color: "#111", fontFamily: serif }}>II. EVALUATION FRAMEWORK</div>
-                          <div style={{ width: "70%", height: 40, background: "#e8f5e9", borderRadius: "2px" }} />
-                          <div style={{ fontSize: "6px", fontWeight: 700, color: "#111", fontFamily: serif }}>III. MATHEMATICAL FOUNDATIONS</div>
-                          <div style={{ width: "60%", height: 12, background: "#f8f8f8", border: "1px solid #eee" }} />
-                          <div style={{ width: "60%", height: 12, background: "#f8f8f8", border: "1px solid #eee" }} />
+                          <div style={{ fontSize: "5.5px", fontWeight: 700, color: "#111", fontFamily: serif }}>II. EVALUATION FRAMEWORK</div>
+                          <div style={{ width: "65%", height: 36, background: "#e0f7ff", borderRadius: "2px" }} />
+                          <div style={{ fontSize: "5.5px", fontWeight: 700, color: "#111", fontFamily: serif }}>III. MATHEMATICAL FOUNDATIONS</div>
+                          <div style={{ width: "55%", height: 10, background: "#f3f3f3", border: "1px solid #eee" }} />
+                          <div style={{ width: "55%", height: 10, background: "#f3f3f3", border: "1px solid #eee" }} />
+                          <div style={{ width: "55%", height: 10, background: "#f3f3f3", border: "1px solid #eee" }} />
                         </>
                       )}
                       {i === 2 && (
                         <>
-                          <div style={{ fontSize: "6px", fontWeight: 700, color: "#111", fontFamily: serif }}>IV. FORENSIC FRAMEWORK</div>
-                          <div style={{ width: "70%", height: 36, background: "#e8f5e9", borderRadius: "2px" }} />
-                          <div style={{ fontSize: "6px", fontWeight: 700, color: "#111", fontFamily: serif }}>V. THREAT MATRIX</div>
-                          <div style={{ display: "flex", flexDirection: "column", width: "80%", gap: "2px" }}>
-                            {[1, 2, 3].map(j => <div key={j} style={{ height: 6, background: "#f0f0f0" }} />)}
+                          <div style={{ fontSize: "5.5px", fontWeight: 700, color: "#111", fontFamily: serif }}>IV. FORENSIC FRAMEWORK</div>
+                          <div style={{ width: "65%", height: 32, background: "#e0f7ff", borderRadius: "2px" }} />
+                          <div style={{ fontSize: "5.5px", fontWeight: 700, color: "#111", fontFamily: serif }}>V. THREAT MATRIX</div>
+                          <div style={{ display: "flex", flexDirection: "column", width: "75%", gap: "2px" }}>
+                            {[1, 2, 3, 4].map(j => <div key={j} style={{ height: 5, background: "#f3f3f3" }} />)}
                           </div>
                         </>
                       )}
                       {i === 3 && (
                         <>
-                          <div style={{ fontSize: "6px", fontWeight: 700, color: "#111", fontFamily: serif }}>VI. TOKENOMICS</div>
-                          <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#2e7d32" }} />
-                          <div style={{ fontSize: "6px", fontWeight: 700, color: "#111", fontFamily: serif }}>VII. ARCHITECTURE</div>
-                          <div style={{ display: "flex", gap: "4px", width: "70%" }}><div style={{ flex: 1, height: 16, background: "#f8f8f8", border: "1px solid #eee" }} /><div style={{ flex: 1, height: 16, background: "#f8f8f8", border: "1px solid #eee" }} /></div>
+                          <div style={{ fontSize: "5.5px", fontWeight: 700, color: "#111", fontFamily: serif }}>VI. TOKENOMICS</div>
+                          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#0097b2" }} />
+                          <div style={{ fontSize: "5.5px", fontWeight: 700, color: "#111", fontFamily: serif }}>VII. ARCHITECTURE</div>
+                          <div style={{ display: "flex", gap: "3px", width: "65%" }}><div style={{ flex: 1, height: 14, background: "#f3f3f3", border: "1px solid #eee" }} /><div style={{ flex: 1, height: 14, background: "#f3f3f3", border: "1px solid #eee" }} /></div>
                         </>
                       )}
                     </div>
-                    <div style={{ padding: "6px", fontSize: "10px", color: currentPage === i + 1 ? "#00c853" : "#aaa", fontFamily: sans, textAlign: "center", background: "#2a2a2a" }}>
+                    <div style={{ padding: "5px", fontSize: "10px", color: currentPage === i + 1 ? ACCENT : "#777", fontFamily: sans, textAlign: "center", background: "#f5f5f5", borderTop: "1px solid #e8e8e8", fontWeight: currentPage === i + 1 ? 600 : 400 }}>
                       Page {i + 1}
                     </div>
                   </button>
                 ))}
               </div>
             ) : (
-              <div style={{ padding: "8px 0" }}>
-                <p style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#666", fontFamily: sans, padding: "4px 16px 8px", margin: 0 }}>
-                  Table of Contents
+              <div>
+                <p style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#999", fontFamily: sans, padding: "4px 8px 10px", margin: 0 }}>
+                  Document Outline
                 </p>
                 {tocItems.map((item, i) => (
                   <button
@@ -542,16 +540,17 @@ export default function Whitepaper() {
                       display: "block",
                       width: "100%",
                       textAlign: "left",
-                      background: currentPage === item.page ? "rgba(0,200,83,0.08)" : "transparent",
+                      background: currentPage === item.page && !item.indent ? "rgba(0,209,255,0.06)" : "transparent",
                       border: "none",
-                      borderLeft: currentPage === item.page ? "2px solid #00c853" : "2px solid transparent",
-                      padding: `5px 16px 5px ${16 + item.indent * 16}px`,
-                      fontSize: item.indent ? "10px" : "11px",
+                      borderLeft: currentPage === item.page && !item.indent ? `2px solid ${ACCENT}` : "2px solid transparent",
+                      padding: `5px 12px 5px ${12 + item.indent * 16}px`,
+                      fontSize: item.indent ? "10.5px" : "11.5px",
                       fontFamily: sans,
-                      color: currentPage === item.page ? "#00c853" : item.indent ? "#888" : "#ccc",
+                      color: currentPage === item.page && !item.indent ? ACCENT : item.indent ? "#999" : "#555",
                       fontWeight: item.indent ? 400 : 500,
                       cursor: "pointer",
-                      lineHeight: 1.6,
+                      lineHeight: 1.7,
+                      borderRadius: "2px",
                     }}
                   >
                     {item.label}
@@ -560,22 +559,22 @@ export default function Whitepaper() {
               </div>
             )}
           </div>
-        )}
+        </div>
 
-        {/* ─── MAIN CONTENT ─── */}
         <div
           ref={scrollRef}
           style={{
             flex: 1,
             overflowY: "auto",
-            background: "#f0f2f5",
-            padding: "24px 40px",
+            background: "#e8eaed",
+            padding: "50px 50px",
           }}
         >
           <Page1 />
           <Page2 />
           <Page3 />
           <Page4 />
+          <div style={{ height: 50 }} />
         </div>
       </div>
     </div>
