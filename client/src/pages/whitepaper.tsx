@@ -1,16 +1,28 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "wouter";
 import katex from "katex";
+import { ChevronLeft, ChevronRight, Minus, Plus, Download, Printer, RotateCw, Undo2, Redo2, Menu, Images, List } from "lucide-react";
 
 const serif = "'Times New Roman', Georgia, serif";
 const mono = "'JetBrains Mono', 'Courier New', monospace";
+const sans = "'Segoe UI', 'Inter', -apple-system, sans-serif";
+const ACCENT = "#00D1FF";
+const TOTAL_PAGES = 5;
 
-const sections = [
-  { id: "abstract", label: "I. Abstract", page: 1 },
-  { id: "heuristics", label: "II. Forensic Heuristics", page: 2 },
-  { id: "modeling", label: "III. Mathematical Modeling", page: 3 },
-  { id: "tokenomics", label: "IV. Tokenomics", page: 4 },
-  { id: "verdict", label: "V. Security Verdict", page: 5 },
+const tocItems = [
+  { label: "I. Abstract", page: 1 },
+  { label: "II. Forensic Heuristics", page: 2 },
+  { label: "III. Mathematical Modeling", page: 3 },
+  { label: "IV. Tokenomics", page: 4 },
+  { label: "V. Security Verdict", page: 5 },
+];
+
+const thumbLabels = [
+  "Title / Abstract",
+  "Forensic Heuristics",
+  "Mathematical Modeling",
+  "Tokenomics",
+  "Security Verdict",
 ];
 
 function PageId({ num }: { num: number }) {
@@ -30,51 +42,25 @@ function KaTeX({ math }: { math: string }) {
 }
 
 const body: React.CSSProperties = {
-  fontSize: 16,
-  lineHeight: 1.6,
-  color: "#222",
-  textAlign: "justify",
-  fontFamily: serif,
-  margin: "0 0 18px",
+  fontSize: 16, lineHeight: 1.6, color: "#222", textAlign: "justify", fontFamily: serif, margin: "0 0 18px",
 };
-
 const heading: React.CSSProperties = {
-  fontSize: 22,
-  fontWeight: 700,
-  fontFamily: serif,
-  color: "#000",
-  margin: "0 0 20px",
-  letterSpacing: "0.02em",
+  fontSize: 22, fontWeight: 700, fontFamily: serif, color: "#000", margin: "0 0 20px", letterSpacing: "0.02em",
 };
-
 const subheading: React.CSSProperties = {
-  fontSize: 17,
-  fontWeight: 700,
-  fontFamily: serif,
-  color: "#111",
-  margin: "28px 0 12px",
+  fontSize: 17, fontWeight: 700, fontFamily: serif, color: "#111", margin: "28px 0 12px",
 };
-
 const defBox: React.CSSProperties = {
-  background: "#f8f8f8",
-  border: "1px solid #e0e0e0",
-  padding: "22px 26px",
-  marginBottom: 22,
+  background: "#f8f8f8", border: "1px solid #e0e0e0", padding: "22px 26px", marginBottom: 22,
 };
-
 const defLabel: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 700,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  color: "#555",
-  fontFamily: mono,
-  marginBottom: 10,
+  fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#555", fontFamily: mono, marginBottom: 10,
 };
+const hr = () => <hr style={{ border: 0, borderTop: "1px solid #ddd", margin: "0 0 24px" }} />;
 
 function Page1() {
   return (
-    <div id="page-1" className="whitepaper-page" data-testid="whitepaper-page-1">
+    <div id="page-1" className="wp-page" data-testid="whitepaper-page-1">
       <PageId num={1} />
       <div style={{ textAlign: "center", padding: "60px 0 40px" }}>
         <img src="/apol-agent-logo.png" alt="APOL Agent" style={{ width: 140, height: 140, margin: "0 auto 24px", display: "block" }} />
@@ -83,7 +69,7 @@ function Page1() {
         <p style={{ fontSize: 14, fontFamily: serif, color: "#888", fontStyle: "italic" }}>Forensic Intelligence Protocol for the Base Ecosystem</p>
       </div>
       <hr style={{ border: 0, borderTop: "1px solid #ddd", margin: "30px 0" }} />
-      <h2 id="abstract" style={heading}>I. Abstract</h2>
+      <h2 style={heading}>I. Abstract</h2>
       <p style={body}>
         APOL Agent is a decentralized forensic intelligence protocol engineered to operate as an autonomous watchdog
         within the Base blockchain ecosystem. The protocol addresses the systemic opacity in decentralized markets by
@@ -110,10 +96,10 @@ function Page1() {
 
 function Page2() {
   return (
-    <div id="page-2" className="whitepaper-page" data-testid="whitepaper-page-2">
+    <div id="page-2" className="wp-page" data-testid="whitepaper-page-2">
       <PageId num={2} />
-      <h2 id="heuristics" style={heading}>II. Forensic Heuristics</h2>
-      <hr style={{ border: 0, borderTop: "1px solid #ddd", margin: "0 0 24px" }} />
+      <h2 style={heading}>II. Forensic Heuristics</h2>
+      {hr()}
       <p style={body}>
         The APOL forensic engine applies a three-layer heuristic taxonomy to evaluate projects across on-chain,
         behavioral, and economic dimensions. Each layer operates independently, producing isolated risk signals
@@ -161,8 +147,7 @@ function Page2() {
             <tr key={i} style={{ borderBottom: "1px solid #ddd" }}>
               <td style={{ padding: "8px 14px", color: "#111" }}>{threat}</td>
               <td style={{
-                padding: "8px 14px", textAlign: "center", fontWeight: 700, fontSize: 11,
-                fontFamily: mono,
+                padding: "8px 14px", textAlign: "center", fontWeight: 700, fontSize: 11, fontFamily: mono,
                 color: severity === "CRITICAL" ? "#c62828" : severity === "HIGH" ? "#d84315" : "#e65100",
               }}>{severity}</td>
               <td style={{ padding: "8px 14px", color: "#444" }}>{method}</td>
@@ -177,10 +162,10 @@ function Page2() {
 
 function Page3() {
   return (
-    <div id="page-3" className="whitepaper-page" data-testid="whitepaper-page-3">
+    <div id="page-3" className="wp-page" data-testid="whitepaper-page-3">
       <PageId num={3} />
-      <h2 id="modeling" style={heading}>III. Mathematical Modeling</h2>
-      <hr style={{ border: 0, borderTop: "1px solid #ddd", margin: "0 0 24px" }} />
+      <h2 style={heading}>III. Mathematical Modeling</h2>
+      {hr()}
       <p style={body}>
         The APOL forensic engine relies on deterministic mathematical models that produce repeatable scores from
         publicly available on-chain data. The following definitions formalize the core scoring functions used
@@ -233,10 +218,10 @@ function Page3() {
 
 function Page4() {
   return (
-    <div id="page-4" className="whitepaper-page" data-testid="whitepaper-page-4">
+    <div id="page-4" className="wp-page" data-testid="whitepaper-page-4">
       <PageId num={4} />
-      <h2 id="tokenomics" style={heading}>IV. Tokenomics</h2>
-      <hr style={{ border: 0, borderTop: "1px solid #ddd", margin: "0 0 24px" }} />
+      <h2 style={heading}>IV. Tokenomics</h2>
+      {hr()}
       <p style={body}>
         The $APOL token employs a maximally fair distribution model with zero insider allocation. The entire supply
         enters public circulation at launch with no team reserves, no marketing tax, and no vesting schedules. This
@@ -305,10 +290,10 @@ function Page4() {
 
 function Page5() {
   return (
-    <div id="page-5" className="whitepaper-page" data-testid="whitepaper-page-5" style={{ marginBottom: 0, display: "flex", flexDirection: "column" }}>
+    <div id="page-5" className="wp-page" data-testid="whitepaper-page-5" style={{ marginBottom: 0 }}>
       <PageId num={5} />
-      <h2 id="verdict" style={heading}>V. Security Verdict</h2>
-      <hr style={{ border: 0, borderTop: "1px solid #ddd", margin: "0 0 24px" }} />
+      <h2 style={heading}>V. Security Verdict</h2>
+      {hr()}
       <p style={body}>
         APOL Agent produces deterministic security verdicts by aggregating signals from all three forensic layers.
         Each project receives a composite score ranging from 0 to 100, with the following classification tiers:
@@ -346,28 +331,20 @@ function Page5() {
         state will always produce the same verdict, ensuring reproducibility and auditability. No manual override
         exists within the scoring pipeline.
       </p>
-      <div style={{ flex: 1 }} />
       <div style={{
         background: "#111",
-        margin: "40px -90px -90px -90px",
+        margin: "auto -90px -90px -90px",
         padding: "60px 90px",
         textAlign: "center",
       }}>
         <img src="/apol-agent-logo.png" alt="APOL Agent" style={{ width: 80, height: 80, margin: "0 auto 20px", display: "block" }} />
-        <p style={{
-          fontSize: 20, fontWeight: 800, fontFamily: mono, color: "#fff",
-          letterSpacing: "0.04em", margin: "0 0 10px",
-        }}>
+        <p style={{ fontSize: 20, fontWeight: 800, fontFamily: mono, color: "#fff", letterSpacing: "0.04em", margin: "0 0 10px" }}>
           APOL AGENT
         </p>
-        <p style={{
-          fontSize: 14, fontFamily: serif, color: "#aaa", fontStyle: "italic", margin: "0 0 20px",
-        }}>
+        <p style={{ fontSize: 14, fontFamily: serif, color: "#aaa", fontStyle: "italic", margin: "0 0 20px" }}>
           The Forensic Standard for Base.
         </p>
-        <p style={{
-          fontSize: 9, fontFamily: mono, color: "#555", letterSpacing: "0.06em", lineHeight: 1.8, textTransform: "uppercase",
-        }}>
+        <p style={{ fontSize: 9, fontFamily: mono, color: "#555", letterSpacing: "0.06em", lineHeight: 1.8, textTransform: "uppercase" }}>
           Autonomous Onchain Forensics Protocol // Base Network // {new Date().getFullYear()}<br />
           This document is for informational purposes only and does not constitute financial advice.
         </p>
@@ -376,117 +353,183 @@ function Page5() {
   );
 }
 
-const TOTAL_PAGES = 5;
-
 export default function Whitepaper() {
-  const [activeSection, setActiveSection] = useState("abstract");
-  const mainRef = useRef<HTMLDivElement>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sidePanel, setSidePanel] = useState<"thumbs" | "outline">("thumbs");
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const el = mainRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      const scrollTop = el.scrollTop + 120;
-      for (let i = sections.length - 1; i >= 0; i--) {
-        const target = document.getElementById(`page-${i + 1}`);
-        if (target && target.offsetTop - el.offsetTop <= scrollTop) {
-          setActiveSection(sections[i].id);
-          return;
-        }
-      }
-      setActiveSection(sections[0].id);
-    };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
+  const scrollToPage = useCallback((p: number) => {
+    const el = document.getElementById(`page-${p}`);
+    if (el && scrollRef.current) {
+      scrollRef.current.scrollTo({ top: el.offsetTop - scrollRef.current.offsetTop - 30, behavior: "smooth" });
+    }
   }, []);
 
-  const scrollToSection = (sectionId: string, pageNum: number) => {
-    const el = document.getElementById(`page-${pageNum}`);
-    if (el && mainRef.current) {
-      mainRef.current.scrollTo({ top: el.offsetTop - mainRef.current.offsetTop - 30, behavior: "smooth" });
-    }
-  };
+  useEffect(() => {
+    const c = scrollRef.current;
+    if (!c) return;
+    const onScroll = () => {
+      const ct = c.scrollTop + 100;
+      for (let i = TOTAL_PAGES; i >= 1; i--) {
+        const el = document.getElementById(`page-${i}`);
+        if (el && el.offsetTop - c.offsetTop <= ct) { setCurrentPage(i); return; }
+      }
+      setCurrentPage(1);
+    };
+    c.addEventListener("scroll", onScroll, { passive: true });
+    return () => c.removeEventListener("scroll", onScroll);
+  }, []);
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+    <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#525659", display: "flex", flexDirection: "column" }}>
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
       <style>{`
-        .whitepaper-page {
+        .wp-page {
           width: 850px;
           min-height: 1200px;
           background: #ffffff;
-          margin-bottom: 50px;
-          box-shadow: 0 10px 40px rgba(0,0,0,0.08);
           padding: 90px;
+          margin: 0 auto 50px;
+          box-shadow: 0 4px 24px rgba(0,0,0,0.25);
           box-sizing: border-box;
           position: relative;
         }
-        .wp-sidebar::-webkit-scrollbar { width: 4px; }
-        .wp-sidebar::-webkit-scrollbar-track { background: transparent; }
-        .wp-sidebar::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
-        .wp-main::-webkit-scrollbar { width: 8px; }
-        .wp-main::-webkit-scrollbar-track { background: #e8eaed; }
-        .wp-main::-webkit-scrollbar-thumb { background: #c0c0c0; border-radius: 4px; }
-        .wp-main::-webkit-scrollbar-thumb:hover { background: #aaa; }
-        .wp-nav-link { transition: color 0.15s ease, background 0.15s ease; }
-        .wp-nav-link:hover { color: #000 !important; background: #f0f0f0; }
+        .wp-icon-btn { background: none; border: none; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; color: #bbb; }
+        .wp-icon-btn:hover { color: #fff; }
+        .wp-tb-sep { width: 1px; height: 22px; background: #666; flex-shrink: 0; }
+        .wp-sidebar-scroll::-webkit-scrollbar { width: 6px; }
+        .wp-sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+        .wp-sidebar-scroll::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+        .wp-main-scroll::-webkit-scrollbar { width: 10px; }
+        .wp-main-scroll::-webkit-scrollbar-track { background: #3a3d40; }
+        .wp-main-scroll::-webkit-scrollbar-thumb { background: #6b6e72; border-radius: 5px; }
+        .wp-main-scroll::-webkit-scrollbar-thumb:hover { background: #888; }
+        .wp-toc-link { transition: color 0.15s ease; }
+        .wp-toc-link:hover { color: #00D1FF !important; }
       `}</style>
 
-      <div
-        className="wp-sidebar"
-        style={{
-          width: 320, minWidth: 320, height: "100vh", overflowY: "auto",
-          background: "#fdfdfd", borderRight: "1px solid #e0e0e0", padding: 30,
-        }}
-      >
-        <Link href="/" style={{ textDecoration: "none", display: "inline-block", marginBottom: 30 }}>
-          <span data-testid="link-back-home" style={{ fontSize: 12, color: "#999", fontFamily: mono, letterSpacing: "0.06em" }}>Back to site</span>
-        </Link>
-        <p style={{
-          fontSize: 11, fontWeight: 700, color: "#999", letterSpacing: "1px",
-          textTransform: "uppercase", fontFamily: mono, margin: "0 0 20px", paddingBottom: 12,
-          borderBottom: "1px solid #e8e8e8",
-        }} data-testid="text-sidebar-header">
-          FORENSIC DOCUMENTATION
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {sections.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => scrollToSection(s.id, s.page)}
-              className="wp-nav-link"
-              data-testid={`button-nav-${s.id}`}
-              style={{
-                display: "block", width: "100%", textAlign: "left",
-                background: activeSection === s.id ? "#f0f0f0" : "transparent",
-                border: "none", borderRadius: 4,
-                padding: "10px 14px",
-                fontSize: 15, fontWeight: 400, fontFamily: serif,
-                color: activeSection === s.id ? "#000" : "#555",
-                cursor: "pointer", lineHeight: 1.5,
-              }}
-            >
-              {s.label}
-            </button>
-          ))}
+      <div style={{
+        height: 36, flexShrink: 0,
+        background: "#333", borderBottom: "1px solid #555",
+        display: "flex", alignItems: "center", padding: "0 8px", gap: 6,
+      }}>
+        <Link href="/"><button className="wp-icon-btn" style={{ padding: 4 }} data-testid="link-back-home"><Menu style={{ width: 16, height: 16 }} /></button></Link>
+        <div className="wp-tb-sep" />
+        <button className="wp-icon-btn" onClick={() => scrollToPage(Math.max(1, currentPage - 1))} data-testid="button-page-prev"><ChevronLeft style={{ width: 16, height: 16 }} /></button>
+        <span style={{ color: "#ddd", fontSize: 12, fontFamily: sans, minWidth: 44, textAlign: "center" }} data-testid="text-page-indicator">{currentPage} / {TOTAL_PAGES}</span>
+        <button className="wp-icon-btn" onClick={() => scrollToPage(Math.min(TOTAL_PAGES, currentPage + 1))} data-testid="button-page-next"><ChevronRight style={{ width: 16, height: 16 }} /></button>
+        <div className="wp-tb-sep" />
+        <button className="wp-icon-btn"><Minus style={{ width: 14, height: 14 }} /></button>
+        <div style={{ background: "#555", borderRadius: 2, padding: "2px 8px" }}>
+          <span style={{ color: "#ddd", fontSize: 11, fontFamily: sans }}>100%</span>
         </div>
+        <button className="wp-icon-btn"><Plus style={{ width: 14, height: 14 }} /></button>
+        <div className="wp-tb-sep" />
+        <button className="wp-icon-btn"><RotateCw style={{ width: 14, height: 14 }} /></button>
+        <button className="wp-icon-btn"><Undo2 style={{ width: 14, height: 14 }} /></button>
+        <button className="wp-icon-btn"><Redo2 style={{ width: 14, height: 14 }} /></button>
+        <div style={{ flex: 1 }} />
+        <button className="wp-icon-btn" onClick={() => window.print()} data-testid="button-download"><Download style={{ width: 16, height: 16 }} /></button>
+        <button className="wp-icon-btn" onClick={() => window.print()} data-testid="button-print"><Printer style={{ width: 16, height: 16 }} /></button>
       </div>
 
-      <div
-        ref={mainRef}
-        className="wp-main"
-        style={{
-          flexGrow: 1, height: "100vh", overflowY: "auto",
-          background: "#f0f2f5",
-          display: "flex", flexDirection: "column", alignItems: "center",
-          padding: "60px 0",
-        }}
-      >
-        <Page1 />
-        <Page2 />
-        <Page3 />
-        <Page4 />
-        <Page5 />
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+        <div style={{
+          width: 200, minWidth: 200, background: "#404040", borderRight: "1px solid #4a4a4a",
+          display: "flex", flexDirection: "column", overflow: "hidden",
+        }}>
+          <div style={{ display: "flex", borderBottom: "1px solid #555", flexShrink: 0 }}>
+            <button
+              onClick={() => setSidePanel("thumbs")}
+              data-testid="button-sidebar-thumbs"
+              style={{
+                flex: 1, padding: "8px 0", display: "flex", alignItems: "center", justifyContent: "center",
+                background: sidePanel === "thumbs" ? "#555" : "transparent",
+                border: "none", borderBottom: sidePanel === "thumbs" ? `2px solid ${ACCENT}` : "2px solid transparent",
+                cursor: "pointer", color: sidePanel === "thumbs" ? "#fff" : "#999", fontSize: 11, fontFamily: sans,
+              }}
+            ><Images style={{ width: 14, height: 14 }} /></button>
+            <button
+              onClick={() => setSidePanel("outline")}
+              data-testid="button-sidebar-outline"
+              style={{
+                flex: 1, padding: "8px 0", display: "flex", alignItems: "center", justifyContent: "center",
+                background: sidePanel === "outline" ? "#555" : "transparent",
+                border: "none", borderBottom: sidePanel === "outline" ? `2px solid ${ACCENT}` : "2px solid transparent",
+                cursor: "pointer", color: sidePanel === "outline" ? "#fff" : "#999", fontSize: 11, fontFamily: sans,
+              }}
+            ><List style={{ width: 14, height: 14 }} /></button>
+          </div>
+
+          <div className="wp-sidebar-scroll" style={{ flex: 1, overflowY: "auto", padding: 10 }}>
+            {sidePanel === "thumbs" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}>
+                {Array.from({ length: TOTAL_PAGES }, (_, i) => {
+                  const active = currentPage === i + 1;
+                  const thumbW = 140;
+                  const thumbH = Math.round(thumbW * (1200 / 850));
+                  return (
+                    <div key={i} style={{ cursor: "pointer", textAlign: "center" }} onClick={() => scrollToPage(i + 1)} data-testid={`button-thumb-page-${i + 1}`}>
+                      <div style={{
+                        width: thumbW, height: thumbH, background: "#fff",
+                        border: active ? `3px solid ${ACCENT}` : "1px solid #666",
+                        boxShadow: active ? `0 0 0 1px ${ACCENT}50, 0 2px 8px rgba(0,0,0,0.3)` : "0 1px 4px rgba(0,0,0,0.3)",
+                        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
+                        gap: 2, padding: "8px 6px", boxSizing: "border-box", overflow: "hidden",
+                      }}>
+                        <div style={{ alignSelf: "flex-end", fontSize: 4, color: "#bbb", fontFamily: sans, marginBottom: 4 }}>
+                          APOL-SEC-0{i + 1}
+                        </div>
+                        <div style={{ fontSize: 5, fontWeight: 700, color: "#000", fontFamily: serif, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                          {thumbLabels[i]}
+                        </div>
+                        <div style={{ width: "60%", height: 1, background: "#e0e0e0", margin: "3px 0" }} />
+                        {i === 0 && <img src="/apol-agent-logo.png" alt="" style={{ width: 18, height: 18, marginTop: 4 }} />}
+                        {[1, 2, 3].map(j => <div key={j} style={{ width: "70%", height: 3, background: "#f0f0f0", marginTop: 2 }} />)}
+                      </div>
+                      <div style={{ fontSize: 10, color: active ? "#fff" : "#aaa", fontFamily: sans, marginTop: 4 }}>{i + 1}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ padding: "4px 0" }}>
+                <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#999", fontFamily: sans, padding: "4px 8px 10px", margin: 0 }}>Document Outline</p>
+                {tocItems.map((item, i) => (
+                  <button
+                    key={i}
+                    onClick={() => scrollToPage(item.page)}
+                    data-testid={`button-toc-${i}`}
+                    className="wp-toc-link"
+                    style={{
+                      display: "block", width: "100%", textAlign: "left",
+                      background: "transparent", border: "none",
+                      padding: "5px 10px",
+                      fontSize: 13, fontFamily: sans, fontWeight: 400,
+                      color: currentPage === item.page ? "#fff" : "#ccc",
+                      cursor: "pointer", lineHeight: 1.8,
+                    }}
+                  >{item.label}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div
+          ref={scrollRef}
+          className="wp-main-scroll"
+          style={{
+            flex: 1, overflowY: "auto", overflowX: "auto",
+            background: "#525659", padding: "40px 0",
+          }}
+        >
+          <Page1 />
+          <Page2 />
+          <Page3 />
+          <Page4 />
+          <Page5 />
+        </div>
       </div>
     </div>
   );
