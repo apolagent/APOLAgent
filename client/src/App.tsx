@@ -13,7 +13,6 @@ import GetVerified from "@/pages/get-verified";
 import AdminDashboard from "@/pages/admin-dashboard";
 import VerifyCertificate from "@/pages/verify-certificate";
 import VerifiedBuilders from "@/pages/verified-builders";
-import Whitepaper from "@/pages/whitepaper";
 import NotFound from "@/pages/not-found";
 import ApolAgent from "@/components/apol-agent";
 
@@ -29,7 +28,6 @@ function Router() {
       <Route path="/admin/dashboard" component={AdminDashboard} />
       <Route path="/verify/:contractAddress" component={VerifyCertificate} />
       <Route path="/verified-builders" component={VerifiedBuilders} />
-      <Route path="/whitepaper" component={Whitepaper} />
       <Route component={NotFound} />
     </Switch>
   );
