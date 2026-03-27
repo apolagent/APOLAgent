@@ -9,7 +9,7 @@ const cards = [
     cta: "FIELD COMMS",
     gradient: "from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800",
     textColor: "text-white",
-    href: "https://t.me/+aR-n79XFWKhjOTg8",
+    href: "https://t.me/ApolAgentBot",
     external: true,
   },
   {

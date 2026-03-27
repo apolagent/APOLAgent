@@ -44,7 +44,7 @@ export default function HeroSection() {
 
           {/* PRIMARY — ACCESS TERMINAL */}
           <a
-            href="https://t.me/+aR-n79XFWKhjOTg8"
+            href="https://t.me/ApolAgentBot"
             target="_blank"
             rel="noopener noreferrer"
             data-testid="button-join-patrol"
