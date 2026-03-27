@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "wouter";
-import { Search, Menu, X, Copy, Check, Info, AlertTriangle, CheckCircle, ChevronRight, Home, BookOpen, Terminal, Shield, Zap, Code, FileText } from "lucide-react";
+import { Search, Menu, X, Copy, Check, Info, AlertTriangle, CheckCircle, ChevronRight, Home, BookOpen, Terminal, Shield, Zap, Code, FileText, Lock, Key, BarChart3, Eye, EyeOff, RefreshCw } from "lucide-react";
 
 const ACCENT = "#00D1FF";
 const sans = "'Inter', 'Segoe UI', -apple-system, sans-serif";
 const mono = "'JetBrains Mono', 'Fira Code', monospace";
 
-type SectionId = "getting-started" | "bot-commands" | "forensic-verdicts" | "security-standards" | "api";
+type SectionId = "getting-started" | "bot-commands" | "forensic-verdicts" | "security-standards" | "api" | "api-dashboard";
 
 const navSections: { id: SectionId; label: string; icon: typeof BookOpen }[] = [
   { id: "getting-started", label: "Getting Started", icon: BookOpen },
@@ -14,6 +14,7 @@ const navSections: { id: SectionId; label: string; icon: typeof BookOpen }[] = [
   { id: "forensic-verdicts", label: "Forensic Verdicts", icon: Shield },
   { id: "security-standards", label: "Security Standards", icon: Zap },
   { id: "api", label: "API", icon: Code },
+  { id: "api-dashboard", label: "API Dashboard", icon: BarChart3 },
 ];
 
 const sectionOutlines: Record<SectionId, string[]> = {
@@ -22,6 +23,7 @@ const sectionOutlines: Record<SectionId, string[]> = {
   "forensic-verdicts": ["Verdict Overview", "Green Status", "Yellow Status", "Red Status", "Score Breakdown"],
   "security-standards": ["Heuristic Logic Scan", "On-Chain Analysis", "Behavioral Detection", "Economic Resilience"],
   "api": ["Authentication", "Endpoints", "Rate Limits", "Response Format"],
+  "api-dashboard": ["Your API Key", "Usage Tracker", "Premium Access"],
 };
 
 function CopyBlock({ code, label }: { code: string; label?: string }) {
@@ -416,12 +418,213 @@ function ApiDocs() {
   );
 }
 
+function ApiDashboard() {
+  const [keyVisible, setKeyVisible] = useState(false);
+  const [keyGenerated, setKeyGenerated] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const demoKey = "apol_sk_live_7f3a9b2e1d4c8f5a6b0e2d9c4a7f1b3e";
+  const usedScans = 5;
+  const totalScans = 100;
+  const usagePercent = (usedScans / totalScans) * 100;
+
+  const handleGenerate = () => {
+    setKeyGenerated(true);
+  };
+
+  const handleCopyKey = () => {
+    navigator.clipboard.writeText(demoKey);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <>
+      <SectionTitle id="api-dashboard">API Management Dashboard</SectionTitle>
+      <Para>Manage your API credentials, monitor usage, and unlock premium forensic capabilities from a single dashboard.</Para>
+
+      <SubTitle id="your-api-key">Your API Key</SubTitle>
+      <div style={{
+        background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12,
+        padding: 28, marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+          <Key style={{ width: 20, height: 20, color: ACCENT }} />
+          <span style={{ fontSize: 16, fontWeight: 600, color: "#0f172a", fontFamily: sans }}>Your API Key</span>
+        </div>
+        {!keyGenerated ? (
+          <div style={{ textAlign: "center", padding: "20px 0" }}>
+            <Para>Generate an API key to start making forensic scan requests programmatically.</Para>
+            <button
+              onClick={handleGenerate}
+              data-testid="button-generate-key"
+              style={{
+                background: ACCENT, color: "#fff", border: "none", borderRadius: 8,
+                padding: "12px 28px", fontSize: 14, fontWeight: 600, fontFamily: sans,
+                cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8,
+              }}
+            >
+              <RefreshCw style={{ width: 16, height: 16 }} />
+              Generate API Key
+            </button>
+          </div>
+        ) : (
+          <div>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 10,
+              background: "#1a1d23", borderRadius: 8, padding: "14px 16px",
+            }}>
+              <code
+                data-testid="text-api-key"
+                style={{
+                  flex: 1, fontSize: 14, fontFamily: mono, letterSpacing: "0.02em",
+                  color: keyVisible ? "#e0e0e0" : "transparent",
+                  textShadow: keyVisible ? "none" : "0 0 8px rgba(255,255,255,0.5)",
+                  userSelect: keyVisible ? "text" : "none",
+                }}
+              >
+                {demoKey}
+              </code>
+              <button
+                onClick={() => setKeyVisible(!keyVisible)}
+                data-testid="button-toggle-key-visibility"
+                style={{
+                  background: "transparent", border: "1px solid #3a3d45", borderRadius: 6,
+                  padding: "6px 8px", cursor: "pointer", color: "#888", display: "flex",
+                  alignItems: "center", gap: 4, fontSize: 12, fontFamily: sans,
+                }}
+              >
+                {keyVisible ? <EyeOff style={{ width: 14, height: 14 }} /> : <Eye style={{ width: 14, height: 14 }} />}
+                {keyVisible ? "Hide" : "Reveal"}
+              </button>
+              <button
+                onClick={handleCopyKey}
+                data-testid="button-copy-api-key"
+                style={{
+                  background: "transparent", border: "1px solid #3a3d45", borderRadius: 6,
+                  padding: "6px 8px", cursor: "pointer",
+                  color: copied ? "#4ade80" : "#888",
+                  display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontFamily: sans,
+                }}
+              >
+                {copied ? <><Check style={{ width: 14, height: 14 }} /> Copied!</> : <><Copy style={{ width: 14, height: 14 }} /> Copy</>}
+              </button>
+            </div>
+            <Callout type="warning">Keep your API key secret. Do not expose it in frontend code or public repositories.</Callout>
+          </div>
+        )}
+      </div>
+
+      <SubTitle id="usage-tracker">Usage Tracker</SubTitle>
+      <div style={{
+        background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12,
+        padding: 28, marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <BarChart3 style={{ width: 20, height: 20, color: ACCENT }} />
+            <span style={{ fontSize: 16, fontWeight: 600, color: "#0f172a", fontFamily: sans }}>Request Credits</span>
+          </div>
+          <span style={{ fontSize: 13, color: "#64748b", fontFamily: sans }}>Resets monthly</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 12 }}>
+          <span style={{ fontSize: 32, fontWeight: 700, color: "#0f172a", fontFamily: sans }}>{usedScans}</span>
+          <span style={{ fontSize: 16, color: "#94a3b8", fontFamily: sans }}>/ {totalScans} scans used</span>
+        </div>
+        <div style={{
+          width: "100%", height: 12, background: "#f1f5f9", borderRadius: 6, overflow: "hidden", marginBottom: 12,
+        }}>
+          <div
+            data-testid="progress-usage"
+            style={{
+              width: `${usagePercent}%`, height: "100%",
+              background: `linear-gradient(90deg, ${ACCENT}, #0ea5e9)`,
+              borderRadius: 6, transition: "width 0.5s ease",
+            }}
+          />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: 13, color: "#64748b", fontFamily: sans }}>
+            Free Tier: {usedScans}/{totalScans} scans used
+          </span>
+          <span style={{
+            fontSize: 11, fontWeight: 600, color: ACCENT, fontFamily: mono,
+            background: "#f0f9ff", padding: "4px 10px", borderRadius: 4,
+          }}>
+            {totalScans - usedScans} remaining
+          </span>
+        </div>
+      </div>
+
+      <SubTitle id="premium-access">Premium Access</SubTitle>
+      <div style={{
+        background: "linear-gradient(135deg, #0c1220 0%, #1a1d2e 100%)",
+        border: "1px solid #2a2d45", borderRadius: 12,
+        padding: 32, position: "relative", overflow: "hidden",
+      }}>
+        <div style={{
+          position: "absolute", top: -40, right: -40, width: 160, height: 160,
+          background: `radial-gradient(circle, ${ACCENT}15 0%, transparent 70%)`,
+          borderRadius: "50%",
+        }} />
+        <div style={{ position: "relative" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: 10,
+              background: `linear-gradient(135deg, ${ACCENT}30, ${ACCENT}10)`,
+              border: `1px solid ${ACCENT}40`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <Lock style={{ width: 22, height: 22, color: ACCENT }} />
+            </div>
+            <div>
+              <span style={{
+                fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
+                color: ACCENT, fontFamily: mono,
+              }}>Premium</span>
+              <p style={{ fontSize: 18, fontWeight: 700, color: "#fff", fontFamily: sans, margin: 0 }}>
+                Unlock Unlimited Forensic API Access
+              </p>
+            </div>
+          </div>
+          <div style={{ marginBottom: 20 }}>
+            <ul style={{ fontSize: 14, lineHeight: 2, color: "#94a3b8", fontFamily: sans, paddingLeft: 20, margin: 0 }}>
+              <li>Unlimited scan requests (no monthly cap)</li>
+              <li>Priority queue processing</li>
+              <li>Deep Dive forensic dossiers via API</li>
+              <li>Webhook notifications for monitored contracts</li>
+              <li>Batch scanning (up to 50 addresses per request)</li>
+            </ul>
+          </div>
+          <button
+            data-testid="button-upgrade-premium"
+            style={{
+              width: "100%", padding: "14px 24px",
+              background: `linear-gradient(135deg, ${ACCENT}, #0ea5e9)`,
+              border: "none", borderRadius: 8, cursor: "pointer",
+              fontSize: 15, fontWeight: 700, color: "#fff", fontFamily: sans,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              boxShadow: `0 4px 16px ${ACCENT}40`,
+            }}
+          >
+            <Lock style={{ width: 16, height: 16 }} />
+            Hold 100,000 $APOL to Upgrade
+          </button>
+          <p style={{ fontSize: 11, color: "#4a5568", textAlign: "center", fontFamily: sans, margin: "12px 0 0" }}>
+            Token balance is verified on-chain via the Base network
+          </p>
+        </div>
+      </div>
+    </>
+  );
+}
+
 const sectionComponents: Record<SectionId, () => JSX.Element> = {
   "getting-started": GettingStarted,
   "bot-commands": BotCommands,
   "forensic-verdicts": ForensicVerdicts,
   "security-standards": SecurityStandards,
   "api": ApiDocs,
+  "api-dashboard": ApiDashboard,
 };
 
 function slugify(text: string) {
