@@ -943,10 +943,10 @@ export default function Docs() {
             <div data-testid="button-back-home" style={{
               display: "flex", alignItems: "center", gap: 8,
               padding: "6px 12px", marginBottom: 12,
-              background: "#0f172a", border: "1px solid #1e293b", borderRadius: 6,
-              cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#fff", fontFamily: sans,
+              background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 6,
+              cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#475569", fontFamily: sans,
             }}>
-              <Home style={{ width: 14, height: 14, color: "#fff" }} />
+              <Home style={{ width: 14, height: 14, color: ACCENT }} />
               Back to Home
             </div>
           </Link>
