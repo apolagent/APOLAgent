@@ -66,10 +66,10 @@ function TokenomicsChart() {
     chartRef.current = new Chart(canvasRef.current, {
       type: "pie",
       data: {
-        labels: ["Liquidity (20%)", "Community (45%)", "Ecosystem (15%)", "Treasury (10%)", "Team (10%)"],
+        labels: ["Public Circulation (100%)"],
         datasets: [{
-          data: [20, 45, 15, 10, 10],
-          backgroundColor: ["#00c853", "#1b5e20", "#4caf50", "#81c784", "#a5d6a7"],
+          data: [100],
+          backgroundColor: ["#00c853"],
           borderColor: "#ffffff",
           borderWidth: 2,
         }],
@@ -207,32 +207,33 @@ export default function Whitepaper() {
         <div>
           <h2 style={sectionTitle} data-testid="heading-tokenomics">IV. TOKENOMICS</h2>
           <p style={bodyText}>
-            The $APOL token allocation is structured to prioritize community ownership and long-term protocol sustainability.
-            The distribution model ensures majority community control while maintaining sufficient reserves for ecosystem
-            development, operational treasury, and founding team vesting:
+            The $APOL token employs a maximally fair distribution model with zero insider allocation.
+            The entire supply enters public circulation at launch with no team reserves, no marketing tax,
+            and no vesting schedules. This structure eliminates sell pressure from insider unlocks and aligns
+            all stakeholders from day one.
           </p>
           <TokenomicsChart />
           <div style={{ margin: "24px 0", padding: "20px 24px", background: "#f9fbe7", border: "1px solid #e8f5e9" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'Times New Roman', serif", fontSize: "14px" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid #00c853" }}>
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontWeight: 700, color: "#111", letterSpacing: "0.08em", textTransform: "uppercase" }}>Allocation</th>
-                  <th style={{ textAlign: "center", padding: "8px 12px", fontWeight: 700, color: "#111", letterSpacing: "0.08em", textTransform: "uppercase" }}>Share</th>
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontWeight: 700, color: "#111", letterSpacing: "0.08em", textTransform: "uppercase" }}>Purpose</th>
+                  <th style={{ textAlign: "left", padding: "8px 12px", fontWeight: 700, color: "#111", letterSpacing: "0.08em", textTransform: "uppercase" }}>Parameter</th>
+                  <th style={{ textAlign: "left", padding: "8px 12px", fontWeight: 700, color: "#111", letterSpacing: "0.08em", textTransform: "uppercase" }}>Value</th>
                 </tr>
               </thead>
               <tbody>
                 {[
-                  ["Liquidity", "20%", "DEX pool seeding and market depth"],
-                  ["Community", "45%", "Airdrops, rewards, contributor incentives"],
-                  ["Ecosystem", "15%", "Partnerships, integrations, grants"],
-                  ["Treasury", "10%", "Operational reserves and protocol development"],
-                  ["Team", "10%", "Founding team allocation (12-month vesting)"],
-                ].map(([alloc, share, purpose], i) => (
+                  ["Total Supply", "1,000,000,000 (Hard Capped)"],
+                  ["Public Circulation", "100%"],
+                  ["Team Reserve", "0%"],
+                  ["Marketing Tax", "0%"],
+                  ["Buy / Sell Tax", "0% / 0% (Immutable)"],
+                  ["Liquidity", "Burned / Locked (Verifiable on-chain)"],
+                  ["Network", "Base"],
+                ].map(([param, value], i) => (
                   <tr key={i} style={{ borderBottom: "1px solid #e8f5e9" }}>
-                    <td style={{ padding: "10px 12px", fontWeight: 600, color: "#1b5e20" }}>{alloc}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "center", fontWeight: 700 }}>{share}</td>
-                    <td style={{ padding: "10px 12px", color: "#555" }}>{purpose}</td>
+                    <td style={{ padding: "10px 12px", fontWeight: 600, color: "#1b5e20" }}>{param}</td>
+                    <td style={{ padding: "10px 12px", color: "#333" }}>{value}</td>
                   </tr>
                 ))}
               </tbody>
