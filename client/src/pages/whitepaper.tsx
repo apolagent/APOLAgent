@@ -17,8 +17,8 @@ mermaid.initialize({
     lineColor: "#00c853",
     secondaryColor: "#f1f8e9",
     tertiaryColor: "#fff",
-    fontFamily: "'JetBrains Mono', monospace",
-    fontSize: "13px",
+    fontFamily: "'Computer Modern', 'Times New Roman', serif",
+    fontSize: "12px",
   },
 });
 
@@ -29,7 +29,7 @@ function KaTeX({ math }: { math: string }) {
       katex.render(math, ref.current, { displayMode: true, throwOnError: false });
     }
   }, [math]);
-  return <div ref={ref} style={{ margin: "28px 0", textAlign: "center" }} />;
+  return <div ref={ref} style={{ margin: "16px 0", textAlign: "center" }} />;
 }
 
 function MermaidChart({ id, definition }: { id: string; definition: string }) {
@@ -40,7 +40,7 @@ function MermaidChart({ id, definition }: { id: string; definition: string }) {
       if (ref.current) ref.current.innerHTML = svg;
     });
   }, [id, definition]);
-  return <div ref={ref} style={{ display: "flex", justifyContent: "center", margin: "32px 0" }} />;
+  return <div ref={ref} style={{ display: "flex", justifyContent: "center", margin: "20px 0" }} />;
 }
 
 function TokenomicsChart() {
@@ -55,7 +55,7 @@ function TokenomicsChart() {
         labels: ["Public Circulation (100%)"],
         datasets: [{
           data: [100],
-          backgroundColor: ["#00c853"],
+          backgroundColor: ["#2e7d32"],
           borderColor: "#ffffff",
           borderWidth: 2,
         }],
@@ -66,7 +66,7 @@ function TokenomicsChart() {
         plugins: {
           legend: {
             position: "bottom",
-            labels: { color: "#333", font: { family: "'Times New Roman', serif", size: 13 }, padding: 16 },
+            labels: { color: "#333", font: { family: "'Times New Roman', serif", size: 11 }, padding: 12 },
           },
         },
       },
@@ -74,57 +74,14 @@ function TokenomicsChart() {
     return () => { chartRef.current?.destroy(); };
   }, []);
   return (
-    <div style={{ maxWidth: 420, margin: "32px auto" }}>
+    <div style={{ maxWidth: 280, margin: "16px auto" }}>
       <canvas ref={canvasRef} data-testid="chart-tokenomics" />
     </div>
   );
 }
 
-const sectionTitle: React.CSSProperties = {
-  fontSize: "16px",
-  fontWeight: 800,
-  letterSpacing: "0.18em",
-  textTransform: "uppercase",
-  color: "#111",
-  borderBottom: "2px solid #00c853",
-  paddingBottom: "8px",
-  marginBottom: "20px",
-  marginTop: "48px",
-  fontFamily: "'Times New Roman', serif",
-};
-
-const bodyText: React.CSSProperties = {
-  fontSize: "15px",
-  lineHeight: "1.85",
-  color: "#333",
-  textAlign: "justify",
-  fontFamily: "'Times New Roman', serif",
-};
-
-const figCaption: React.CSSProperties = {
-  fontSize: "12px",
-  color: "#666",
-  textAlign: "center",
-  fontStyle: "italic",
-  fontFamily: "'Times New Roman', serif",
-  marginTop: "8px",
-  marginBottom: "24px",
-};
-
-const calloutBox: React.CSSProperties = {
-  background: "#f5f5f5",
-  border: "1px solid #e0e0e0",
-  borderLeft: "4px solid #00c853",
-  padding: "24px 28px",
-  margin: "24px 0",
-};
-
-const defTable: React.CSSProperties = {
-  fontSize: "13px",
-  color: "#555",
-  fontFamily: "'Times New Roman', serif",
-  lineHeight: "1.7",
-};
+const serif = "'Times New Roman', 'Computer Modern', Georgia, serif";
+const mono = "'JetBrains Mono', 'Courier New', monospace";
 
 const hierarchyDef = `graph TD
     CORE["APOL CORE"] --> OC["On-Chain Layer"]
@@ -136,8 +93,8 @@ const hierarchyDef = `graph TD
     BL --> BL1["Narrative Alignment"]
     BL --> BL2["Logic Auditing"]
     BL --> BL3["Agent Autonomy"]
-    EL --> EL1["Liquidity Floor (Lf)"]
-    EL --> EL2["Whale Concentration (WCR)"]`;
+    EL --> EL1["Liquidity Floor"]
+    EL --> EL2["Whale Concentration"]`;
 
 const forensicDef = `graph TD
     A["APOL Forensic Engine"] --> B["Wallet Analytics"]
@@ -155,303 +112,362 @@ const forensicDef = `graph TD
 
 export default function Whitepaper() {
   return (
-    <div style={{ background: "#f4f4f4", minHeight: "100vh", padding: "40px 16px" }}>
+    <div style={{ background: "#e8e8e8", minHeight: "100vh", padding: "20px 16px" }}>
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
 
-      <div style={{ maxWidth: 850, margin: "0 auto", background: "#ffffff", padding: "60px 64px", boxShadow: "0 2px 24px rgba(0,0,0,0.08)" }}>
+      <div style={{ position: "fixed", top: 20, left: 20, zIndex: 100 }}>
+        <Link href="/">
+          <button style={{ display: "flex", alignItems: "center", gap: "5px", background: "rgba(0,0,0,0.7)", border: "none", color: "#fff", cursor: "pointer", fontFamily: mono, fontSize: "11px", letterSpacing: "0.06em", padding: "8px 14px", borderRadius: "4px" }} data-testid="link-back-home">
+            <ArrowLeft style={{ width: 12, height: 12 }} /> BACK
+          </button>
+        </Link>
+      </div>
 
-        <div style={{ marginBottom: "40px" }}>
-          <Link href="/">
-            <button style={{ display: "flex", alignItems: "center", gap: "6px", background: "none", border: "none", color: "#666", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace", fontSize: "12px", letterSpacing: "0.06em" }} data-testid="link-back-home">
-              <ArrowLeft style={{ width: 14, height: 14 }} /> BACK TO TERMINAL
-            </button>
-          </Link>
-        </div>
-
-        <div style={{ textAlign: "center", marginBottom: "56px" }}>
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: "20px" }}>
-            <img src="/apol-agent-logo.png" alt="APOL Agent" style={{ width: 64, height: 64 }} />
-          </div>
-          <h1 style={{ fontSize: "28px", fontWeight: 800, letterSpacing: "0.22em", textTransform: "uppercase", color: "#111", fontFamily: "'Times New Roman', serif", margin: "0 0 8px" }} data-testid="text-whitepaper-title">
+      {/* ═══ PAGE 1: COVER ═══ */}
+      <div style={{
+        maxWidth: 816,
+        margin: "0 auto 24px",
+        background: "#ffffff",
+        padding: "80px 72px 60px",
+        boxShadow: "0 1px 8px rgba(0,0,0,0.15)",
+        minHeight: 1056,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-start",
+      }}>
+        <div style={{ textAlign: "center", marginBottom: "60px", marginTop: "40px" }}>
+          <img src="/apol-agent-logo.png" alt="APOL Agent" style={{ width: 140, height: 140, margin: "0 auto 24px", display: "block" }} />
+          <h1 style={{ fontSize: "42px", fontWeight: 700, fontFamily: serif, color: "#111", margin: "0 0 4px", letterSpacing: "0.04em" }} data-testid="text-whitepaper-title">
             APOL AGENT
           </h1>
-          <p style={{ fontSize: "14px", letterSpacing: "0.14em", textTransform: "uppercase", color: "#666", fontFamily: "'Times New Roman', serif", margin: "0 0 6px" }}>
-            Autonomous Onchain Forensics Protocol
+          <p style={{ fontSize: "11px", fontWeight: 700, fontFamily: mono, color: "#00c853", letterSpacing: "0.2em", margin: "8px 0 0", textTransform: "uppercase" }}>
+            $APOL
           </p>
-          <p style={{ fontSize: "12px", color: "#999", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.06em" }}>
-            Technical Whitepaper — v1.0 — Base Network
-          </p>
-          <div style={{ width: "80px", height: "3px", background: "#00c853", margin: "24px auto 0" }} />
         </div>
 
-        {/* ─── TABLE OF CONTENTS ─── */}
-        <div style={{ border: "1px solid #e0e0e0", padding: "20px 28px", marginBottom: "40px" }}>
-          <p style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: "#111", fontFamily: "'Times New Roman', serif", marginBottom: "12px" }}>
-            TABLE OF CONTENTS
-          </p>
-          {[
-            "I. Abstract",
-            "II. Mathematical Foundations",
-            "III. Forensic Framework",
-            "IV. Threat Classification Matrix",
-            "V. Tokenomics",
-            "VI. Protocol Architecture",
-          ].map((item, i) => (
-            <p key={i} style={{ fontSize: "13px", color: "#555", fontFamily: "'Times New Roman', serif", lineHeight: "2", borderBottom: i < 5 ? "1px dotted #ddd" : "none", margin: 0 }}>
-              {item}
+        <div style={{ textAlign: "center", marginBottom: "48px" }}>
+          <h2 style={{ fontSize: "22px", fontWeight: 400, fontFamily: serif, color: "#222", lineHeight: 1.4, margin: "0 auto", maxWidth: 520 }}>
+            Autonomous Onchain Forensics<br />and AI-Driven Threat Intelligence
+          </h2>
+        </div>
+
+        <div style={{ textAlign: "center", marginBottom: "60px" }}>
+          <p style={{ fontSize: "13px", fontFamily: serif, color: "#444", margin: "0 0 2px", fontWeight: 600 }}>APOL Labs</p>
+          <p style={{ fontSize: "12px", fontFamily: serif, color: "#777", margin: "0", fontStyle: "italic" }}>Base Network</p>
+        </div>
+
+        <div style={{ borderTop: "1px solid #ddd", paddingTop: "32px" }}>
+          <div style={{ columns: 2, columnGap: "32px" }}>
+            <h3 style={{ fontSize: "11px", fontWeight: 700, fontFamily: serif, textTransform: "uppercase", letterSpacing: "0.12em", color: "#111", marginTop: 0, marginBottom: "8px", textAlign: "center", columnSpan: "all" } as React.CSSProperties}>
+              I. Abstract
+            </h3>
+            <p style={{ fontSize: "11.5px", lineHeight: 1.7, color: "#333", textAlign: "justify", fontFamily: serif, margin: "0 0 10px", textIndent: "24px" }}>
+              APOL Agent is a decentralized forensic intelligence protocol engineered to operate as an autonomous watchdog
+              within the Base blockchain ecosystem. The protocol addresses the systemic opacity in decentralized markets by
+              providing real-time contract analysis, wallet provenance tracing, AI agent verification, and social forensics.
+              Unlike conventional audit platforms that rely on manual review cycles, APOL Agent executes continuous, permissionless
+              surveillance across on-chain and off-chain data layers, synthesizing results into actionable threat intelligence
+              for retail participants.
             </p>
-          ))}
+            <p style={{ fontSize: "11.5px", lineHeight: 1.7, color: "#333", textAlign: "justify", fontFamily: serif, margin: "0 0 10px", textIndent: "24px" }}>
+              The core thesis is that market integrity is a public good. By automating forensic analysis — contract honeypot detection,
+              deployer wallet genealogy, liquidity lock verification, holder concentration mapping, and behavioral timing analysis —
+              APOL Agent reduces information asymmetry between sophisticated actors and retail holders. The protocol is governed by
+              the $APOL token, which serves as the access layer for premium forensic capabilities and the economic substrate for
+              community-driven threat reporting.
+            </p>
+            <p style={{ fontSize: "11.5px", lineHeight: 1.7, color: "#333", textAlign: "justify", fontFamily: serif, margin: "0 0 10px", textIndent: "24px" }}>
+              This paper presents the mathematical foundations, forensic framework, threat classification taxonomy,
+              tokenomic architecture, and protocol design underlying the APOL Agent system. All models are deterministic
+              and operate exclusively on publicly available on-chain data, requiring zero trust assumptions from end users.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ PAGE 2: FRAMEWORK + MATH ═══ */}
+      <div style={{
+        maxWidth: 816,
+        margin: "0 auto 24px",
+        background: "#ffffff",
+        padding: "56px 72px",
+        boxShadow: "0 1px 8px rgba(0,0,0,0.15)",
+        minHeight: 1056,
+      }}>
+        <div style={{ marginBottom: "36px", textAlign: "center" }}>
+          <h3 style={{ fontSize: "11px", fontWeight: 700, fontFamily: serif, textTransform: "uppercase", letterSpacing: "0.12em", color: "#111", marginBottom: "4px" }}>
+            II. Hierarchical Evaluation Framework
+          </h3>
         </div>
 
-        {/* ─── I. ABSTRACT ─── */}
-        <div style={{ borderTop: "1px solid #e0e0e0", paddingTop: "32px" }}>
-          <h2 style={{ ...sectionTitle, marginTop: 0 }} data-testid="heading-abstract">I. ABSTRACT</h2>
-          <p style={bodyText}>
-            APOL Agent is a decentralized forensic intelligence protocol engineered to operate as an autonomous watchdog
-            within the Base blockchain ecosystem. The protocol addresses the systemic opacity in decentralized markets by
-            providing real-time contract analysis, wallet provenance tracing, AI agent verification, and social forensics.
-            Unlike conventional audit platforms that rely on manual review cycles, APOL Agent executes continuous, permissionless
-            surveillance across on-chain and off-chain data layers, synthesizing results into actionable threat intelligence
-            for retail participants.
-          </p>
-          <p style={{ ...bodyText, marginTop: "16px" }}>
-            The core thesis is that market integrity is a public good. By automating forensic analysis — contract honeypot detection,
-            deployer wallet genealogy, liquidity lock verification, holder concentration mapping, and behavioral timing analysis —
-            APOL Agent reduces information asymmetry between sophisticated actors and retail holders. The protocol is governed by
-            the $APOL token, which serves as the access layer for premium forensic capabilities and the economic substrate for
-            community-driven threat reporting.
-          </p>
+        <MermaidChart id="fig1-hierarchy" definition={hierarchyDef} />
+        <p style={{ fontSize: "10px", color: "#777", textAlign: "center", fontStyle: "italic", fontFamily: serif, margin: "-8px 0 28px" }}>
+          Fig. 1: Hierarchical Evaluation Framework — Three-layer forensic taxonomy underlying all APOL analysis modules.
+        </p>
 
-          <MermaidChart id="fig1-hierarchy" definition={hierarchyDef} />
-          <p style={figCaption}>Fig. 1: Hierarchical Evaluation Framework — The three-layer forensic taxonomy underlying all APOL analysis modules.</p>
+        <div style={{ columns: 2, columnGap: "32px", marginBottom: "32px" }}>
+          <p style={{ fontSize: "11.5px", lineHeight: 1.7, color: "#333", textAlign: "justify", fontFamily: serif, margin: "0 0 10px", textIndent: "24px" }}>
+            The <strong>On-Chain Layer</strong> performs Wallet Cluster identification via transaction graph analysis,
+            Shadow ID resolution to unmask connected deployer wallets, and Funding Trace to track capital provenance
+            back to centralized exchanges, bridges, or mixers.
+          </p>
+          <p style={{ fontSize: "11.5px", lineHeight: 1.7, color: "#333", textAlign: "justify", fontFamily: serif, margin: "0 0 10px", textIndent: "24px" }}>
+            The <strong>Behavioral Layer</strong> evaluates Narrative Alignment between public claims and on-chain evidence,
+            Logic Auditing to verify autonomous reasoning patterns, and Agent Autonomy scoring through temporal
+            execution analysis and round-the-clock activity verification.
+          </p>
+          <p style={{ fontSize: "11.5px", lineHeight: 1.7, color: "#333", textAlign: "justify", fontFamily: serif, margin: "0 0 10px", textIndent: "24px" }}>
+            The <strong>Economic Layer</strong> assesses the Liquidity Floor (L<sub>f</sub>) — the minimum locked capital
+            preventing zero-liquidity exits — and the Whale Concentration Ratio (WCR), measuring the cumulative supply
+            share held by the top non-contract holders.
+          </p>
         </div>
 
-        {/* ─── II. MATHEMATICAL FOUNDATIONS ─── */}
-        <div>
-          <h2 style={sectionTitle} data-testid="heading-math-foundations">II. MATHEMATICAL FOUNDATIONS</h2>
-          <p style={bodyText}>
-            All APOL forensic outputs are derived from deterministic mathematical models. These models transform raw on-chain
-            observables into normalized scores that enable cross-contract and cross-wallet comparison. The following foundational
-            equations govern the protocol's core scoring mechanisms.
-          </p>
+        <div style={{ borderTop: "1px solid #ddd", paddingTop: "28px" }}>
+          <h3 style={{ fontSize: "11px", fontWeight: 700, fontFamily: serif, textTransform: "uppercase", letterSpacing: "0.12em", color: "#111", marginBottom: "16px", textAlign: "center" }}>
+            III. Mathematical Foundations
+          </h3>
 
-          <div style={calloutBox}>
-            <p style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#1b5e20", fontFamily: "'JetBrains Mono', monospace", marginBottom: "12px" }}>
-              DEFINITION 1 — RESILIENCE SCORE (RS)
+          <div style={{ background: "#f8f8f8", border: "1px solid #e0e0e0", padding: "20px 24px", marginBottom: "20px" }}>
+            <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#555", fontFamily: mono, marginBottom: "8px" }}>
+              Definition 1 — Resilience Score (RS)
             </p>
             <KaTeX math="RS = \\frac{L_{total}}{C_{whale} \\times H_{rank}} \\times 100" />
-            <p style={defTable}>
-              The Resilience Score quantifies the probability of a liquidity death-spiral based on holder concentration.
-              A high RS indicates that locked liquidity sufficiently buffers against coordinated whale exits. Conversely,
-              a low RS signals structural fragility where a small number of holders can trigger cascading sell pressure.
-            </p>
-            <div style={{ marginTop: "16px", padding: "12px 16px", background: "#fff", border: "1px solid #e8f5e9", fontSize: "13px", fontFamily: "'Times New Roman', serif", color: "#555" }}>
-              <strong style={{ color: "#333" }}>Variable Definitions:</strong><br />
-              <em>L<sub>total</sub></em> — Total locked liquidity in USD equivalent, verified via on-chain LP lock contracts.<br />
-              <em>C<sub>whale</sub></em> — Whale Concentration Ratio: cumulative share of top-10 non-contract holders (0 &lt; WCR ≤ 1).<br />
-              <em>H<sub>rank</sub></em> — Holder Distribution Rank Index: Gini-derived metric of supply distribution (1 = uniform, ∞ = single holder).
+            <div style={{ columns: 2, columnGap: "24px" }}>
+              <p style={{ fontSize: "10.5px", lineHeight: 1.65, color: "#444", textAlign: "justify", fontFamily: serif, margin: 0 }}>
+                The Resilience Score quantifies the probability of a liquidity death-spiral based on holder concentration.
+                A high RS indicates that locked liquidity sufficiently buffers against coordinated whale exits. Conversely,
+                a low RS signals structural fragility.
+              </p>
+              <p style={{ fontSize: "10.5px", lineHeight: 1.65, color: "#555", fontFamily: serif, margin: 0 }}>
+                <em>L<sub>total</sub></em> = total locked liquidity (USD).<br />
+                <em>C<sub>whale</sub></em> = whale concentration ratio (0 &lt; WCR ≤ 1).<br />
+                <em>H<sub>rank</sub></em> = Gini-derived holder distribution rank.
+              </p>
             </div>
           </div>
 
-          <div style={calloutBox}>
-            <p style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#1b5e20", fontFamily: "'JetBrains Mono', monospace", marginBottom: "12px" }}>
-              DEFINITION 2 — COMMUNITY REWARD FUNCTION
+          <div style={{ background: "#f8f8f8", border: "1px solid #e0e0e0", padding: "20px 24px", marginBottom: "20px" }}>
+            <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#555", fontFamily: mono, marginBottom: "8px" }}>
+              Definition 2 — Community Reward Function
             </p>
             <KaTeX math="Reward = R \\times R_{circulation} \\times M" />
-            <p style={defTable}>
-              The Reward function governs $APOL token distribution for community forensic contributions — scam reports,
-              verified intelligence submissions, and threat flagging operations. The multiplier M scales with contribution
-              quality and verification status.
-            </p>
-            <div style={{ marginTop: "16px", padding: "12px 16px", background: "#fff", border: "1px solid #e8f5e9", fontSize: "13px", fontFamily: "'Times New Roman', serif", color: "#555" }}>
-              <strong style={{ color: "#333" }}>Variable Definitions:</strong><br />
-              <em>R</em> — Base reward rate, set by protocol governance.<br />
-              <em>R<sub>circulation</sub></em> — Circulating supply ratio: proportion of tokens in active circulation vs. total supply.<br />
-              <em>M</em> — Contribution multiplier: weighted by report accuracy, community votes, and on-chain verification status.
+            <div style={{ columns: 2, columnGap: "24px" }}>
+              <p style={{ fontSize: "10.5px", lineHeight: 1.65, color: "#444", textAlign: "justify", fontFamily: serif, margin: 0 }}>
+                Governs $APOL distribution for community forensic contributions — scam reports,
+                verified intelligence, and threat flagging. The multiplier M scales with contribution
+                quality and verification status.
+              </p>
+              <p style={{ fontSize: "10.5px", lineHeight: 1.65, color: "#555", fontFamily: serif, margin: 0 }}>
+                <em>R</em> = base reward rate.<br />
+                <em>R<sub>circulation</sub></em> = circulating supply ratio.<br />
+                <em>M</em> = contribution multiplier (quality-weighted).
+              </p>
             </div>
           </div>
 
-          <div style={calloutBox}>
-            <p style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#1b5e20", fontFamily: "'JetBrains Mono', monospace", marginBottom: "12px" }}>
-              DEFINITION 3 — COGNITION SCORE (CS)
+          <div style={{ background: "#f8f8f8", border: "1px solid #e0e0e0", padding: "20px 24px" }}>
+            <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#555", fontFamily: mono, marginBottom: "8px" }}>
+              Definition 3 — Cognition Score (CS)
             </p>
             <KaTeX math="CS = \\frac{\\sum_{i=1}^{n} w_i \\cdot T_i}{\\sum_{i=1}^{n} w_i} \\times 100" />
-            <p style={defTable}>
-              The Cognition Score evaluates whether a purported AI agent exhibits genuine autonomous behavior
-              or is a human-operated LARP. Each test T<sub>i</sub> produces a binary or continuous signal weighted
-              by domain importance w<sub>i</sub>. Scores ≥71% classify as "Fully Autonomous"; 31–70% as "Semi-Autonomous";
-              ≤30% as "Digital Puppet."
-            </p>
-            <div style={{ marginTop: "16px", padding: "12px 16px", background: "#fff", border: "1px solid #e8f5e9", fontSize: "13px", fontFamily: "'Times New Roman', serif", color: "#555" }}>
-              <strong style={{ color: "#333" }}>Variable Definitions:</strong><br />
-              <em>T<sub>i</sub></em> — Individual test score: traceability, timing spread, claim verification, log consistency, social integrity.<br />
-              <em>w<sub>i</sub></em> — Weight assigned to test domain based on forensic significance.<br />
-              <em>n</em> — Total number of evaluation domains (currently 5).
+            <div style={{ columns: 2, columnGap: "24px" }}>
+              <p style={{ fontSize: "10.5px", lineHeight: 1.65, color: "#444", textAlign: "justify", fontFamily: serif, margin: 0 }}>
+                Evaluates whether a purported AI agent exhibits genuine autonomous behavior.
+                Scores ≥71% = "Fully Autonomous"; 31–70% = "Semi-Autonomous"; ≤30% = "Digital Puppet."
+              </p>
+              <p style={{ fontSize: "10.5px", lineHeight: 1.65, color: "#555", fontFamily: serif, margin: 0 }}>
+                <em>T<sub>i</sub></em> = individual test score per domain.<br />
+                <em>w<sub>i</sub></em> = forensic significance weight.<br />
+                <em>n</em> = evaluation domains (currently 5).
+              </p>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* ─── III. FORENSIC FRAMEWORK ─── */}
-        <div>
-          <h2 style={sectionTitle} data-testid="heading-forensic-framework">III. FORENSIC FRAMEWORK</h2>
-          <p style={bodyText}>
-            The APOL Forensic Engine operates across three interdependent analytical domains. Each domain contributes weighted
-            signals to the composite Risk Score and Cognition Score outputs. The hierarchical structure below illustrates
-            the full analytical taxonomy:
-          </p>
-          <MermaidChart id="fig2-forensic" definition={forensicDef} />
-          <p style={figCaption}>Fig. 2: APOL Forensic Engine — Analytical domain decomposition and sub-module taxonomy.</p>
-          <p style={bodyText}>
+      {/* ═══ PAGE 3: FORENSIC ENGINE + THREAT MATRIX ═══ */}
+      <div style={{
+        maxWidth: 816,
+        margin: "0 auto 24px",
+        background: "#ffffff",
+        padding: "56px 72px",
+        boxShadow: "0 1px 8px rgba(0,0,0,0.15)",
+        minHeight: 1056,
+      }}>
+        <h3 style={{ fontSize: "11px", fontWeight: 700, fontFamily: serif, textTransform: "uppercase", letterSpacing: "0.12em", color: "#111", marginBottom: "4px", textAlign: "center" }}>
+          IV. Forensic Framework
+        </h3>
+        <p style={{ fontSize: "10px", color: "#777", textAlign: "center", fontFamily: serif, marginBottom: "12px" }}>
+          Analytical domain decomposition and sub-module taxonomy
+        </p>
+
+        <MermaidChart id="fig2-forensic" definition={forensicDef} />
+        <p style={{ fontSize: "10px", color: "#777", textAlign: "center", fontStyle: "italic", fontFamily: serif, margin: "-8px 0 24px" }}>
+          Fig. 2: APOL Forensic Engine — Complete module hierarchy.
+        </p>
+
+        <div style={{ columns: 2, columnGap: "32px", marginBottom: "32px" }}>
+          <p style={{ fontSize: "11.5px", lineHeight: 1.7, color: "#333", textAlign: "justify", fontFamily: serif, margin: "0 0 10px", textIndent: "24px" }}>
             <strong>Wallet Analytics</strong> encompasses transaction tracing through Base chain history, identification of
             funding sources via genesis transaction analysis, and whale concentration detection through holder distribution mapping.
-            <strong> Behavioral Logic</strong> evaluates temporal execution patterns to distinguish autonomous AI agents from
+          </p>
+          <p style={{ fontSize: "11.5px", lineHeight: 1.7, color: "#333", textAlign: "justify", fontFamily: serif, margin: "0 0 10px", textIndent: "24px" }}>
+            <strong>Behavioral Logic</strong> evaluates temporal execution patterns to distinguish autonomous AI agents from
             human-operated wallets, applying timing spread analysis and round-the-clock activity verification.
-            <strong> Economic Resilience</strong> assesses structural integrity through liquidity lock verification, buy/sell tax
+          </p>
+          <p style={{ fontSize: "11.5px", lineHeight: 1.7, color: "#333", textAlign: "justify", fontFamily: serif, margin: "0 0 10px", textIndent: "24px" }}>
+            <strong>Economic Resilience</strong> assesses structural integrity through liquidity lock verification, buy/sell tax
             analysis, and holder rank distribution to quantify rug-pull risk vectors.
           </p>
         </div>
 
-        {/* ─── IV. THREAT CLASSIFICATION MATRIX ─── */}
-        <div>
-          <h2 style={sectionTitle} data-testid="heading-threat-matrix">IV. THREAT CLASSIFICATION MATRIX</h2>
-          <p style={bodyText}>
-            APOL Agent classifies detected threats into a standardized severity matrix. Each threat vector is assigned a
-            risk tier based on the probability of capital loss and the reversibility of the exploit:
-          </p>
-          <div style={{ margin: "24px 0", border: "1px solid #e0e0e0", overflow: "hidden" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'Times New Roman', serif", fontSize: "14px" }}>
-              <thead>
-                <tr style={{ background: "#1b5e20", color: "#fff" }}>
-                  <th style={{ textAlign: "left", padding: "10px 14px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", fontSize: "11px" }}>Threat Vector</th>
-                  <th style={{ textAlign: "center", padding: "10px 14px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", fontSize: "11px" }}>Severity</th>
-                  <th style={{ textAlign: "left", padding: "10px 14px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", fontSize: "11px" }}>Detection Method</th>
-                  <th style={{ textAlign: "center", padding: "10px 14px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", fontSize: "11px" }}>Reversible</th>
-                </tr>
-              </thead>
-              <tbody>
-                {([
-                  ["Honeypot Contract", "CRITICAL", "GoPlus API + sell simulation", "No"],
-                  ["Rug Pull (LP Drain)", "CRITICAL", "LP lock verification + holder analysis", "No"],
-                  ["Hidden Mint Function", "HIGH", "Contract source analysis + owner permissions", "No"],
-                  ["Whale Concentration", "HIGH", "Top holder distribution mapping", "Partial"],
-                  ["Agent LARP", "MEDIUM", "Cognition Score + timing analysis", "N/A"],
-                  ["Elevated Tax", "MEDIUM", "Buy/sell tax simulation", "Yes"],
-                  ["Social Impersonation", "LOW", "Account age + engagement forensics", "Yes"],
-                ] as const).map(([threat, severity, method, reversible], i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid #e8e8e8", background: i % 2 === 0 ? "#fafafa" : "#fff" }}>
-                    <td style={{ padding: "10px 14px", fontWeight: 600, color: "#111" }}>{threat}</td>
-                    <td style={{ padding: "10px 14px", textAlign: "center" }}>
-                      <span style={{
-                        fontSize: "10px",
-                        fontWeight: 800,
-                        letterSpacing: "0.1em",
-                        padding: "3px 10px",
-                        background: severity === "CRITICAL" ? "#ffebee" : severity === "HIGH" ? "#fff3e0" : severity === "MEDIUM" ? "#fff8e1" : "#e8f5e9",
-                        color: severity === "CRITICAL" ? "#c62828" : severity === "HIGH" ? "#e65100" : severity === "MEDIUM" ? "#f57f17" : "#2e7d32",
-                        fontFamily: "'JetBrains Mono', monospace",
-                      }}>
-                        {severity}
-                      </span>
-                    </td>
-                    <td style={{ padding: "10px 14px", color: "#555", fontSize: "13px" }}>{method}</td>
-                    <td style={{ padding: "10px 14px", textAlign: "center", color: reversible === "No" ? "#c62828" : "#555", fontWeight: reversible === "No" ? 700 : 400 }}>{reversible}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p style={figCaption}>Table 1: APOL Threat Classification Matrix — Severity tiers, detection methodologies, and reversibility assessment.</p>
-        </div>
+        <div style={{ borderTop: "1px solid #ddd", paddingTop: "28px" }}>
+          <h3 style={{ fontSize: "11px", fontWeight: 700, fontFamily: serif, textTransform: "uppercase", letterSpacing: "0.12em", color: "#111", marginBottom: "16px", textAlign: "center" }}>
+            V. Threat Classification Matrix
+          </h3>
 
-        {/* ─── V. TOKENOMICS ─── */}
-        <div>
-          <h2 style={sectionTitle} data-testid="heading-tokenomics">V. TOKENOMICS</h2>
-          <p style={bodyText}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: serif, fontSize: "11px", marginBottom: "8px" }}>
+            <thead>
+              <tr style={{ borderBottom: "2px solid #111" }}>
+                <th style={{ textAlign: "left", padding: "6px 10px", fontWeight: 700, fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase" }}>Threat Vector</th>
+                <th style={{ textAlign: "center", padding: "6px 10px", fontWeight: 700, fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase" }}>Severity</th>
+                <th style={{ textAlign: "left", padding: "6px 10px", fontWeight: 700, fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase" }}>Detection Method</th>
+                <th style={{ textAlign: "center", padding: "6px 10px", fontWeight: 700, fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase" }}>Rev.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {([
+                ["Honeypot Contract", "CRITICAL", "Sell simulation + bytecode analysis", "No"],
+                ["Rug Pull (LP Drain)", "CRITICAL", "LP lock verification + holder analysis", "No"],
+                ["Hidden Mint Function", "HIGH", "Contract source + owner permissions", "No"],
+                ["Whale Concentration", "HIGH", "Top holder distribution mapping", "Partial"],
+                ["Agent LARP", "MEDIUM", "Cognition Score + timing analysis", "N/A"],
+                ["Elevated Tax", "MEDIUM", "Buy/sell tax simulation", "Yes"],
+                ["Social Impersonation", "LOW", "Account age + engagement forensics", "Yes"],
+              ] as const).map(([threat, severity, method, rev], i) => (
+                <tr key={i} style={{ borderBottom: "1px solid #ddd" }}>
+                  <td style={{ padding: "5px 10px", color: "#222" }}>{threat}</td>
+                  <td style={{ padding: "5px 10px", textAlign: "center", fontWeight: 700, fontSize: "9px", fontFamily: mono, color: severity === "CRITICAL" ? "#b71c1c" : severity === "HIGH" ? "#e65100" : severity === "MEDIUM" ? "#f57f17" : "#2e7d32" }}>{severity}</td>
+                  <td style={{ padding: "5px 10px", color: "#555" }}>{method}</td>
+                  <td style={{ padding: "5px 10px", textAlign: "center", color: rev === "No" ? "#b71c1c" : "#555" }}>{rev}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p style={{ fontSize: "10px", color: "#777", textAlign: "center", fontStyle: "italic", fontFamily: serif }}>
+            Table 1: Severity tiers, detection methodologies, and reversibility assessment.
+          </p>
+        </div>
+      </div>
+
+      {/* ═══ PAGE 4: TOKENOMICS + ARCHITECTURE ═══ */}
+      <div style={{
+        maxWidth: 816,
+        margin: "0 auto 24px",
+        background: "#ffffff",
+        padding: "56px 72px",
+        boxShadow: "0 1px 8px rgba(0,0,0,0.15)",
+        minHeight: 1056,
+      }}>
+        <h3 style={{ fontSize: "11px", fontWeight: 700, fontFamily: serif, textTransform: "uppercase", letterSpacing: "0.12em", color: "#111", marginBottom: "16px", textAlign: "center" }}>
+          VI. Tokenomics
+        </h3>
+
+        <div style={{ columns: 2, columnGap: "32px", marginBottom: "20px" }}>
+          <p style={{ fontSize: "11.5px", lineHeight: 1.7, color: "#333", textAlign: "justify", fontFamily: serif, margin: "0 0 10px", textIndent: "24px" }}>
             The $APOL token employs a maximally fair distribution model with zero insider allocation.
             The entire supply enters public circulation at launch with no team reserves, no marketing tax,
             and no vesting schedules. This structure eliminates sell pressure from insider unlocks and aligns
-            all stakeholders from day one.
+            all stakeholders from genesis.
           </p>
-          <TokenomicsChart />
-          <p style={figCaption}>Fig. 3: $APOL Token Distribution — 100% public circulation model.</p>
-          <div style={{ margin: "24px 0", padding: "20px 24px", background: "#f9fbe7", border: "1px solid #e8f5e9" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'Times New Roman', serif", fontSize: "14px" }}>
-              <thead>
-                <tr style={{ borderBottom: "2px solid #00c853" }}>
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontWeight: 700, color: "#111", letterSpacing: "0.08em", textTransform: "uppercase" }}>Parameter</th>
-                  <th style={{ textAlign: "left", padding: "8px 12px", fontWeight: 700, color: "#111", letterSpacing: "0.08em", textTransform: "uppercase" }}>Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  ["Total Supply", "1,000,000,000 (Hard Capped)"],
-                  ["Public Circulation", "100%"],
-                  ["Team Reserve", "0%"],
-                  ["Marketing Tax", "0%"],
-                  ["Buy / Sell Tax", "0% / 0% (Immutable)"],
-                  ["Liquidity", "Burned / Locked (Verifiable on-chain)"],
-                  ["Network", "Base"],
-                ].map(([param, value], i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid #e8f5e9" }}>
-                    <td style={{ padding: "10px 12px", fontWeight: 600, color: "#1b5e20" }}>{param}</td>
-                    <td style={{ padding: "10px 12px", color: "#333" }}>{value}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <p style={{ fontSize: "11.5px", lineHeight: 1.7, color: "#333", textAlign: "justify", fontFamily: serif, margin: "0 0 10px", textIndent: "24px" }}>
+            The immutable 0/0 tax structure ensures that no value is extracted from trades. Liquidity is permanently
+            locked or burned, verifiable on-chain, providing a non-revocable floor for market participants. The hard cap
+            of 1,000,000,000 tokens prevents inflationary dilution.
+          </p>
         </div>
 
-        {/* ─── VI. PROTOCOL ARCHITECTURE ─── */}
-        <div>
-          <h2 style={sectionTitle} data-testid="heading-architecture">VI. PROTOCOL ARCHITECTURE</h2>
-          <p style={bodyText}>
-            The APOL protocol operates across two complementary interfaces — a web-based forensic terminal and a Telegram
-            bot — both powered by a shared backend intelligence engine. The architecture is designed for low-latency
-            forensic output with minimal trust assumptions:
-          </p>
-          <div style={{ ...calloutBox, borderLeftColor: "#1b5e20" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
-              <div>
-                <p style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "#1b5e20", fontFamily: "'JetBrains Mono', monospace", marginBottom: "10px" }}>
-                  CORE ANALYTIC ENGINE
-                </p>
-                <ul style={{ ...defTable, paddingLeft: "18px", margin: 0 }}>
-                  <li><strong>Heuristic Logic Layer:</strong> Proprietary byte-code analysis to detect hidden developer "backdoors."</li>
-                  <li><strong>Cluster Fingerprinting:</strong> Identification of multi-wallet sybil attacks and pre-launch accumulation.</li>
-                  <li><strong>Cross-Chain Provenance:</strong> Tracing funding sources back to centralized exchanges or mixers.</li>
-                </ul>
-              </div>
-              <div>
-                <p style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "#1b5e20", fontFamily: "'JetBrains Mono', monospace", marginBottom: "10px" }}>
-                  INTELLIGENCE OUTPUT
-                </p>
-                <ul style={{ ...defTable, paddingLeft: "18px", margin: 0 }}>
-                  <li><strong>Automated Verdicts:</strong> Real-time generation of "Safe" vs "Larp" signals for the Telegram interface.</li>
-                  <li><strong>Forensic Dossiers:</strong> High-fidelity PDF reports for institutional-grade project audits.</li>
-                  <li><strong>Verified Registry:</strong> On-chain certification for projects that pass the 90+ Resilience Score.</li>
-                </ul>
-              </div>
+        <TokenomicsChart />
+        <p style={{ fontSize: "10px", color: "#777", textAlign: "center", fontStyle: "italic", fontFamily: serif, margin: "-4px 0 20px" }}>
+          Fig. 3: $APOL Token Distribution — 100% public circulation.
+        </p>
+
+        <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: serif, fontSize: "11px", marginBottom: "32px" }}>
+          <thead>
+            <tr style={{ borderBottom: "2px solid #111" }}>
+              <th style={{ textAlign: "left", padding: "6px 10px", fontWeight: 700, fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase" }}>Parameter</th>
+              <th style={{ textAlign: "left", padding: "6px 10px", fontWeight: 700, fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase" }}>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              ["Total Supply", "1,000,000,000 (Hard Capped)"],
+              ["Public Circulation", "100%"],
+              ["Team Reserve", "0%"],
+              ["Marketing Tax", "0%"],
+              ["Buy / Sell Tax", "0% / 0% (Immutable)"],
+              ["Liquidity", "Burned / Locked (On-chain verifiable)"],
+              ["Network", "Base (Chain ID: 8453)"],
+            ].map(([param, value], i) => (
+              <tr key={i} style={{ borderBottom: "1px solid #ddd" }}>
+                <td style={{ padding: "5px 10px", fontWeight: 600, color: "#222" }}>{param}</td>
+                <td style={{ padding: "5px 10px", color: "#444" }}>{value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div style={{ borderTop: "1px solid #ddd", paddingTop: "28px" }}>
+          <h3 style={{ fontSize: "11px", fontWeight: 700, fontFamily: serif, textTransform: "uppercase", letterSpacing: "0.12em", color: "#111", marginBottom: "16px", textAlign: "center" }}>
+            VII. Protocol Architecture
+          </h3>
+
+          <div style={{ columns: 2, columnGap: "32px", marginBottom: "24px" }}>
+            <p style={{ fontSize: "11.5px", lineHeight: 1.7, color: "#333", textAlign: "justify", fontFamily: serif, margin: "0 0 10px", textIndent: "24px" }}>
+              The APOL protocol operates across two complementary interfaces — a web-based forensic terminal and a Telegram
+              bot — both powered by a shared backend intelligence engine. The architecture is designed for low-latency
+              forensic output with minimal trust assumptions.
+            </p>
+            <p style={{ fontSize: "11.5px", lineHeight: 1.7, color: "#333", textAlign: "justify", fontFamily: serif, margin: "0 0 10px", textIndent: "24px" }}>
+              All forensic analyses are executed server-side and cached for performance. No private keys or user wallet contents
+              are ever accessed — the protocol operates exclusively on publicly available on-chain data.
+            </p>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "24px" }}>
+            <div style={{ background: "#f8f8f8", border: "1px solid #e0e0e0", padding: "16px 18px" }}>
+              <p style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#333", fontFamily: mono, marginBottom: "8px" }}>
+                Core Analytic Engine
+              </p>
+              <ul style={{ fontSize: "10.5px", lineHeight: 1.65, color: "#444", fontFamily: serif, paddingLeft: "16px", margin: 0 }}>
+                <li><strong>Heuristic Logic Layer:</strong> Proprietary byte-code analysis to detect hidden developer "backdoors."</li>
+                <li style={{ marginTop: "4px" }}><strong>Cluster Fingerprinting:</strong> Identification of multi-wallet sybil attacks and pre-launch accumulation.</li>
+                <li style={{ marginTop: "4px" }}><strong>Cross-Chain Provenance:</strong> Tracing funding sources back to centralized exchanges or mixers.</li>
+              </ul>
+            </div>
+            <div style={{ background: "#f8f8f8", border: "1px solid #e0e0e0", padding: "16px 18px" }}>
+              <p style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#333", fontFamily: mono, marginBottom: "8px" }}>
+                Intelligence Output
+              </p>
+              <ul style={{ fontSize: "10.5px", lineHeight: 1.65, color: "#444", fontFamily: serif, paddingLeft: "16px", margin: 0 }}>
+                <li><strong>Automated Verdicts:</strong> Real-time generation of "Safe" vs "Larp" signals for the Telegram interface.</li>
+                <li style={{ marginTop: "4px" }}><strong>Forensic Dossiers:</strong> High-fidelity PDF reports for institutional-grade project audits.</li>
+                <li style={{ marginTop: "4px" }}><strong>Verified Registry:</strong> On-chain certification for projects that pass the 90+ Resilience Score.</li>
+              </ul>
             </div>
           </div>
-          <p style={{ ...bodyText, marginTop: "20px" }}>
-            All forensic analyses are executed server-side and cached for performance. No private keys or user wallet contents
-            are ever accessed — the protocol operates exclusively on publicly available on-chain data. The Telegram bot runs
-            as a persistent process in production, polling for commands and delivering formatted forensic reports directly to
-            user chats.
-          </p>
         </div>
 
-        {/* ─── FOOTER ─── */}
-        <div style={{ marginTop: "56px", paddingTop: "24px", borderTop: "2px solid #00c853", textAlign: "center" }}>
-          <p style={{ fontSize: "11px", color: "#999", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.06em", lineHeight: "1.8" }}>
+        <div style={{ borderTop: "1px solid #ddd", marginTop: "40px", paddingTop: "20px", textAlign: "center" }}>
+          <p style={{ fontSize: "9px", color: "#999", fontFamily: mono, letterSpacing: "0.06em", lineHeight: "1.8" }}>
             APOL AGENT — AUTONOMOUS ONCHAIN FORENSICS PROTOCOL<br />
             BASE NETWORK — {new Date().getFullYear()}<br />
             THIS DOCUMENT IS FOR INFORMATIONAL PURPOSES ONLY AND DOES NOT CONSTITUTE FINANCIAL ADVICE.
           </p>
         </div>
-
       </div>
+
     </div>
   );
 }
