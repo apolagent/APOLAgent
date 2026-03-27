@@ -632,7 +632,13 @@ function slugify(text: string) {
 }
 
 export default function Docs() {
-  const [activeSection, setActiveSection] = useState<SectionId>("getting-started");
+  const initialSection = (() => {
+    const params = new URLSearchParams(window.location.search);
+    const s = params.get("section");
+    if (s && navSections.some(n => n.id === s)) return s as SectionId;
+    return "getting-started" as SectionId;
+  })();
+  const [activeSection, setActiveSection] = useState<SectionId>(initialSection);
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeOutlineItem, setActiveOutlineItem] = useState("");

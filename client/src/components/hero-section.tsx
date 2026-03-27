@@ -78,7 +78,8 @@ export default function HeroSection() {
           </a>
 
           {/* SECONDARY — ACQUIRE ACCESS KEY */}
-          <button
+          <a
+            href="/docs?section=api-dashboard"
             data-testid="button-buy-apol"
             style={{
               display: "flex",
@@ -100,11 +101,12 @@ export default function HeroSection() {
               textTransform: "uppercase",
               fontFamily: "'JetBrains Mono', monospace",
               boxSizing: "border-box",
+              textDecoration: "none",
             }}
           >
             <Coins size={16} />
             Acquire Access Key
-          </button>
+          </a>
 
         </div>
       </div>
