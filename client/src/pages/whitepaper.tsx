@@ -410,12 +410,13 @@ export default function Whitepaper() {
         .wp-page {
           width: 850px;
           min-height: 1200px;
-          background: #fff;
+          background: #ffffff;
           padding: 48px 64px;
-          margin: 40px auto;
-          box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+          margin: 40px 0;
+          box-shadow: 0 4px 24px rgba(0,0,0,0.18);
           box-sizing: border-box;
           position: relative;
+          flex-shrink: 0;
         }
         .wp-icon-btn { background: none; border: none; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; color: #bbb; }
         .wp-icon-btn:hover { color: #fff; }
@@ -427,6 +428,8 @@ export default function Whitepaper() {
         .wp-content::-webkit-scrollbar-track { background: #ddd; }
         .wp-content::-webkit-scrollbar-thumb { background: #aaa; border-radius: 5px; }
         .wp-content::-webkit-scrollbar-thumb:hover { background: #888; }
+        .wp-toc-link { transition: color 0.15s ease; }
+        .wp-toc-link:hover { color: #00D1FF !important; }
       `}</style>
 
       <div style={{
@@ -456,8 +459,8 @@ export default function Whitepaper() {
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
         <div style={{
-          width: 300, minWidth: 300, display: "flex", flexDirection: "column",
-          background: "#484848", borderRight: "1px solid #555", flexShrink: 0, overflow: "hidden",
+          flex: "0 0 300px", display: "flex", flexDirection: "column",
+          background: "#484848", borderRight: "1px solid #555", overflow: "hidden",
         }}>
           <div style={{ display: "flex", borderBottom: "1px solid #555", flexShrink: 0 }}>
             <button
@@ -538,21 +541,22 @@ export default function Whitepaper() {
               </div>
             ) : (
               <div style={{ padding: "4px 0" }}>
-                <p style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#999", fontFamily: sans, padding: "4px 8px 10px", margin: 0 }}>Document Outline</p>
+                <p style={{ fontSize: "9px", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "#999", fontFamily: sans, padding: "4px 8px 10px", margin: 0 }}>Document Outline</p>
                 {tocItems.map((item, i) => (
                   <button
                     key={i}
                     onClick={() => scrollToPage(item.page)}
                     data-testid={`button-toc-${i}`}
+                    className="wp-toc-link"
                     style={{
                       display: "block", width: "100%", textAlign: "left",
                       background: "transparent", border: "none",
-                      padding: `4px 10px 4px ${10 + item.indent * 14}px`,
-                      fontSize: item.indent ? "10.5px" : "11.5px",
+                      padding: `5px 10px 5px ${10 + item.indent * 14}px`,
+                      fontSize: item.indent ? "12px" : "14px",
                       fontFamily: sans,
-                      color: currentPage === item.page && !item.indent ? "#fff" : item.indent ? "#888" : "#ccc",
-                      fontWeight: item.indent ? 400 : 500,
-                      cursor: "pointer", lineHeight: 1.7,
+                      color: currentPage === item.page && !item.indent ? "#fff" : item.indent ? "#999" : "#ccc",
+                      fontWeight: 400,
+                      cursor: "pointer", lineHeight: 1.8,
                     }}
                   >
                     {item.label}
@@ -566,7 +570,7 @@ export default function Whitepaper() {
         <div
           ref={scrollRef}
           className="wp-content"
-          style={{ flex: 1, overflowY: "auto", overflowX: "auto", background: "#f0f2f5" }}
+          style={{ flex: 1, overflowY: "auto", overflowX: "auto", background: "#e9ecef", display: "flex", flexDirection: "column", alignItems: "center" }}
         >
           <Page1 />
           <Page2 />
@@ -575,7 +579,7 @@ export default function Whitepaper() {
           <Page5 />
           <Page6 />
           <Page7 />
-          <div style={{ height: 40 }} />
+          <div style={{ height: 40, flexShrink: 0 }} />
         </div>
       </div>
     </div>
