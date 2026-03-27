@@ -935,9 +935,20 @@ export default function Docs() {
         }}
       >
         <div style={{ padding: "20px 20px 12px", borderBottom: "1px solid #e5e7eb", flexShrink: 0 }}>
-          <Link href="/" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+          <Link href="/" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
             <img src="/apol-agent-logo.png" alt="APOL" style={{ width: 32, height: 32, borderRadius: "50%" }} data-testid="link-docs-home" />
             <span style={{ fontSize: 15, fontWeight: 700, color: "#0f172a", fontFamily: sans }}>APOL Docs</span>
+          </Link>
+          <Link href="/" style={{ textDecoration: "none" }}>
+            <div data-testid="button-back-home" style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "6px 12px", marginBottom: 12,
+              background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 6,
+              cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#475569", fontFamily: sans,
+            }}>
+              <Home style={{ width: 14, height: 14, color: ACCENT }} />
+              Back to Home
+            </div>
           </Link>
           <div style={{ position: "relative" }}>
             <Search style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", width: 16, height: 16, color: "#94a3b8" }} />

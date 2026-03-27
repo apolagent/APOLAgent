@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import katex from "katex";
 import mermaid from "mermaid";
 import { Chart, ArcElement, Tooltip, Legend, PieController } from "chart.js";
-import { ChevronLeft, ChevronRight, Minus, Plus, Download, Printer, RotateCw, Undo2, Redo2, Menu, Images, List } from "lucide-react";
+import { ChevronLeft, ChevronRight, Minus, Plus, Download, Printer, RotateCw, Undo2, Redo2, Menu, Images, List, Home } from "lucide-react";
 
 Chart.register(ArcElement, Tooltip, Legend, PieController);
 
@@ -504,7 +504,7 @@ export default function Whitepaper() {
         background: "#333", borderBottom: "1px solid #555",
         display: "flex", alignItems: "center", padding: "0 8px", gap: 6,
       }}>
-        <Link href="/"><button className="wp-icon-btn" style={{ padding: 4 }} data-testid="link-back-home"><Menu style={{ width: 16, height: 16 }} /></button></Link>
+        <Link href="/"><button className="wp-icon-btn" style={{ padding: "4px 8px", display: "flex", alignItems: "center", gap: 6 }} data-testid="link-back-home"><Home style={{ width: 14, height: 14 }} /><span style={{ fontSize: 11, color: "#ccc", fontFamily: sans }}>Home</span></button></Link>
         <div className="wp-tb-sep" />
         <button className="wp-icon-btn" onClick={() => scrollToPage(Math.max(1, currentPage - 1))} data-testid="button-page-prev"><ChevronLeft style={{ width: 16, height: 16 }} /></button>
         <span style={{ color: "#ddd", fontSize: 12, fontFamily: sans, minWidth: 44, textAlign: "center" }} data-testid="text-page-indicator">{currentPage} / {TOTAL_PAGES}</span>
