@@ -414,26 +414,22 @@ export default function Whitepaper() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
               <div>
                 <p style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "#1b5e20", fontFamily: "'JetBrains Mono', monospace", marginBottom: "10px" }}>
-                  DATA SOURCES
+                  CORE ANALYTIC ENGINE
                 </p>
                 <ul style={{ ...defTable, paddingLeft: "18px", margin: 0 }}>
-                  <li>GoPlus Security API — contract risk signals</li>
-                  <li>Moralis Web3 API — wallet transaction history</li>
-                  <li>DexScreener — real-time price and liquidity data</li>
-                  <li>Blockscout — Base chain explorer and ENS resolution</li>
-                  <li>ChainAbuse — sanctioned wallet and threat reports</li>
+                  <li><strong>Heuristic Logic Layer:</strong> Proprietary byte-code analysis to detect hidden developer "backdoors."</li>
+                  <li><strong>Cluster Fingerprinting:</strong> Identification of multi-wallet sybil attacks and pre-launch accumulation.</li>
+                  <li><strong>Cross-Chain Provenance:</strong> Tracing funding sources back to centralized exchanges or mixers.</li>
                 </ul>
               </div>
               <div>
                 <p style={{ fontSize: "12px", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "#1b5e20", fontFamily: "'JetBrains Mono', monospace", marginBottom: "10px" }}>
-                  OUTPUT CHANNELS
+                  INTELLIGENCE OUTPUT
                 </p>
                 <ul style={{ ...defTable, paddingLeft: "18px", margin: 0 }}>
-                  <li>Web Terminal — full forensic reports with visual scoring</li>
-                  <li>Telegram Bot — /scan, /scanagent, /checkwallet, /scanx</li>
-                  <li>Verified Builders Registry — on-chain certification</li>
-                  <li>Community Intelligence Feed — crowdsourced threat data</li>
-                  <li>API Endpoints — programmatic access for integrators</li>
+                  <li><strong>Automated Verdicts:</strong> Real-time generation of "Safe" vs "Larp" signals for the Telegram interface.</li>
+                  <li><strong>Forensic Dossiers:</strong> High-fidelity PDF reports for institutional-grade project audits.</li>
+                  <li><strong>Verified Registry:</strong> On-chain certification for projects that pass the 90+ Resilience Score.</li>
                 </ul>
               </div>
             </div>
