@@ -23,7 +23,7 @@ const sectionOutlines: Record<SectionId, string[]> = {
   "forensic-verdicts": ["Verdict Overview", "Green Status", "Yellow Status", "Red Status", "Score Breakdown"],
   "security-standards": ["Heuristic Logic Scan", "On-Chain Analysis", "Behavioral Detection", "Economic Resilience"],
   "api": ["Authentication", "Endpoints", "Rate Limits", "Response Format"],
-  "api-dashboard": ["Your API Key", "Usage Tracker", "Premium Access"],
+  "api-dashboard": ["Your API Key", "Usage Tracker", "Premium Access", "Authentication Header", "Scan Endpoint", "Integration Guide"],
 };
 
 function CopyBlock({ code, label }: { code: string; label?: string }) {
@@ -614,6 +614,74 @@ function ApiDashboard() {
           </p>
         </div>
       </div>
+
+      <div style={{ margin: "48px 0 0", padding: "40px 0 0", borderTop: "1px solid #e5e7eb" }}>
+        <h2 style={{ fontSize: 24, fontWeight: 700, color: "#0f172a", fontFamily: sans, margin: "0 0 8px" }}>Endpoints & Integration</h2>
+        <Para>Technical reference for integrating APOL forensic scanning into your applications.</Para>
+      </div>
+
+      <SubTitle id="authentication-header">Authentication Header</SubTitle>
+      <Para>All authenticated requests must include your API key in the request header. Pass the key using the X-APOL-AUTH header on every request:</Para>
+      <CopyBlock code="X-APOL-AUTH: YOUR_API_KEY" label="Header" />
+      <Callout type="info">Replace YOUR_API_KEY with the key generated from the dashboard above. Keys are prefixed with apol_sk_live_ for production access.</Callout>
+
+      <SubTitle id="scan-endpoint">Scan Endpoint</SubTitle>
+      <Para>The primary forensic endpoint accepts a contract address and returns a full risk assessment with composite scoring, individual signals, and a final verdict.</Para>
+      <div style={{ marginBottom: 8 }}>
+        <span style={{
+          display: "inline-block", fontSize: 11, fontWeight: 700, fontFamily: mono,
+          color: "#16a34a", background: "#f0fdf4", border: "1px solid #bbf7d0",
+          padding: "2px 10px", borderRadius: 4, marginBottom: 8,
+        }}>GET</span>
+        <code style={{ fontSize: 14, fontFamily: mono, color: ACCENT, marginLeft: 8 }}>/v1/scan</code>
+      </div>
+      <CopyBlock code="curl https://api.apolagent.io/v1/scan?address=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \\\n  -H &quot;X-APOL-AUTH: apol_sk_live_7f3a9b2e1d4c...&quot;" label="Request" />
+      <CopyBlock code={`{
+  "status": "success",
+  "resilience_score": 88,
+  "verdict": "Low Risk",
+  "flags": ["Contract Verified", "Liquidity Locked"]
+}`} label="Response (200 OK)" />
+      <Para>The response includes the composite resilience_score (0 to 100), a human-readable verdict string, and an array of detected flags. Premium holders receive additional fields including cluster_id and creator_provenance.</Para>
+
+      <SubTitle id="integration-guide">Integration Guide</SubTitle>
+      <Para>To integrate APOL into your own dApp or Trading Bot, simply call our REST API. Premium holders (50k+ $APOL) receive priority bandwidth and deeper forensic metadata, including Cluster-ID and Creator-Provenance data.</Para>
+      <CopyBlock code={`// Example: Node.js Integration
+const response = await fetch(
+  "https://api.apolagent.io/v1/scan?address=" + contractAddress,
+  {
+    headers: {
+      "X-APOL-AUTH": process.env.APOL_API_KEY,
+      "Content-Type": "application/json"
+    }
+  }
+);
+
+const data = await response.json();
+
+if (data.resilience_score < 40) {
+  console.warn("CRITICAL THREAT detected:", data.verdict);
+  // Block interaction or alert user
+}
+
+if (data.resilience_score >= 90) {
+  console.log("Project is APOL Verified:", data.flags);
+  // Safe to proceed
+}`} label="Node.js" />
+      <CopyBlock code={`# Example: Python Integration
+import requests
+
+headers = {"X-APOL-AUTH": "apol_sk_live_YOUR_KEY"}
+url = f"https://api.apolagent.io/v1/scan?address={contract_address}"
+
+response = requests.get(url, headers=headers)
+data = response.json()
+
+if data["resilience_score"] < 40:
+    print(f"THREAT: {data['verdict']}")
+elif data["resilience_score"] >= 90:
+    print(f"VERIFIED: {data['flags']}")`} label="Python" />
+      <Callout type="success">Premium API responses include additional forensic metadata: cluster_id (linked wallet group identifier), creator_provenance (funding source chain), and whale_map (top 10 holder breakdown with wallet ages).</Callout>
     </>
   );
 }
