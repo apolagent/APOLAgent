@@ -25,6 +25,17 @@ mermaid.initialize({
 const ACCENT = "#00D1FF";
 const serif = "'Times New Roman', 'Computer Modern', Georgia, serif";
 const mono = "'JetBrains Mono', 'Courier New', monospace";
+const sans = "'Segoe UI', 'Inter', -apple-system, sans-serif";
+
+function PageHeader() {
+  return (
+    <div style={{ textAlign: "right", marginBottom: "28px", paddingBottom: "8px", borderBottom: "1px solid #eee" }}>
+      <span style={{ fontSize: "10px", color: "#bbb", fontFamily: sans, letterSpacing: "0.06em" }}>
+        APOL AGENT &nbsp;|&nbsp; TECHNICAL SPECIFICATION
+      </span>
+    </div>
+  );
+}
 
 function KaTeX({ math }: { math: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -120,7 +131,8 @@ const vB: React.CSSProperties = { padding: "10px 14px", background: "#fff", bord
 function Page1() {
   return (
     <div id="page-1" className="wp-page">
-      <div style={{ textAlign: "center", padding: "60px 0 40px" }}>
+      <PageHeader />
+      <div style={{ textAlign: "center", padding: "40px 0 30px" }}>
         <img src="/apol-agent-logo.png" alt="APOL Agent" style={{ width: 160, height: 160, margin: "0 auto 20px", display: "block" }} />
         <h1 style={{ fontSize: "48px", fontWeight: 800, fontFamily: serif, color: "#000", margin: "0", letterSpacing: "0.03em", lineHeight: 1.1 }} data-testid="text-whitepaper-title">APOL AGENT</h1>
       </div>
@@ -129,7 +141,7 @@ function Page1() {
           Autonomous Onchain Forensics<br />and AI-Driven Threat Intelligence
         </h2>
       </div>
-      <div style={{ textAlign: "center", margin: "24px 0 40px" }}>
+      <div style={{ textAlign: "center", margin: "24px 0 36px" }}>
         <p style={{ fontSize: "13px", fontFamily: serif, color: "#333", margin: "0 0 2px", fontWeight: 600 }}>APOL Labs</p>
         <p style={{ fontSize: "12px", fontFamily: serif, color: "#666", margin: 0, fontStyle: "italic" }}>contact@apepolice.online</p>
       </div>
@@ -163,6 +175,7 @@ function Page1() {
 function Page2() {
   return (
     <div id="page-2" className="wp-page">
+      <PageHeader />
       <h3 style={sH}>II. Hierarchical Evaluation Framework</h3>
       <MermaidChart id="fig1-hierarchy" definition={hierarchyDef} />
       <p style={fC}>Fig. 1: Hierarchical Evaluation Framework — Three-layer forensic taxonomy.</p>
@@ -200,6 +213,7 @@ function Page2() {
 function Page3() {
   return (
     <div id="page-3" className="wp-page">
+      <PageHeader />
       <h3 style={sH}>IV. Forensic Framework</h3>
       <p style={{ fontSize: "11px", color: "#888", textAlign: "center", fontFamily: serif, marginBottom: "8px" }}>Analytical domain decomposition and sub-module taxonomy</p>
       <MermaidChart id="fig2-forensic" definition={forensicDef} />
@@ -249,6 +263,7 @@ function Page3() {
 function Page4() {
   return (
     <div id="page-4" className="wp-page">
+      <PageHeader />
       <h3 style={sH}>VI. Tokenomics</h3>
       <div style={{ height: 8 }} />
       <div style={{ display: "flex", gap: "30px", marginBottom: "24px" }}>
@@ -322,7 +337,7 @@ export default function Whitepaper() {
     const el = document.getElementById(`page-${p}`);
     if (el && scrollRef.current) {
       const off = el.offsetTop - scrollRef.current.offsetTop;
-      scrollRef.current.scrollTo({ top: off - 10, behavior: "smooth" });
+      scrollRef.current.scrollTo({ top: off - 20, behavior: "smooth" });
     }
   }, []);
 
@@ -346,40 +361,41 @@ export default function Whitepaper() {
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
       <style>{`
         .wp-page {
+          width: 850px;
+          min-height: 1200px;
           background: #fff;
-          padding: 60px 72px;
-          margin: 0 auto 8px;
-          max-width: 900px;
-          width: 100%;
-          box-shadow: 0 1px 6px rgba(0,0,0,0.25);
+          padding: 48px 64px;
+          margin: 40px auto;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.1);
           box-sizing: border-box;
+          position: relative;
         }
         .wp-icon-btn { background: none; border: none; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; color: #bbb; }
         .wp-icon-btn:hover { color: #fff; }
         .wp-tb-sep { width: 1px; height: 22px; background: #666; flex-shrink: 0; }
-        .wp-sidebar-scroll::-webkit-scrollbar { width: 6px; }
-        .wp-sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
-        .wp-sidebar-scroll::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
-        .wp-content-scroll::-webkit-scrollbar { width: 10px; }
-        .wp-content-scroll::-webkit-scrollbar-track { background: #3a3a3a; }
-        .wp-content-scroll::-webkit-scrollbar-thumb { background: #666; border-radius: 5px; }
-        .wp-content-scroll::-webkit-scrollbar-thumb:hover { background: #888; }
+        .wp-sidebar::-webkit-scrollbar { width: 6px; }
+        .wp-sidebar::-webkit-scrollbar-track { background: transparent; }
+        .wp-sidebar::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+        .wp-content::-webkit-scrollbar { width: 10px; }
+        .wp-content::-webkit-scrollbar-track { background: #ddd; }
+        .wp-content::-webkit-scrollbar-thumb { background: #aaa; border-radius: 5px; }
+        .wp-content::-webkit-scrollbar-thumb:hover { background: #888; }
       `}</style>
 
-      {/* TOP BAR — dark, matching the reference exactly */}
+      {/* TOP BAR */}
       <div style={{
         height: 36, background: "#333", borderBottom: "1px solid #555",
         display: "flex", alignItems: "center", padding: "0 8px", gap: "6px", flexShrink: 0,
       }}>
-        <button className="wp-icon-btn" style={{ padding: "4px" }} data-testid="button-menu"><Menu style={{ width: 16, height: 16 }} /></button>
+        <Link href="/"><button className="wp-icon-btn" style={{ padding: "4px" }} data-testid="link-back-home"><Menu style={{ width: 16, height: 16 }} /></button></Link>
         <div className="wp-tb-sep" />
         <button className="wp-icon-btn" onClick={() => scrollToPage(Math.max(1, currentPage - 1))} data-testid="button-page-prev"><ChevronLeft style={{ width: 16, height: 16 }} /></button>
-        <span style={{ color: "#ddd", fontSize: "12px", fontFamily: "'Segoe UI', sans-serif", minWidth: 44, textAlign: "center" }} data-testid="text-page-indicator">{currentPage} / {TOTAL_PAGES}</span>
+        <span style={{ color: "#ddd", fontSize: "12px", fontFamily: sans, minWidth: 44, textAlign: "center" }} data-testid="text-page-indicator">{currentPage} / {TOTAL_PAGES}</span>
         <button className="wp-icon-btn" onClick={() => scrollToPage(Math.min(TOTAL_PAGES, currentPage + 1))} data-testid="button-page-next"><ChevronRight style={{ width: 16, height: 16 }} /></button>
         <div className="wp-tb-sep" />
         <button className="wp-icon-btn"><Minus style={{ width: 14, height: 14 }} /></button>
         <div style={{ background: "#555", borderRadius: "2px", padding: "2px 8px" }}>
-          <span style={{ color: "#ddd", fontSize: "11px", fontFamily: "'Segoe UI', sans-serif" }}>100%</span>
+          <span style={{ color: "#ddd", fontSize: "11px", fontFamily: sans }}>100%</span>
         </div>
         <button className="wp-icon-btn"><Plus style={{ width: 14, height: 14 }} /></button>
         <div className="wp-tb-sep" />
@@ -391,101 +407,109 @@ export default function Whitepaper() {
         <button className="wp-icon-btn" onClick={() => window.print()} data-testid="button-print"><Printer style={{ width: 16, height: 16 }} /></button>
       </div>
 
-      {/* BODY */}
+      {/* BODY: sidebar + content */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
-        {/* ICON STRIP — thin vertical bar with 2 icons */}
+        {/* SIDEBAR — 300px fixed, scrolls independently */}
         <div style={{
-          width: 36, background: "#484848", borderRight: "1px solid #555",
-          display: "flex", flexDirection: "column", alignItems: "center", paddingTop: "6px", gap: "2px", flexShrink: 0,
+          width: 300, minWidth: 300, display: "flex", flexDirection: "column",
+          background: "#484848", borderRight: "1px solid #555", flexShrink: 0, overflow: "hidden",
         }}>
-          <button
-            onClick={() => setSidePanel("thumbs")}
-            data-testid="button-sidebar-thumbs"
-            style={{
-              width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
-              background: sidePanel === "thumbs" ? "#5a5a5a" : "transparent",
-              border: "none", borderRadius: "3px", cursor: "pointer",
-              color: sidePanel === "thumbs" ? "#fff" : "#999",
-            }}
-          >
-            <Images style={{ width: 16, height: 16 }} />
-          </button>
-          <button
-            onClick={() => setSidePanel("outline")}
-            data-testid="button-sidebar-outline"
-            style={{
-              width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
-              background: sidePanel === "outline" ? "#5a5a5a" : "transparent",
-              border: "none", borderRadius: "3px", cursor: "pointer",
-              color: sidePanel === "outline" ? "#fff" : "#999",
-            }}
-          >
-            <List style={{ width: 16, height: 16 }} />
-          </button>
-        </div>
+          {/* Icon strip at top */}
+          <div style={{ display: "flex", borderBottom: "1px solid #555", flexShrink: 0 }}>
+            <button
+              onClick={() => setSidePanel("thumbs")}
+              data-testid="button-sidebar-thumbs"
+              style={{
+                flex: 1, padding: "8px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px",
+                background: sidePanel === "thumbs" ? "#555" : "transparent",
+                border: "none", borderBottom: sidePanel === "thumbs" ? `2px solid ${ACCENT}` : "2px solid transparent",
+                cursor: "pointer", color: sidePanel === "thumbs" ? "#fff" : "#999",
+                fontSize: "11px", fontFamily: sans,
+              }}
+            >
+              <Images style={{ width: 14, height: 14 }} />
+            </button>
+            <button
+              onClick={() => setSidePanel("outline")}
+              data-testid="button-sidebar-outline"
+              style={{
+                flex: 1, padding: "8px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px",
+                background: sidePanel === "outline" ? "#555" : "transparent",
+                border: "none", borderBottom: sidePanel === "outline" ? `2px solid ${ACCENT}` : "2px solid transparent",
+                cursor: "pointer", color: sidePanel === "outline" ? "#fff" : "#999",
+                fontSize: "11px", fontFamily: sans,
+              }}
+            >
+              <List style={{ width: 14, height: 14 }} />
+            </button>
+          </div>
 
-        {/* SIDE PANEL — thumbnails or outline */}
-        <div style={{
-          width: 160, background: "#484848", borderRight: "1px solid #555",
-          display: "flex", flexDirection: "column", flexShrink: 0, overflow: "hidden",
-        }}>
-          <div className="wp-sidebar-scroll" style={{ flex: 1, overflowY: "auto", padding: "8px 8px" }}>
+          {/* Panel content — scrolls independently */}
+          <div className="wp-sidebar" style={{ flex: 1, overflowY: "auto", padding: "10px" }}>
             {sidePanel === "thumbs" ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                {Array.from({ length: TOTAL_PAGES }, (_, i) => (
-                  <div key={i} style={{ cursor: "pointer" }} onClick={() => scrollToPage(i + 1)} data-testid={`button-thumb-page-${i + 1}`}>
-                    <div style={{
-                      background: "#fff",
-                      border: currentPage === i + 1 ? `2px solid ${ACCENT}` : "2px solid transparent",
-                      height: 180,
-                      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                      gap: "3px", padding: "8px", boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
-                    }}>
-                      {i === 0 && (<>
-                        <img src="/apol-agent-logo.png" alt="" style={{ width: 24, height: 24 }} />
-                        <div style={{ fontSize: "6px", fontWeight: 700, fontFamily: serif, color: "#000" }}>APOL AGENT</div>
-                        <div style={{ fontSize: "4.5px", color: "#666", fontFamily: serif }}>Autonomous Onchain Forensics<br />and AI-Driven Threat Intelligence</div>
-                        <div style={{ fontSize: "4px", color: "#888", fontFamily: serif, marginTop: 2 }}>APOL Labs</div>
-                        <div style={{ width: "40%", height: 1, background: "#ccc", margin: "3px 0" }} />
-                        <div style={{ fontSize: "4px", fontWeight: 700, color: "#000" }}>I. ABSTRACT</div>
-                        <div style={{ display: "flex", gap: "2px", width: "60%" }}>
-                          <div style={{ flex: 1, height: 14, background: "#f0f0f0" }} />
-                          <div style={{ flex: 1, height: 14, background: "#f0f0f0" }} />
-                        </div>
-                      </>)}
-                      {i === 1 && (<>
-                        <div style={{ fontSize: "4px", fontWeight: 700, color: "#000" }}>II. EVALUATION</div>
-                        <div style={{ width: "55%", height: 30, background: "#e8f5e9", borderRadius: "1px" }} />
-                        <div style={{ fontSize: "4px", fontWeight: 700, color: "#000" }}>III. MATH</div>
-                        <div style={{ width: "50%", height: 8, background: "#f5f5f5", border: "0.5px solid #ddd" }} />
-                        <div style={{ width: "50%", height: 8, background: "#f5f5f5", border: "0.5px solid #ddd" }} />
-                        <div style={{ width: "50%", height: 8, background: "#f5f5f5", border: "0.5px solid #ddd" }} />
-                      </>)}
-                      {i === 2 && (<>
-                        <div style={{ fontSize: "4px", fontWeight: 700, color: "#000" }}>IV. FORENSICS</div>
-                        <div style={{ width: "55%", height: 26, background: "#e8f5e9", borderRadius: "1px" }} />
-                        <div style={{ fontSize: "4px", fontWeight: 700, color: "#000" }}>V. THREATS</div>
-                        {[1, 2, 3, 4].map(j => <div key={j} style={{ width: "65%", height: 3, background: "#eee" }} />)}
-                      </>)}
-                      {i === 3 && (<>
-                        <div style={{ fontSize: "4px", fontWeight: 700, color: "#000" }}>VI. TOKENOMICS</div>
-                        <div style={{ width: 22, height: 22, borderRadius: "50%", background: "#0097b2" }} />
-                        <div style={{ fontSize: "4px", fontWeight: 700, color: "#000" }}>VII. ARCHITECTURE</div>
-                        <div style={{ display: "flex", gap: "2px", width: "55%" }}>
-                          <div style={{ flex: 1, height: 10, background: "#f5f5f5", border: "0.5px solid #ddd" }} />
-                          <div style={{ flex: 1, height: 10, background: "#f5f5f5", border: "0.5px solid #ddd" }} />
-                        </div>
-                      </>)}
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px", alignItems: "center" }}>
+                {Array.from({ length: TOTAL_PAGES }, (_, i) => {
+                  const active = currentPage === i + 1;
+                  const ratio = 1200 / 850;
+                  const thumbW = 200;
+                  const thumbH = Math.round(thumbW * ratio);
+                  return (
+                    <div key={i} style={{ cursor: "pointer", textAlign: "center" }} onClick={() => scrollToPage(i + 1)} data-testid={`button-thumb-page-${i + 1}`}>
+                      <div style={{
+                        width: thumbW, height: thumbH,
+                        background: "#fff",
+                        border: active ? `3px solid ${ACCENT}` : "1px solid #666",
+                        boxShadow: active ? `0 0 0 1px ${ACCENT}50, 0 2px 8px rgba(0,0,0,0.3)` : "0 1px 4px rgba(0,0,0,0.3)",
+                        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                        gap: "3px", padding: "10px", boxSizing: "border-box", overflow: "hidden",
+                      }}>
+                        {i === 0 && (<>
+                          <img src="/apol-agent-logo.png" alt="" style={{ width: 28, height: 28 }} />
+                          <div style={{ fontSize: "7px", fontWeight: 700, fontFamily: serif, color: "#000" }}>APOL AGENT</div>
+                          <div style={{ fontSize: "5px", color: "#666", fontFamily: serif, textAlign: "center" }}>Autonomous Onchain Forensics<br />and AI-Driven Threat Intelligence</div>
+                          <div style={{ fontSize: "4px", color: "#888", fontFamily: serif, marginTop: 2 }}>APOL Labs</div>
+                          <div style={{ width: "45%", height: 1, background: "#ccc", margin: "3px 0" }} />
+                          <div style={{ fontSize: "4px", fontWeight: 700, color: "#000" }}>I. ABSTRACT</div>
+                          <div style={{ display: "flex", gap: "3px", width: "65%" }}>
+                            <div style={{ flex: 1, height: 18, background: "#f0f0f0" }} />
+                            <div style={{ flex: 1, height: 18, background: "#f0f0f0" }} />
+                          </div>
+                        </>)}
+                        {i === 1 && (<>
+                          <div style={{ fontSize: "4.5px", fontWeight: 700, color: "#000" }}>II. EVALUATION FRAMEWORK</div>
+                          <div style={{ width: "60%", height: 34, background: "#e0f7ff", borderRadius: "1px" }} />
+                          <div style={{ fontSize: "4.5px", fontWeight: 700, color: "#000" }}>III. MATH</div>
+                          <div style={{ width: "55%", height: 10, background: "#f5f5f5", border: "0.5px solid #ddd" }} />
+                          <div style={{ width: "55%", height: 10, background: "#f5f5f5", border: "0.5px solid #ddd" }} />
+                          <div style={{ width: "55%", height: 10, background: "#f5f5f5", border: "0.5px solid #ddd" }} />
+                        </>)}
+                        {i === 2 && (<>
+                          <div style={{ fontSize: "4.5px", fontWeight: 700, color: "#000" }}>IV. FORENSICS</div>
+                          <div style={{ width: "60%", height: 28, background: "#e0f7ff", borderRadius: "1px" }} />
+                          <div style={{ fontSize: "4.5px", fontWeight: 700, color: "#000" }}>V. THREATS</div>
+                          {[1, 2, 3, 4].map(j => <div key={j} style={{ width: "70%", height: 4, background: "#eee" }} />)}
+                        </>)}
+                        {i === 3 && (<>
+                          <div style={{ fontSize: "4.5px", fontWeight: 700, color: "#000" }}>VI. TOKENOMICS</div>
+                          <div style={{ width: 24, height: 24, borderRadius: "50%", background: "#0097b2" }} />
+                          <div style={{ fontSize: "4.5px", fontWeight: 700, color: "#000" }}>VII. ARCHITECTURE</div>
+                          <div style={{ display: "flex", gap: "3px", width: "60%" }}>
+                            <div style={{ flex: 1, height: 12, background: "#f5f5f5", border: "0.5px solid #ddd" }} />
+                            <div style={{ flex: 1, height: 12, background: "#f5f5f5", border: "0.5px solid #ddd" }} />
+                          </div>
+                        </>)}
+                      </div>
+                      <div style={{ fontSize: "11px", color: active ? "#fff" : "#aaa", fontFamily: sans, marginTop: "5px" }}>
+                        {i + 1}
+                      </div>
                     </div>
-                    <div style={{ textAlign: "center", fontSize: "11px", color: currentPage === i + 1 ? "#fff" : "#aaa", fontFamily: "'Segoe UI', sans-serif", marginTop: "4px" }}>
-                      {i + 1}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
-              <div>
+              <div style={{ padding: "4px 0" }}>
+                <p style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#999", fontFamily: sans, padding: "4px 8px 10px", margin: 0 }}>Document Outline</p>
                 {tocItems.map((item, i) => (
                   <button
                     key={i}
@@ -494,10 +518,10 @@ export default function Whitepaper() {
                     style={{
                       display: "block", width: "100%", textAlign: "left",
                       background: "transparent", border: "none",
-                      padding: `3px 8px 3px ${8 + item.indent * 12}px`,
-                      fontSize: item.indent ? "10px" : "11px",
-                      fontFamily: "'Segoe UI', sans-serif",
-                      color: currentPage === item.page && !item.indent ? "#fff" : item.indent ? "#999" : "#ccc",
+                      padding: `4px 10px 4px ${10 + item.indent * 14}px`,
+                      fontSize: item.indent ? "10.5px" : "11.5px",
+                      fontFamily: sans,
+                      color: currentPage === item.page && !item.indent ? "#fff" : item.indent ? "#888" : "#ccc",
                       fontWeight: item.indent ? 400 : 500,
                       cursor: "pointer", lineHeight: 1.7,
                     }}
@@ -510,17 +534,17 @@ export default function Whitepaper() {
           </div>
         </div>
 
-        {/* MAIN CONTENT — dark bg, white pages centered */}
+        {/* CONTENT AREA — remaining width, light grey bg, scrolls independently */}
         <div
           ref={scrollRef}
-          className="wp-content-scroll"
-          style={{ flex: 1, overflowY: "auto", overflowX: "hidden", background: "#525659", padding: "12px 0" }}
+          className="wp-content"
+          style={{ flex: 1, overflowY: "auto", overflowX: "auto", background: "#f0f2f5" }}
         >
           <Page1 />
           <Page2 />
           <Page3 />
           <Page4 />
-          <div style={{ height: 12 }} />
+          <div style={{ height: 40 }} />
         </div>
       </div>
     </div>
