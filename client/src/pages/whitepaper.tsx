@@ -577,20 +577,17 @@ export default function Whitepaper() {
           position: "absolute", top: 36, left: 300, right: 0, bottom: 0,
           overflowY: "auto", overflowX: "auto",
           background: "#525659",
-          display: "flex", justifyContent: "center",
-          padding: "40px",
+          padding: "40px 0",
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <Page1 />
-          <Page2 />
-          <Page3 />
-          <Page4 />
-          <Page5 />
-          <Page6 />
-          <Page7 />
-          <div style={{ height: 40 }} />
-        </div>
+        <Page1 />
+        <Page2 />
+        <Page3 />
+        <Page4 />
+        <Page5 />
+        <Page6 />
+        <Page7 />
+        <div style={{ height: 40 }} />
       </div>
     </div>
   );
