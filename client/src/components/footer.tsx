@@ -32,6 +32,27 @@ export default function Footer() {
             Digital Asset Intelligence Network
           </p>
 
+          {/* Footer links */}
+          <div className="mb-6">
+            <Link
+              href="/whitepaper"
+              data-testid="link-whitepaper"
+              style={{
+                fontSize: "10px",
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "rgba(0,255,0,0.5)",
+                textDecoration: "none",
+                fontFamily: "JetBrains Mono, monospace",
+                transition: "color 0.15s",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.color = "#00ff00")}
+              onMouseLeave={e => (e.currentTarget.style.color = "rgba(0,255,0,0.5)")}
+            >
+              Whitepaper
+            </Link>
+          </div>
+
           {/* Operational disclaimer */}
           <p className="text-xs max-w-2xl mx-auto leading-relaxed" style={{ color: "rgba(255,255,255,0.3)" }}>
             © 2026 APOL Agent. Providing on-chain forensics and agent verification for the Base ecosystem.
