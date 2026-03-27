@@ -504,7 +504,7 @@ export default function Whitepaper() {
         background: "#333", borderBottom: "1px solid #555",
         display: "flex", alignItems: "center", padding: "0 8px", gap: 6,
       }}>
-        <Link href="/"><button className="wp-icon-btn" style={{ padding: "4px 8px", display: "flex", alignItems: "center", gap: 6 }} data-testid="link-back-home"><Home style={{ width: 14, height: 14 }} /><span style={{ fontSize: 11, color: "#ccc", fontFamily: sans }}>Home</span></button></Link>
+        <Link href="/"><button className="wp-icon-btn" style={{ padding: "4px 8px", display: "flex", alignItems: "center", gap: 6 }} data-testid="link-back-home"><Home style={{ width: 14, height: 14 }} /><span style={{ fontSize: 11, color: "#fff", fontFamily: sans }}>Home</span></button></Link>
         <div className="wp-tb-sep" />
         <button className="wp-icon-btn" onClick={() => scrollToPage(Math.max(1, currentPage - 1))} data-testid="button-page-prev"><ChevronLeft style={{ width: 16, height: 16 }} /></button>
         <span style={{ color: "#ddd", fontSize: 12, fontFamily: sans, minWidth: 44, textAlign: "center" }} data-testid="text-page-indicator">{currentPage} / {TOTAL_PAGES}</span>
