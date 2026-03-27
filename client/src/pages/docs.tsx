@@ -483,8 +483,8 @@ function ApiDashboard() {
 
   const demoKey = "apol_sk_live_7f3a9b2e1d4c8f5a6b0e2d9c4a7f1b3e";
   const premiumKey = "apol_sk_premium_" + (wallet.address ? wallet.address.slice(2, 18).toLowerCase() : "") + "x9f2e7d1a";
-  const usedScans = 5;
-  const totalScans = premiumClaimed ? 999999 : 100;
+  const usedScans = 3;
+  const totalScans = premiumClaimed ? 999999 : 10;
   const usagePercent = premiumClaimed ? 0 : (usedScans / totalScans) * 100;
 
   const handleClaimPremium = () => {
