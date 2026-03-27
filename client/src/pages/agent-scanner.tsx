@@ -190,7 +190,7 @@ function AdvancedResults({ result }: { result: AgentResult }) {
             <img src="/apol-agent-logo.png" alt="APOL" style={{ width: 28, height: 28 }} />
             <div>
               <div style={{ color: G, fontSize: "11px", fontWeight: 900, letterSpacing: "0.16em", textTransform: "uppercase" }}>
-                APOL Agent — Investigation Report
+                APOL Agent // Investigation Report
               </div>
               <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase" }}>
                 Full Forensic Analysis
@@ -621,7 +621,7 @@ export default function AgentScanner() {
                 fontFamily: "'JetBrains Mono', monospace",
               }} data-testid="div-tx-pending">
                 <Loader2 size={12} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />
-                <span>TX SUBMITTED — Awaiting on-chain confirmation...</span>
+                <span>TX SUBMITTED: Awaiting on-chain confirmation...</span>
                 <a href={`${CHAIN.explorerUrl}/tx/${deepDiveTxHash}`} target="_blank" rel="noopener noreferrer" style={{ color: G, marginLeft: "auto", flexShrink: 0 }}>
                   <ExternalLink size={12} />
                 </a>
@@ -636,7 +636,7 @@ export default function AgentScanner() {
                 fontFamily: "'JetBrains Mono', monospace",
               }} data-testid="div-tx-confirmed">
                 <CheckCircle size={12} style={{ flexShrink: 0 }} />
-                <span>TX CONFIRMED — Advanced Results unlocked below.</span>
+                <span>TX CONFIRMED: Advanced Results unlocked below.</span>
                 <a href={`${CHAIN.explorerUrl}/tx/${deepDiveTxHash}`} target="_blank" rel="noopener noreferrer" style={{ color: G, marginLeft: "auto", flexShrink: 0 }}>
                   <ExternalLink size={12} />
                 </a>
@@ -698,7 +698,7 @@ export default function AgentScanner() {
                   <div style={{ color: "rgba(255,255,255,0.6)", fontSize: "11px", marginTop: "3px", letterSpacing: "0.06em" }}>
                     This contract has passed a full APOL Agent audit and is verified on-chain.
                     {apolCertified.project?.projectName && (
-                      <span style={{ color: G, marginLeft: "6px" }}>— {apolCertified.project.projectName}</span>
+                      <span style={{ color: G, marginLeft: "6px" }}>[ {apolCertified.project.projectName} ]</span>
                     )}
                   </div>
                 </div>
@@ -766,7 +766,7 @@ export default function AgentScanner() {
                 <p className="text-slate-200 text-sm leading-relaxed" data-testid="text-apol-verdict">{result.apolVerdict}</p>
                 <button onClick={() => {
                   const scoreText = result.cognitionScore !== null ? `Cognition Score: ${result.cognitionScore}%` : "No verifiable data";
-                  const text = `🦍 APOL Agent — LARP Detection\n\nAgent: ${result.agentName}\n${scoreText}\nVerdict: ${result.verdict}\n\n${result.apolVerdict}\n\nScan at apepolice.online #APOL #LARPDetector`;
+                  const text = `🦍 APOL Agent // LARP Detection\n\nAgent: ${result.agentName}\n${scoreText}\nVerdict: ${result.verdict}\n\n${result.apolVerdict}\n\nScan at apepolice.online #APOL #LARPDetector`;
                   window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank");
                 }} className="mt-3 text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors" data-testid="button-tweet-verdict">
                   Tweet this verdict <ChevronRight className="w-3 h-3" />
@@ -790,7 +790,7 @@ export default function AgentScanner() {
                 }} data-testid="div-advanced-results-locked">
                   <Lock size={28} color="rgba(0,255,0,0.65)" />
                   <p style={{ color: "rgba(0,255,0,0.7)", fontSize: "12px", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 700 }}>
-                    Advanced Forensic Report — Locked
+                    Advanced Forensic Report [Locked]
                   </p>
                   <p style={{ color: "rgba(255,255,255,0.72)", fontSize: "11px", maxWidth: "320px", lineHeight: "1.6" }}>
                     Timing pattern matrix, raw log entries, full test narratives, and behavioral fingerprint.

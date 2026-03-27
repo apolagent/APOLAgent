@@ -45,7 +45,7 @@ const KB: { patterns: RegExp[]; answer: string }[] = [
   },
   {
     patterns: [/roadmap|plan|future|phase/i],
-    answer: "OPERATIONAL MILESTONES :: Phase 1 [COMPLETED] — token + tools. Phase 2 — Agent-LARP Detector [ACTIVE]. Phase 3 — Predictive Threat Engine. Phase 4 — Institutional API Access. See Roadmap section.",
+    answer: "OPERATIONAL MILESTONES :: Phase 1 [COMPLETED] token + tools. Phase 2: Agent-LARP Detector [ACTIVE]. Phase 3: Predictive Threat Engine. Phase 4: Institutional API Access. See Roadmap section.",
   },
   {
     patterns: [/buy.*apol|\$apol.*buy|where.*buy|how.*buy/i],
@@ -57,7 +57,7 @@ const KB: { patterns: RegExp[]; answer: string }[] = [
   },
   {
     patterns: [/rug|rugpull|scam.*type|type.*scam/i],
-    answer: "KNOWN THREAT VECTORS:\n[01] Rug Pull — dev abandons + dumps\n[02] Fake Token — project impersonation\n[03] Ponzi — old investors paid by new\n[04] Phishing — wallet credential theft\n[05] Fake Airdrop — pre-payment required\n\nReport confirmed threats via Report a Scam.",
+    answer: "KNOWN THREAT VECTORS:\n[01] Rug Pull: dev abandons + dumps\n[02] Fake Token: project impersonation\n[03] Ponzi: old investors paid by new\n[04] Phishing: wallet credential theft\n[05] Fake Airdrop: pre-payment required\n\nReport confirmed threats via Report a Scam.",
   },
   {
     patterns: [/dyor|research|how.*safe/i],

@@ -40,7 +40,7 @@ export default function ChannelSection() {
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Algorithmic Verification</p>
-                  <p className="text-slate-300 text-sm leading-relaxed">Scores agent identities against the Cognition Index — detecting LARPs and Sybil clusters in real time.</p>
+                  <p className="text-slate-300 text-sm leading-relaxed">Scores agent identities against the Cognition Index, detecting LARPs and Sybil clusters in real time.</p>
                 </div>
               </div>
             </div>

@@ -669,7 +669,7 @@ export default function GetVerified() {
                 {phase === "saving" && (
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 12px", border: `1px solid ${G}`, fontSize: "11px", color: G }} data-testid="div-saving">
                     <Loader2 size={13} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />
-                    Transaction confirmed — Recording submission…
+                    Transaction confirmed: Recording submission...
                   </div>
                 )}
 
@@ -705,7 +705,7 @@ export default function GetVerified() {
 
                 <p style={{ fontSize: "10px", color: "rgba(255,255,255,0.6)", textAlign: "center", margin: 0, lineHeight: "1.6" }}>
                   Payment is processed on Base via your connected wallet.
-                  Submitting does not guarantee a passing verdict — APOL agents issue impartial findings.
+                  Submitting does not guarantee a passing verdict. APOL agents issue impartial findings.
                 </p>
               </div>
             </div>

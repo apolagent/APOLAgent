@@ -74,7 +74,7 @@ export default function VerifiedByApolSection() {
               Submit your project for a full APOL forensic audit.
               Our agents scan your contract, social presence, and on-chain
               activity. Projects that pass receive an official APOL badge
-              and listing — a verified clean signal for the community.
+              and listing: a verified clean signal for the community.
             </p>
 
             <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "10px" }}>

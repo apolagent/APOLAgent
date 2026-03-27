@@ -91,7 +91,7 @@ export default function VerifiedBuilders() {
             Verified Builders
           </div>
           <div style={{ color: "rgba(255,255,255,0.35)", fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-            APOL Agent Certified — Community Vetted Projects
+            APOL Agent Certified: Community Vetted Projects
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -107,7 +107,7 @@ export default function VerifiedBuilders() {
         {/* Page intro */}
         <div style={{ marginBottom: "32px", display: "flex", flexDirection: "column", gap: "8px" }}>
           <div style={{ fontSize: "9px", color: "rgba(0,255,0,0.5)", letterSpacing: "0.14em", textTransform: "uppercase" }}>
-            — Official Registry
+            Official Registry
           </div>
           <h1 style={{ fontSize: "clamp(24px, 5vw, 42px)", fontWeight: 900, color: "#fff", letterSpacing: "0.04em", lineHeight: 1.1, margin: 0 }}>
             APOL AGENT<br />

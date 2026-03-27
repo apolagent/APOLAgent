@@ -104,7 +104,7 @@ export default function VerifyCertificate() {
 
   const verifiedDate = data?.project.reviewedAt
     ? new Date(data.project.reviewedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
-    : "—";
+    : "-";
 
   // Loading
   if (state === "loading") {
@@ -237,7 +237,7 @@ export default function VerifyCertificate() {
               <div style={{ textAlign: "right" }}>
                 <p style={{ margin: "0 0 4px", fontSize: "9px", color: "rgba(0,255,0,0.55)", letterSpacing: "0.16em", textTransform: "uppercase" }}>Holders</p>
                 <p style={{ margin: 0, fontSize: "20px", fontWeight: 900, color: "#fff" }}>
-                  {audit.holderCount > 0 ? audit.holderCount.toLocaleString() : "—"}
+                  {audit.holderCount > 0 ? audit.holderCount.toLocaleString() : "-"}
                 </p>
               </div>
             </div>
@@ -441,7 +441,7 @@ export default function VerifyCertificate() {
                 Certificate ID: {project.contractAddress.toLowerCase()}
               </p>
               <p style={{ margin: 0, fontSize: "9px", color: "rgba(0,255,0,0.4)", letterSpacing: "0.1em" }}>
-                VERIFIED BY APOL AGENT — AUTONOMOUS ONCHAIN FORENSICS
+                VERIFIED BY APOL AGENT // AUTONOMOUS ONCHAIN FORENSICS
               </p>
             </div>
           </div>

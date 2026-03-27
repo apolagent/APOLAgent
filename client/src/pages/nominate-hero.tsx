@@ -221,7 +221,7 @@ function TipModal({
           {tipState.phase === "pending_builder" && (
             <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "rgba(0,255,0,0.7)", padding: "8px 10px", border: "1px solid rgba(0,255,0,0.2)" }} data-testid="div-tip-pending-builder">
               <Loader2 size={12} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />
-              <span>TX 1/2 — Sending builder tip{tipState.builderTxHash ? "..." : " — confirm in MetaMask"}</span>
+              <span>TX 1/2: Sending builder tip{tipState.builderTxHash ? "..." : " [confirm in MetaMask]"}</span>
             </div>
           )}
 
@@ -229,14 +229,14 @@ function TipModal({
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }} data-testid="div-tip-pending-platform">
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: G, padding: "6px 10px", border: `1px solid rgba(0,255,0,0.3)` }}>
                 <CheckCircle size={12} style={{ flexShrink: 0 }} />
-                TX 1/2 — Builder tip confirmed
+                TX 1/2: Builder tip confirmed
                 <a href={`https://basescan.org/tx/${tipState.builderTxHash}`} target="_blank" rel="noopener noreferrer" style={{ color: G, marginLeft: "auto" }}>
                   <ExternalLink size={11} />
                 </a>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "rgba(0,255,0,0.7)", padding: "6px 10px", border: "1px solid rgba(0,255,0,0.2)" }}>
                 <Loader2 size={12} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />
-                TX 2/2 — Confirm platform fee in MetaMask
+                TX 2/2: Confirm platform fee in MetaMask
               </div>
             </div>
           )}
@@ -261,7 +261,7 @@ function TipModal({
                     color: G, fontSize: "11px", textDecoration: "none",
                     background: "rgba(0,255,0,0.04)",
                   }}>
-                  <span>{tx.label} — View on BaseScan</span>
+                  <span>{tx.label}: View on BaseScan</span>
                   <ExternalLink size={11} />
                 </a>
               ))}

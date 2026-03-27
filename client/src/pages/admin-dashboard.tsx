@@ -89,7 +89,7 @@ function AuditPanel({ data, onClose }: { data: AuditData | "loading" | "error"; 
       }}>
         <Loader2 size={20} color={G} style={{ animation: "spin 1s linear infinite", margin: "0 auto 10px", display: "block" }} />
         <p style={{ margin: 0, fontSize: "11px", color: "rgba(255,255,255,0.5)" }}>
-          APOL AGENT — running simulated buy/sell scan...
+          APOL AGENT: running simulated buy/sell scan...
         </p>
       </div>
     );
@@ -121,7 +121,7 @@ function AuditPanel({ data, onClose }: { data: AuditData | "loading" | "error"; 
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <Search size={13} color={riskColor} />
           <span style={{ fontSize: "9px", color: riskColor, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700 }}>
-            Contract Audit — {data.dataSource}
+            Contract Audit // {data.dataSource}
           </span>
           <span style={{
             padding: "2px 8px", border: `1px solid ${riskColor}`,
@@ -767,7 +767,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               {[
                 ["Contract", r.contractAddress],
                 ["Website", r.website],
-                ["Wallet", r.walletAddress || "—"],
+                ["Wallet", r.walletAddress || "-"],
                 ["TX Hash", r.txHash],
               ].map(([label, value]) => (
                 <div key={label}>
