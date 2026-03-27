@@ -6,7 +6,7 @@ const ACCENT = "#00D1FF";
 const sans = "'Inter', 'Segoe UI', -apple-system, sans-serif";
 const mono = "'JetBrains Mono', 'Fira Code', monospace";
 
-type SectionId = "getting-started" | "bot-commands" | "forensic-verdicts" | "security-standards" | "api" | "api-dashboard";
+type SectionId = "getting-started" | "bot-commands" | "forensic-verdicts" | "security-standards" | "api" | "api-dashboard" | "security-governance";
 
 const navSections: { id: SectionId; label: string; icon: typeof BookOpen }[] = [
   { id: "getting-started", label: "Getting Started", icon: BookOpen },
@@ -15,6 +15,7 @@ const navSections: { id: SectionId; label: string; icon: typeof BookOpen }[] = [
   { id: "security-standards", label: "Security Standards", icon: Zap },
   { id: "api", label: "API", icon: Code },
   { id: "api-dashboard", label: "API Dashboard", icon: BarChart3 },
+  { id: "security-governance", label: "Security Protocol", icon: Shield },
 ];
 
 const sectionOutlines: Record<SectionId, string[]> = {
@@ -24,6 +25,7 @@ const sectionOutlines: Record<SectionId, string[]> = {
   "security-standards": ["Heuristic Logic Scan", "On-Chain Analysis", "Behavioral Detection", "Economic Resilience"],
   "api": ["Authentication", "Endpoints", "Rate Limits", "Response Format"],
   "api-dashboard": ["Your API Key", "Usage Tracker", "Premium Access", "Authentication Header", "Scan Endpoint", "Integration Guide"],
+  "security-governance": ["Privacy Commitment", "Data Handling Policy", "The Verified Standard"],
 };
 
 function CopyBlock({ code, label }: { code: string; label?: string }) {
@@ -686,6 +688,144 @@ elif data["resilience_score"] >= 90:
   );
 }
 
+function SecurityGovernance() {
+  return (
+    <>
+      <SectionTitle id="security-governance">Security & Data Governance</SectionTitle>
+      <Para>APOL Agent is built on a principle of radical transparency and zero-trust architecture. This section details our commitments to user privacy, data handling integrity, and the verification standards that govern the APOL ecosystem.</Para>
+
+      <SubTitle id="privacy-commitment">Privacy Commitment</SubTitle>
+      <div style={{
+        background: "linear-gradient(135deg, #0c1220 0%, #111827 100%)",
+        border: `1px solid ${ACCENT}30`, borderRadius: 12,
+        padding: 32, position: "relative", overflow: "hidden",
+      }}>
+        <div style={{
+          position: "absolute", top: -30, left: -30, width: 120, height: 120,
+          background: `radial-gradient(circle, ${ACCENT}12 0%, transparent 70%)`, borderRadius: "50%",
+        }} />
+        <div style={{ position: "relative", display: "flex", gap: 16, alignItems: "flex-start" }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 10, flexShrink: 0,
+            background: `linear-gradient(135deg, ${ACCENT}25, ${ACCENT}08)`,
+            border: `1px solid ${ACCENT}35`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Shield style={{ width: 24, height: 24, color: ACCENT }} />
+          </div>
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: ACCENT, fontFamily: mono, margin: "0 0 10px" }}>Zero-Access Architecture</p>
+            <p style={{ fontSize: 16, lineHeight: 1.7, color: "#e2e8f0", fontFamily: sans, margin: 0 }}>
+              APOL Agent operates on a Zero-Access architecture. We never request private keys, seed phrases, or wallet signatures. All forensic data is pulled exclusively from public on-chain ledgers.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <SubTitle id="data-handling-policy">Data Handling Policy</SubTitle>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{
+          background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12,
+          padding: "24px 28px", display: "flex", gap: 16, alignItems: "flex-start",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+        }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 8, flexShrink: 0,
+            background: `${ACCENT}10`, display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Zap style={{ width: 20, height: 20, color: ACCENT }} />
+          </div>
+          <div>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#0f172a", fontFamily: sans, margin: "0 0 6px" }}>Server-Side Execution</p>
+            <p style={{ fontSize: 14, lineHeight: 1.7, color: "#475569", fontFamily: sans, margin: 0 }}>
+              All heavy lifting is done on our secure forensic servers to ensure user device safety. No contract bytecode is ever executed client-side, and all analysis runs in isolated sandboxed environments.
+            </p>
+          </div>
+        </div>
+        <div style={{
+          background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12,
+          padding: "24px 28px", display: "flex", gap: 16, alignItems: "flex-start",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+        }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 8, flexShrink: 0,
+            background: `${ACCENT}10`, display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <RefreshCw style={{ width: 20, height: 20, color: ACCENT }} />
+          </div>
+          <div>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#0f172a", fontFamily: sans, margin: "0 0 6px" }}>Cached Intelligence</p>
+            <p style={{ fontSize: 14, lineHeight: 1.7, color: "#475569", fontFamily: sans, margin: 0 }}>
+              Scan results are cached for 60 seconds to provide real-time speed while reducing blockchain congestion. Subsequent requests for the same contract within the cache window return instant results with zero RPC overhead.
+            </p>
+          </div>
+        </div>
+        <div style={{
+          background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12,
+          padding: "24px 28px", display: "flex", gap: 16, alignItems: "flex-start",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+        }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 8, flexShrink: 0,
+            background: `${ACCENT}10`, display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <EyeOff style={{ width: 20, height: 20, color: ACCENT }} />
+          </div>
+          <div>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#0f172a", fontFamily: sans, margin: "0 0 6px" }}>No Tracking</p>
+            <p style={{ fontSize: 14, lineHeight: 1.7, color: "#475569", fontFamily: sans, margin: 0 }}>
+              We do not link Telegram IDs to specific wallet addresses in our public database. Your privacy is a forensic priority. Scan requests are processed statelessly with no persistent user-to-address mapping.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <SubTitle id="the-verified-standard">The Verified Standard</SubTitle>
+      <div style={{
+        background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12,
+        padding: 28, boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: "50%",
+            background: `linear-gradient(135deg, ${ACCENT}, #0ea5e9)`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: `0 4px 12px ${ACCENT}40`,
+          }}>
+            <CheckCircle style={{ width: 24, height: 24, color: "#fff" }} />
+          </div>
+          <div>
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: ACCENT, fontFamily: mono, margin: 0 }}>Golden Checkmark</p>
+            <p style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", fontFamily: sans, margin: 0 }}>APOL Verified Standard</p>
+          </div>
+        </div>
+        <Para>Projects only receive an APOL Verified status if they pass our 3-tier check:</Para>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, margin: "20px 0" }}>
+          {([
+            ["HoneyPot Resistance", "Contract must pass sell simulation with zero blocking mechanisms. No hidden transfer restrictions, blacklist functions, or conditional revert logic detected in bytecode."],
+            ["Liquidity Lock (Minimum 6 months)", "Liquidity pool tokens must be locked or burned with a minimum duration of 6 months. Lock must be verifiable on-chain through a recognized locker contract."],
+            ["Cluster-Free Top Holders", "The top 10 non-contract holders must not belong to the same wallet cluster. No circular funding patterns, shared genesis transactions, or coordinated accumulation detected."],
+          ]).map(([title, desc], i) => (
+            <div key={i} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: "50%", flexShrink: 0, marginTop: 2,
+                background: `${ACCENT}15`, border: `1px solid ${ACCENT}30`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 13, fontWeight: 700, color: ACCENT, fontFamily: mono,
+              }}>{i + 1}</div>
+              <div>
+                <p style={{ fontSize: 15, fontWeight: 600, color: "#0f172a", fontFamily: sans, margin: "0 0 4px" }}>{title}</p>
+                <p style={{ fontSize: 14, lineHeight: 1.7, color: "#475569", fontFamily: sans, margin: 0 }}>{desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <Callout type="success">Projects that maintain Verified status for 90+ consecutive days are eligible for the APOL Sentinel tier, which includes enhanced visibility in the Verified Builders registry and priority forensic monitoring.</Callout>
+      </div>
+    </>
+  );
+}
+
 const sectionComponents: Record<SectionId, () => JSX.Element> = {
   "getting-started": GettingStarted,
   "bot-commands": BotCommands,
@@ -693,6 +833,7 @@ const sectionComponents: Record<SectionId, () => JSX.Element> = {
   "security-standards": SecurityStandards,
   "api": ApiDocs,
   "api-dashboard": ApiDashboard,
+  "security-governance": SecurityGovernance,
 };
 
 function slugify(text: string) {
