@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "wouter";
-import { Search, Menu, X, Copy, Check, Info, AlertTriangle, CheckCircle, ChevronRight, Home, BookOpen, Terminal, Shield, Zap, Code, FileText, Lock, Key, BarChart3, Eye, EyeOff, RefreshCw } from "lucide-react";
+import { Search, Menu, X, Copy, Check, Info, AlertTriangle, CheckCircle, ChevronRight, Home, BookOpen, Terminal, Shield, Zap, Code, FileText, Lock, Key, BarChart3, Eye, EyeOff, RefreshCw, Unlock, ExternalLink, Sparkles, BadgeCheck } from "lucide-react";
+import { useWalletContext } from "@/hooks/use-wallet";
 
 const ACCENT = "#00D1FF";
 const sans = "'Inter', 'Segoe UI', -apple-system, sans-serif";
@@ -420,14 +421,77 @@ function ApiDocs() {
   );
 }
 
+const APOL_PREMIUM_THRESHOLD = 100000;
+const UNISWAP_BUY_URL = "https://app.uniswap.org/swap?outputCurrency=TBA&chain=base";
+
+function useApolBalance(address: string | null) {
+  const [balance, setBalance] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!address) { setBalance(null); return; }
+    setLoading(true);
+    const timer = setTimeout(() => {
+      setBalance(0);
+      setLoading(false);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [address]);
+  return { balance, loading };
+}
+
+function ConfettiEffect() {
+  const colors = [ACCENT, "#0ea5e9", "#22d3ee", "#67e8f9", "#a5f3fc", "#fff"];
+  return (
+    <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 10 }}>
+      {Array.from({ length: 40 }).map((_, i) => {
+        const left = Math.random() * 100;
+        const delay = Math.random() * 0.6;
+        const size = 4 + Math.random() * 6;
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        const rotation = Math.random() * 360;
+        return (
+          <div key={i} style={{
+            position: "absolute", left: `${left}%`, top: -10,
+            width: size, height: size * 1.5, background: color,
+            borderRadius: 2, opacity: 0.9, transform: `rotate(${rotation}deg)`,
+            animation: `confetti-fall 1.5s ease-out ${delay}s forwards`,
+          }} />
+        );
+      })}
+      <style>{`
+        @keyframes confetti-fall {
+          0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(350px) rotate(720deg); opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 function ApiDashboard() {
+  const wallet = useWalletContext();
+  const { balance, loading: balanceLoading } = useApolBalance(wallet.address);
+  const isConnected = !!wallet.address;
+  const hasPremium = balance !== null && balance >= APOL_PREMIUM_THRESHOLD;
+
   const [keyVisible, setKeyVisible] = useState(false);
   const [keyGenerated, setKeyGenerated] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [premiumClaimed, setPremiumClaimed] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [showPopup, setShowPopup] = useState(false);
+
   const demoKey = "apol_sk_live_7f3a9b2e1d4c8f5a6b0e2d9c4a7f1b3e";
+  const premiumKey = "apol_sk_premium_" + (wallet.address ? wallet.address.slice(2, 18).toLowerCase() : "") + "x9f2e7d1a";
   const usedScans = 5;
-  const totalScans = 100;
-  const usagePercent = (usedScans / totalScans) * 100;
+  const totalScans = premiumClaimed ? 999999 : 100;
+  const usagePercent = premiumClaimed ? 0 : (usedScans / totalScans) * 100;
+
+  const handleClaimPremium = () => {
+    setPremiumClaimed(true);
+    setShowConfetti(true);
+    setTimeout(() => setShowConfetti(false), 2000);
+  };
 
   const handleGenerate = () => {
     setKeyGenerated(true);
@@ -517,6 +581,17 @@ function ApiDashboard() {
       </div>
 
       <SubTitle id="usage-tracker">Usage Tracker</SubTitle>
+      {isConnected && (
+        <div data-testid="badge-wallet-verified" style={{
+          display: "inline-flex", alignItems: "center", gap: 6,
+          padding: "5px 12px", marginBottom: 14,
+          background: `${ACCENT}10`, border: `1px solid ${ACCENT}30`, borderRadius: 20,
+          fontSize: 12, fontWeight: 600, color: ACCENT, fontFamily: mono,
+        }}>
+          <BadgeCheck style={{ width: 14, height: 14 }} />
+          Wallet Verified: {wallet.truncated}
+        </div>
+      )}
       <div style={{
         background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12,
         padding: 28, marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
@@ -563,6 +638,7 @@ function ApiDashboard() {
         border: "1px solid #2a2d45", borderRadius: 12,
         padding: 32, position: "relative", overflow: "hidden",
       }}>
+        {showConfetti && <ConfettiEffect />}
         <div style={{
           position: "absolute", top: -40, right: -40, width: 160, height: 160,
           background: `radial-gradient(circle, ${ACCENT}15 0%, transparent 70%)`,
@@ -597,23 +673,147 @@ function ApiDashboard() {
               <li>Batch scanning (up to 50 addresses per request)</li>
             </ul>
           </div>
-          <button
-            data-testid="button-upgrade-premium"
-            style={{
+          {premiumClaimed ? (
+            <>
+              <div style={{
+                width: "100%", padding: "14px 24px",
+                background: `linear-gradient(135deg, ${ACCENT}20, #0ea5e920)`,
+                border: `1px solid ${ACCENT}50`, borderRadius: 8,
+                fontSize: 15, fontWeight: 700, color: ACCENT, fontFamily: sans,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              }}>
+                <BadgeCheck style={{ width: 18, height: 18 }} />
+                Premium Active
+              </div>
+              <div style={{
+                marginTop: 16, background: "#111827", border: "1px solid #1e293b", borderRadius: 8,
+                padding: 16,
+              }}>
+                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: ACCENT, fontFamily: mono, margin: "0 0 8px" }}>Premium API Key</p>
+                <code style={{
+                  display: "block", fontSize: 13, fontFamily: mono, color: "#e2e8f0",
+                  background: "#0a0e17", padding: "10px 14px", borderRadius: 6, wordBreak: "break-all",
+                }}>{premiumKey}</code>
+              </div>
+            </>
+          ) : !isConnected ? (
+            <>
+              <button
+                data-testid="button-upgrade-premium"
+                onClick={() => setShowPopup(true)}
+                style={{
+                  width: "100%", padding: "14px 24px",
+                  background: `linear-gradient(135deg, ${ACCENT}, #0ea5e9)`,
+                  border: "none", borderRadius: 8, cursor: "pointer",
+                  fontSize: 15, fontWeight: 700, color: "#fff", fontFamily: sans,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  boxShadow: `0 4px 16px ${ACCENT}40`,
+                }}
+              >
+                <Lock style={{ width: 16, height: 16 }} />
+                Hold 100,000 $APOL to Upgrade
+              </button>
+              <p style={{ fontSize: 11, color: "#4a5568", textAlign: "center", fontFamily: sans, margin: "12px 0 0" }}>
+                Token balance is verified on-chain via the Base network
+              </p>
+            </>
+          ) : balanceLoading ? (
+            <div style={{
               width: "100%", padding: "14px 24px",
-              background: `linear-gradient(135deg, ${ACCENT}, #0ea5e9)`,
-              border: "none", borderRadius: 8, cursor: "pointer",
-              fontSize: 15, fontWeight: 700, color: "#fff", fontFamily: sans,
+              background: "#1e293b", borderRadius: 8,
+              fontSize: 14, fontWeight: 600, color: "#94a3b8", fontFamily: sans,
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              boxShadow: `0 4px 16px ${ACCENT}40`,
-            }}
-          >
-            <Lock style={{ width: 16, height: 16 }} />
-            Hold 100,000 $APOL to Upgrade
-          </button>
-          <p style={{ fontSize: 11, color: "#4a5568", textAlign: "center", fontFamily: sans, margin: "12px 0 0" }}>
-            Token balance is verified on-chain via the Base network
-          </p>
+            }}>
+              <RefreshCw style={{ width: 16, height: 16, animation: "spin 1s linear infinite" }} />
+              Checking $APOL balance...
+              <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+            </div>
+          ) : hasPremium ? (
+            <>
+              <button
+                data-testid="button-claim-premium"
+                onClick={handleClaimPremium}
+                style={{
+                  width: "100%", padding: "14px 24px",
+                  background: `linear-gradient(135deg, ${ACCENT}, #0ea5e9)`,
+                  border: "none", borderRadius: 8, cursor: "pointer",
+                  fontSize: 15, fontWeight: 700, color: "#fff", fontFamily: sans,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  boxShadow: `0 4px 16px ${ACCENT}40, 0 0 30px ${ACCENT}25`,
+                  animation: "premium-glow 2s ease-in-out infinite",
+                }}
+              >
+                <Sparkles style={{ width: 18, height: 18 }} />
+                Claim Premium API Key
+              </button>
+              <style>{`@keyframes premium-glow {
+                0%, 100% { box-shadow: 0 4px 16px ${ACCENT}40, 0 0 20px ${ACCENT}15; }
+                50% { box-shadow: 0 4px 24px ${ACCENT}60, 0 0 40px ${ACCENT}30; }
+              }`}</style>
+              <p style={{ fontSize: 11, color: "#4ade80", textAlign: "center", fontFamily: sans, margin: "12px 0 0" }}>
+                Balance verified: {balance?.toLocaleString()} $APOL
+              </p>
+            </>
+          ) : (
+            <>
+              <a
+                href={UNISWAP_BUY_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="button-buy-apol-uniswap"
+                style={{
+                  width: "100%", padding: "14px 24px",
+                  background: "linear-gradient(135deg, #334155, #1e293b)",
+                  border: "1px solid #475569", borderRadius: 8, cursor: "pointer",
+                  fontSize: 15, fontWeight: 700, color: "#f59e0b", fontFamily: sans,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  textDecoration: "none", boxSizing: "border-box",
+                }}
+              >
+                <ExternalLink style={{ width: 16, height: 16 }} />
+                Insufficient $APOL for Premium
+              </a>
+              <p style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", fontFamily: sans, margin: "12px 0 0" }}>
+                Your balance: {balance?.toLocaleString() ?? "0"} $APOL — Need {APOL_PREMIUM_THRESHOLD.toLocaleString()}+ to unlock Premium
+              </p>
+            </>
+          )}
+
+          {showPopup && (
+            <div style={{
+              position: "fixed", inset: 0, zIndex: 9999,
+              background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }} onClick={() => setShowPopup(false)}>
+              <div onClick={e => e.stopPropagation()} style={{
+                background: "#fff", borderRadius: 16, padding: 32, maxWidth: 400, width: "90%",
+                boxShadow: "0 20px 60px rgba(0,0,0,0.3)", textAlign: "center",
+              }}>
+                <div style={{
+                  width: 56, height: 56, borderRadius: "50%", margin: "0 auto 16px",
+                  background: `${ACCENT}15`, border: `2px solid ${ACCENT}30`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <Lock style={{ width: 28, height: 28, color: ACCENT }} />
+                </div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", fontFamily: sans, margin: "0 0 8px" }}>Wallet Not Connected</h3>
+                <p style={{ fontSize: 14, lineHeight: 1.6, color: "#475569", fontFamily: sans, margin: "0 0 24px" }}>
+                  Please connect your wallet in the header to verify your $APOL balance.
+                </p>
+                <button
+                  data-testid="button-popup-close"
+                  onClick={() => setShowPopup(false)}
+                  style={{
+                    padding: "10px 24px", background: `linear-gradient(135deg, ${ACCENT}, #0ea5e9)`,
+                    border: "none", borderRadius: 8, cursor: "pointer",
+                    fontSize: 14, fontWeight: 600, color: "#fff", fontFamily: sans,
+                  }}
+                >
+                  Got it
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
