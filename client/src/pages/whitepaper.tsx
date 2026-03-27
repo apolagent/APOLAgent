@@ -404,7 +404,7 @@ export default function Whitepaper() {
   }, []);
 
   return (
-    <div style={{ position: "fixed", inset: 0, display: "flex", flexDirection: "column", background: "#404040", overflow: "hidden" }}>
+    <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#e9ecef" }}>
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
       <style>{`
         .wp-page {
@@ -412,18 +412,18 @@ export default function Whitepaper() {
           min-height: 1200px;
           background: #ffffff;
           padding: 48px 64px;
-          margin: 40px 0;
+          margin: 0 auto 40px;
           box-shadow: 0 4px 24px rgba(0,0,0,0.18);
           box-sizing: border-box;
           position: relative;
-          flex-shrink: 0;
         }
+        .wp-page:first-child { margin-top: 0; }
         .wp-icon-btn { background: none; border: none; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; color: #bbb; }
         .wp-icon-btn:hover { color: #fff; }
         .wp-tb-sep { width: 1px; height: 22px; background: #666; flex-shrink: 0; }
-        .wp-sidebar::-webkit-scrollbar { width: 6px; }
-        .wp-sidebar::-webkit-scrollbar-track { background: transparent; }
-        .wp-sidebar::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+        .wp-sidebar-scroll::-webkit-scrollbar { width: 6px; }
+        .wp-sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+        .wp-sidebar-scroll::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
         .wp-content::-webkit-scrollbar { width: 10px; }
         .wp-content::-webkit-scrollbar-track { background: #ddd; }
         .wp-content::-webkit-scrollbar-thumb { background: #aaa; border-radius: 5px; }
@@ -432,9 +432,11 @@ export default function Whitepaper() {
         .wp-toc-link:hover { color: #00D1FF !important; }
       `}</style>
 
+      {/* Top toolbar - full width */}
       <div style={{
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 20,
         height: 36, background: "#333", borderBottom: "1px solid #555",
-        display: "flex", alignItems: "center", padding: "0 8px", gap: "6px", flexShrink: 0,
+        display: "flex", alignItems: "center", padding: "0 8px", gap: "6px",
       }}>
         <Link href="/"><button className="wp-icon-btn" style={{ padding: "4px" }} data-testid="link-back-home"><Menu style={{ width: 16, height: 16 }} /></button></Link>
         <div className="wp-tb-sep" />
@@ -456,122 +458,130 @@ export default function Whitepaper() {
         <button className="wp-icon-btn" onClick={() => window.print()} data-testid="button-print"><Printer style={{ width: 16, height: 16 }} /></button>
       </div>
 
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-
-        <div style={{
-          flex: "0 0 300px", display: "flex", flexDirection: "column",
-          background: "#484848", borderRight: "1px solid #555", overflow: "hidden",
-        }}>
-          <div style={{ display: "flex", borderBottom: "1px solid #555", flexShrink: 0 }}>
-            <button
-              onClick={() => setSidePanel("thumbs")}
-              data-testid="button-sidebar-thumbs"
-              style={{
-                flex: 1, padding: "8px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px",
-                background: sidePanel === "thumbs" ? "#555" : "transparent",
-                border: "none", borderBottom: sidePanel === "thumbs" ? `2px solid ${ACCENT}` : "2px solid transparent",
-                cursor: "pointer", color: sidePanel === "thumbs" ? "#fff" : "#999",
-                fontSize: "11px", fontFamily: sans,
-              }}
-            >
-              <Images style={{ width: 14, height: 14 }} />
-            </button>
-            <button
-              onClick={() => setSidePanel("outline")}
-              data-testid="button-sidebar-outline"
-              style={{
-                flex: 1, padding: "8px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px",
-                background: sidePanel === "outline" ? "#555" : "transparent",
-                border: "none", borderBottom: sidePanel === "outline" ? `2px solid ${ACCENT}` : "2px solid transparent",
-                cursor: "pointer", color: sidePanel === "outline" ? "#fff" : "#999",
-                fontSize: "11px", fontFamily: sans,
-              }}
-            >
-              <List style={{ width: 14, height: 14 }} />
-            </button>
-          </div>
-
-          <div className="wp-sidebar" style={{ flex: 1, overflowY: "auto", padding: "10px" }}>
-            {sidePanel === "thumbs" ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "14px", alignItems: "center" }}>
-                {Array.from({ length: TOTAL_PAGES }, (_, i) => {
-                  const active = currentPage === i + 1;
-                  const ratio = 1200 / 850;
-                  const thumbW = 180;
-                  const thumbH = Math.round(thumbW * ratio);
-                  const pageLabels = [
-                    "Title / Abstract",
-                    "Evaluation Framework",
-                    "Mathematical Foundations",
-                    "Forensic Framework",
-                    "Threat Matrix",
-                    "Tokenomics",
-                    "Protocol Architecture",
-                  ];
-                  return (
-                    <div key={i} style={{ cursor: "pointer", textAlign: "center" }} onClick={() => scrollToPage(i + 1)} data-testid={`button-thumb-page-${i + 1}`}>
-                      <div style={{
-                        width: thumbW, height: thumbH,
-                        background: "#fff",
-                        border: active ? `3px solid ${ACCENT}` : "1px solid #666",
-                        boxShadow: active ? `0 0 0 1px ${ACCENT}50, 0 2px 8px rgba(0,0,0,0.3)` : "0 1px 4px rgba(0,0,0,0.3)",
-                        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
-                        gap: "2px", padding: "8px 6px", boxSizing: "border-box", overflow: "hidden",
-                      }}>
-                        <div style={{ alignSelf: "flex-end", fontSize: "4px", color: "#bbb", fontFamily: sans, marginBottom: "4px" }}>
-                          APOL-SEC-P{String(i + 1).padStart(2, "0")}
-                        </div>
-                        <div style={{ fontSize: "5.5px", fontWeight: 700, color: "#000", fontFamily: serif, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                          {pageLabels[i]}
-                        </div>
-                        <div style={{ width: "60%", height: 1, background: "#e0e0e0", margin: "3px 0" }} />
-                        {i === 0 && (
-                          <img src="/apol-agent-logo.png" alt="" style={{ width: 22, height: 22, marginTop: 4 }} />
-                        )}
-                        {[1, 2, 3].map(j => (
-                          <div key={j} style={{ width: "70%", height: 3, background: "#f0f0f0", marginTop: 2 }} />
-                        ))}
-                      </div>
-                      <div style={{ fontSize: "10px", color: active ? "#fff" : "#aaa", fontFamily: sans, marginTop: "4px" }}>
-                        {i + 1}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div style={{ padding: "4px 0" }}>
-                <p style={{ fontSize: "9px", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "#999", fontFamily: sans, padding: "4px 8px 10px", margin: 0 }}>Document Outline</p>
-                {tocItems.map((item, i) => (
-                  <button
-                    key={i}
-                    onClick={() => scrollToPage(item.page)}
-                    data-testid={`button-toc-${i}`}
-                    className="wp-toc-link"
-                    style={{
-                      display: "block", width: "100%", textAlign: "left",
-                      background: "transparent", border: "none",
-                      padding: `5px 10px 5px ${10 + item.indent * 14}px`,
-                      fontSize: item.indent ? "12px" : "14px",
-                      fontFamily: sans,
-                      color: currentPage === item.page && !item.indent ? "#fff" : item.indent ? "#999" : "#ccc",
-                      fontWeight: 400,
-                      cursor: "pointer", lineHeight: 1.8,
-                    }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+      {/* Sidebar - fixed 300px */}
+      <div style={{
+        position: "fixed", top: 36, left: 0, bottom: 0, width: 300, zIndex: 10,
+        background: "#484848", borderRight: "1px solid #555",
+        display: "flex", flexDirection: "column", overflow: "hidden",
+      }}>
+        <div style={{ display: "flex", borderBottom: "1px solid #555", flexShrink: 0 }}>
+          <button
+            onClick={() => setSidePanel("thumbs")}
+            data-testid="button-sidebar-thumbs"
+            style={{
+              flex: 1, padding: "8px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px",
+              background: sidePanel === "thumbs" ? "#555" : "transparent",
+              border: "none", borderBottom: sidePanel === "thumbs" ? `2px solid ${ACCENT}` : "2px solid transparent",
+              cursor: "pointer", color: sidePanel === "thumbs" ? "#fff" : "#999",
+              fontSize: "11px", fontFamily: sans,
+            }}
+          >
+            <Images style={{ width: 14, height: 14 }} />
+          </button>
+          <button
+            onClick={() => setSidePanel("outline")}
+            data-testid="button-sidebar-outline"
+            style={{
+              flex: 1, padding: "8px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px",
+              background: sidePanel === "outline" ? "#555" : "transparent",
+              border: "none", borderBottom: sidePanel === "outline" ? `2px solid ${ACCENT}` : "2px solid transparent",
+              cursor: "pointer", color: sidePanel === "outline" ? "#fff" : "#999",
+              fontSize: "11px", fontFamily: sans,
+            }}
+          >
+            <List style={{ width: 14, height: 14 }} />
+          </button>
         </div>
 
-        <div
-          ref={scrollRef}
-          className="wp-content"
-          style={{ flex: 1, overflowY: "auto", overflowX: "auto", background: "#e9ecef", display: "flex", flexDirection: "column", alignItems: "center" }}
-        >
+        <div className="wp-sidebar-scroll" style={{ flex: 1, overflowY: "auto", padding: "10px" }}>
+          {sidePanel === "thumbs" ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px", alignItems: "center" }}>
+              {Array.from({ length: TOTAL_PAGES }, (_, i) => {
+                const active = currentPage === i + 1;
+                const ratio = 1200 / 850;
+                const thumbW = 180;
+                const thumbH = Math.round(thumbW * ratio);
+                const pageLabels = [
+                  "Title / Abstract",
+                  "Evaluation Framework",
+                  "Mathematical Foundations",
+                  "Forensic Framework",
+                  "Threat Matrix",
+                  "Tokenomics",
+                  "Protocol Architecture",
+                ];
+                return (
+                  <div key={i} style={{ cursor: "pointer", textAlign: "center" }} onClick={() => scrollToPage(i + 1)} data-testid={`button-thumb-page-${i + 1}`}>
+                    <div style={{
+                      width: thumbW, height: thumbH,
+                      background: "#fff",
+                      border: active ? `3px solid ${ACCENT}` : "1px solid #666",
+                      boxShadow: active ? `0 0 0 1px ${ACCENT}50, 0 2px 8px rgba(0,0,0,0.3)` : "0 1px 4px rgba(0,0,0,0.3)",
+                      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
+                      gap: "2px", padding: "8px 6px", boxSizing: "border-box", overflow: "hidden",
+                    }}>
+                      <div style={{ alignSelf: "flex-end", fontSize: "4px", color: "#bbb", fontFamily: sans, marginBottom: "4px" }}>
+                        APOL-SEC-P{String(i + 1).padStart(2, "0")}
+                      </div>
+                      <div style={{ fontSize: "5.5px", fontWeight: 700, color: "#000", fontFamily: serif, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                        {pageLabels[i]}
+                      </div>
+                      <div style={{ width: "60%", height: 1, background: "#e0e0e0", margin: "3px 0" }} />
+                      {i === 0 && (
+                        <img src="/apol-agent-logo.png" alt="" style={{ width: 22, height: 22, marginTop: 4 }} />
+                      )}
+                      {[1, 2, 3].map(j => (
+                        <div key={j} style={{ width: "70%", height: 3, background: "#f0f0f0", marginTop: 2 }} />
+                      ))}
+                    </div>
+                    <div style={{ fontSize: "10px", color: active ? "#fff" : "#aaa", fontFamily: sans, marginTop: "4px" }}>
+                      {i + 1}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ padding: "4px 0" }}>
+              <p style={{ fontSize: "9px", fontWeight: 400, letterSpacing: "0.1em", textTransform: "uppercase", color: "#999", fontFamily: sans, padding: "4px 8px 10px", margin: 0 }}>Document Outline</p>
+              {tocItems.map((item, i) => (
+                <button
+                  key={i}
+                  onClick={() => scrollToPage(item.page)}
+                  data-testid={`button-toc-${i}`}
+                  className="wp-toc-link"
+                  style={{
+                    display: "block", width: "100%", textAlign: "left",
+                    background: "transparent", border: "none",
+                    padding: `5px 10px 5px ${10 + item.indent * 14}px`,
+                    fontSize: "14px",
+                    fontFamily: sans,
+                    color: currentPage === item.page && !item.indent ? "#fff" : item.indent ? "#999" : "#ccc",
+                    fontWeight: 400,
+                    cursor: "pointer", lineHeight: 1.8,
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Content area - offset by sidebar width */}
+      <div
+        ref={scrollRef}
+        className="wp-content"
+        style={{
+          position: "absolute", top: 36, left: 300, right: 0, bottom: 0,
+          overflowY: "auto", overflowX: "auto",
+          background: "#e9ecef",
+          display: "flex", justifyContent: "center",
+          padding: "40px",
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
           <Page1 />
           <Page2 />
           <Page3 />
@@ -579,7 +589,7 @@ export default function Whitepaper() {
           <Page5 />
           <Page6 />
           <Page7 />
-          <div style={{ height: 40, flexShrink: 0 }} />
+          <div style={{ height: 40 }} />
         </div>
       </div>
     </div>
