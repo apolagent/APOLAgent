@@ -1,6 +1,6 @@
-import { users, scamReports, heroNominations, votes, flaggedWallets, verificationRequests, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet, type InsertVerificationRequest, type VerificationRequest } from "@shared/schema";
+import { users, scamReports, heroNominations, votes, flaggedWallets, verificationRequests, scanLookups, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet, type InsertVerificationRequest, type VerificationRequest, type ScanLookup } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, gte, or, and, sql } from "drizzle-orm";
+import { eq, desc, gte, or, and, sql, sum } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -31,6 +31,10 @@ export interface IStorage {
   approveVerification(id: number, reviewerWallet: string): Promise<VerificationRequest>;
   rejectVerification(id: number, reason: string, reviewerWallet: string): Promise<VerificationRequest>;
   getVerifiedProjectByContract(contractAddress: string): Promise<VerificationRequest | null>;
+  incrementLookup(address: string, tokenName?: string, tokenSymbol?: string): Promise<number>;
+  getLookupCount(address: string): Promise<number>;
+  getTotalLookups(): Promise<number>;
+  getRecentLookups(limit?: number): Promise<ScanLookup[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -213,6 +217,37 @@ export class DatabaseStorage implements IStorage {
       .where(eq(verificationRequests.id, id))
       .returning();
     return row;
+  }
+
+  async incrementLookup(address: string, tokenName?: string, tokenSymbol?: string): Promise<number> {
+    const [row] = await db
+      .insert(scanLookups)
+      .values({ address: address.toLowerCase(), tokenName: tokenName || null, tokenSymbol: tokenSymbol || null, lookupCount: 1, lastScannedAt: new Date() })
+      .onConflictDoUpdate({
+        target: scanLookups.address,
+        set: {
+          lookupCount: sql`${scanLookups.lookupCount} + 1`,
+          lastScannedAt: new Date(),
+          ...(tokenName ? { tokenName } : {}),
+          ...(tokenSymbol ? { tokenSymbol } : {}),
+        },
+      })
+      .returning();
+    return row.lookupCount;
+  }
+
+  async getLookupCount(address: string): Promise<number> {
+    const [row] = await db.select({ count: scanLookups.lookupCount }).from(scanLookups).where(eq(scanLookups.address, address.toLowerCase())).limit(1);
+    return row?.count ?? 0;
+  }
+
+  async getTotalLookups(): Promise<number> {
+    const [row] = await db.select({ total: sum(scanLookups.lookupCount) }).from(scanLookups);
+    return parseInt(String(row?.total ?? "0"), 10);
+  }
+
+  async getRecentLookups(limit = 5): Promise<ScanLookup[]> {
+    return await db.select().from(scanLookups).orderBy(desc(scanLookups.lastScannedAt)).limit(limit);
   }
 
   async checkInternalReports(address: string): Promise<boolean> {

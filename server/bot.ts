@@ -1,4 +1,5 @@
 import { Telegraf } from "telegraf";
+import { storage } from "./storage";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -176,7 +177,9 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     msg += `📍 *Address:* \`${shortAddr(address)}\`\n`;
     msg += `⛓️ *Chain:* Base Mainnet\n\n`;
 
-    msg += `*${tokenName}* (${tokenSymbol})\n`;
+    let lookupCount = 0;
+    try { lookupCount = await storage.incrementLookup(address, rawName, rawSymbol); } catch { /* non-fatal */ }
+    msg += `*${tokenName}* (${tokenSymbol}) 👁️ ${lookupCount}\n`;
     msg += `💲 Price: *${priceStr}*\n`;
     msg += `📊 Market Cap: *${mcapStr}*\n`;
     msg += `💧 Liquidity: *${liqFormatted}*\n`;

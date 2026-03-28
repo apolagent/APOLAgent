@@ -113,6 +113,17 @@ export const insertVerificationRequestSchema = createInsertSchema(verificationRe
 export type InsertVerificationRequest = z.infer<typeof insertVerificationRequestSchema>;
 export type VerificationRequest = typeof verificationRequests.$inferSelect;
 
+export const scanLookups = pgTable("scan_lookups", {
+  id: serial("id").primaryKey(),
+  address: text("address").notNull().unique(),
+  tokenName: text("token_name"),
+  tokenSymbol: text("token_symbol"),
+  lookupCount: integer("lookup_count").notNull().default(1),
+  lastScannedAt: timestamp("last_scanned_at").defaultNow().notNull(),
+});
+
+export type ScanLookup = typeof scanLookups.$inferSelect;
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,

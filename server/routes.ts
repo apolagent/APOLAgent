@@ -366,6 +366,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
 
+        const lookupCount = await storage.incrementLookup(address as string, tokenData.token_name, tokenData.token_symbol);
+
         return res.json({
           address, chain,
           addressType: "contract",
@@ -375,6 +377,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isNewOffender: false,
           greenBadge,
           redFlags,
+          lookupCount,
           tokenName: tokenData.token_name,
           tokenSymbol: tokenData.token_symbol,
           buyTax,
@@ -431,6 +434,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      const lookupCount = await storage.incrementLookup(address as string);
+
       return res.json({
         address, chain,
         addressType: "wallet",
@@ -440,10 +445,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isNewOffender: internalFlag && walletFlags.length === 0,
         walletFlags,
         totalFlags: walletFlags.length,
+        lookupCount,
       });
 
     } catch (error) {
       res.status(500).json({ error: "Detective analysis failed" });
+    }
+  });
+
+  // ── Scan Lookups (public counters) ──────────────────────────────────────────
+
+  app.get("/api/lookups/total", async (_req, res) => {
+    try {
+      const total = await storage.getTotalLookups();
+      res.json({ total });
+    } catch {
+      res.json({ total: 0 });
+    }
+  });
+
+  app.get("/api/lookups/recent", async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(String(req.query.limit ?? "5")), 20);
+      const recent = await storage.getRecentLookups(limit);
+      res.json(recent);
+    } catch {
+      res.json([]);
     }
   });
 

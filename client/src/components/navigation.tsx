@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
-import { Menu, X, Bot, Wallet, AlertTriangle, ChevronDown } from "lucide-react";
+import { Menu, X, Bot, Wallet, AlertTriangle, ChevronDown, Eye } from "lucide-react";
 import { useWalletContext, type EIP6963ProviderDetail } from "@/hooks/use-wallet";
+import { useQuery } from "@tanstack/react-query";
 
 const G = "#00ff00";
 
@@ -190,6 +191,23 @@ function WalletButton({ compact = false }: { compact?: boolean }) {
   );
 }
 
+function ForensicCounter() {
+  const { data } = useQuery<{ total: number }>({ queryKey: ["/api/lookups/total"], refetchInterval: 30000 });
+  const total = data?.total ?? 0;
+  if (!total) return null;
+  return (
+    <div data-testid="text-total-lookups" style={{
+      display: "flex", alignItems: "center", gap: 5,
+      fontSize: 10, fontFamily: "'JetBrains Mono', monospace",
+      color: "rgba(255,255,255,0.5)", letterSpacing: "0.05em",
+    }}>
+      <Eye size={11} style={{ color: "#00D1FF" }} />
+      <span style={{ color: "#00D1FF", fontWeight: 700 }}>{total.toLocaleString()}</span>
+      <span>lookups</span>
+    </div>
+  );
+}
+
 export default function Navigation() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -241,6 +259,7 @@ export default function Navigation() {
 
           {/* Right actions */}
           <div className="flex items-center gap-2 justify-self-end">
+            <ForensicCounter />
             <Link href="/agent-scanner">
               <span style={actionBtnStyle} data-testid="link-nav-agent-scanner">
                 <Bot size={11} />
