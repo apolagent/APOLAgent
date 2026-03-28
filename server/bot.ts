@@ -12,7 +12,7 @@ function getSiteUrl(): string {
     const primary = domains.split(",")[0].trim();
     return `https://${primary}`;
   }
-  return "https://apepolice.online";
+  return "https://apolagent.online";
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -766,7 +766,7 @@ export default function AgentScanner() {
                 <p className="text-slate-200 text-sm leading-relaxed" data-testid="text-apol-verdict">{result.apolVerdict}</p>
                 <button onClick={() => {
                   const scoreText = result.cognitionScore !== null ? `Cognition Score: ${result.cognitionScore}%` : "No verifiable data";
-                  const text = `🦍 APOL Agent // LARP Detection\n\nAgent: ${result.agentName}\n${scoreText}\nVerdict: ${result.verdict}\n\n${result.apolVerdict}\n\nScan at apepolice.online #APOL #LARPDetector`;
+                  const text = `🦍 APOL Agent // LARP Detection\n\nAgent: ${result.agentName}\n${scoreText}\nVerdict: ${result.verdict}\n\n${result.apolVerdict}\n\nScan at apolagent.online #APOL #LARPDetector`;
                   window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank");
                 }} className="mt-3 text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors" data-testid="button-tweet-verdict">
                   Tweet this verdict <ChevronRight className="w-3 h-3" />

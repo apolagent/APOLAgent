@@ -48,7 +48,7 @@ shared/
 - **Colors**: #000000 / #FFFFFF / #00FF00 only — terminal aesthetic
 - **Font**: JetBrains Mono everywhere, `font-meme` = JetBrains Mono bold weight 800
 - **Admin wallet**: `0x857aca6A8A743C9262d64819D239f509a1Cd0A85`
-- **Domain**: apepolice.online
+- **Domain**: apolagent.online
 - **Bot**: Only starts in production (`NODE_ENV=production` or `REPL_DEPLOYMENT`)
 
 ## API Endpoints

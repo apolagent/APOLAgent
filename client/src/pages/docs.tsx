@@ -384,7 +384,7 @@ function ApiDocs() {
 
       <SubTitle id="authentication">Authentication</SubTitle>
       <Para>API access requires an API key passed via the X-API-Key header. Keys are available to $APOL token holders through the verification portal.</Para>
-      <CopyBlock code={`curl -X GET "https://apepolice.online/api/scan/0x..." \\\n  -H "X-API-Key: YOUR_API_KEY" \\\n  -H "Content-Type: application/json"`} label="Authentication Header" />
+      <CopyBlock code={`curl -X GET "https://apolagent.online/api/scan/0x..." \\\n  -H "X-API-Key: YOUR_API_KEY" \\\n  -H "Content-Type: application/json"`} label="Authentication Header" />
 
       <SubTitle id="endpoints">Endpoints</SubTitle>
       <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: sans, fontSize: 14, margin: "16px 0" }}>
