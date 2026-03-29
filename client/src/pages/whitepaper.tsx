@@ -303,7 +303,7 @@ function Page4() {
       <PageId num={4} />
       <h2 style={heading}>IV. Tokenomics</h2>
       {hr()}
-      <div style={{ display: "flex", gap: 30, marginBottom: 24 }}>
+      <div className="wp-tokenomics-row" style={{ display: "flex", gap: 30, marginBottom: 24 }}>
         <div style={{ flex: 1 }}>
           <p style={body}>
             The $APOL token employs a maximally fair distribution model with zero insider allocation. The entire supply
@@ -316,7 +316,7 @@ function Page4() {
             1,000,000,000 tokens prevents inflationary dilution.
           </p>
         </div>
-        <div style={{ width: 200, flexShrink: 0 }}>
+        <div className="wp-tokenomics-chart" style={{ width: 200, flexShrink: 0 }}>
           <TokenomicsChart />
           <p style={{ fontSize: 9, color: "#999", textAlign: "center", fontStyle: "italic", fontFamily: serif }}>Fig. 3: Token Distribution</p>
         </div>
@@ -357,7 +357,7 @@ function Page4() {
         contents are ever accessed; the protocol operates exclusively on publicly available on-chain data. The
         Telegram bot runs as a persistent process in production, providing 24/7 forensic coverage.
       </p>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 28 }}>
+      <div className="wp-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 28 }}>
         <div style={{ background: "#f8f8f8", border: "1px solid #e0e0e0", padding: "18px 20px" }}>
           <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#333", fontFamily: mono, marginBottom: 10 }}>Core Analytic Engine</p>
           <ul style={{ fontSize: 14, lineHeight: 1.65, color: "#333", fontFamily: serif, paddingLeft: 18, margin: 0 }}>
@@ -497,6 +497,19 @@ export default function Whitepaper() {
         .wp-main-scroll::-webkit-scrollbar-thumb:hover { background: #888; }
         .wp-toc-link { transition: color 0.15s ease; }
         .wp-toc-link:hover { color: #00D1FF !important; }
+        @media (max-width: 900px) {
+          .wp-page { width: 100% !important; min-height: auto !important; padding: 32px 20px !important; margin: 0 auto 24px !important; border-radius: 0 !important; }
+          .wp-page table { font-size: 12px !important; }
+          .wp-page table td, .wp-page table th { padding: 6px 8px !important; }
+          .wp-sidebar { display: none !important; }
+          .wp-toolbar-extras { display: none !important; }
+        }
+        @media (max-width: 600px) {
+          .wp-page { padding: 20px 14px !important; }
+          .wp-grid-2col { grid-template-columns: 1fr !important; }
+          .wp-tokenomics-row { flex-direction: column !important; gap: 16px !important; }
+          .wp-tokenomics-chart { width: 100% !important; max-width: 200px !important; margin: 0 auto !important; }
+        }
       `}</style>
 
       <div style={{
@@ -509,6 +522,7 @@ export default function Whitepaper() {
         <button className="wp-icon-btn" onClick={() => scrollToPage(Math.max(1, currentPage - 1))} data-testid="button-page-prev"><ChevronLeft style={{ width: 16, height: 16 }} /></button>
         <span style={{ color: "#ddd", fontSize: 12, fontFamily: sans, minWidth: 44, textAlign: "center" }} data-testid="text-page-indicator">{currentPage} / {TOTAL_PAGES}</span>
         <button className="wp-icon-btn" onClick={() => scrollToPage(Math.min(TOTAL_PAGES, currentPage + 1))} data-testid="button-page-next"><ChevronRight style={{ width: 16, height: 16 }} /></button>
+        <div className="wp-toolbar-extras" style={{ display: "contents" }}>
         <div className="wp-tb-sep" />
         <button className="wp-icon-btn"><Minus style={{ width: 14, height: 14 }} /></button>
         <div style={{ background: "#555", borderRadius: 2, padding: "2px 8px" }}>
@@ -519,13 +533,14 @@ export default function Whitepaper() {
         <button className="wp-icon-btn"><RotateCw style={{ width: 14, height: 14 }} /></button>
         <button className="wp-icon-btn"><Undo2 style={{ width: 14, height: 14 }} /></button>
         <button className="wp-icon-btn"><Redo2 style={{ width: 14, height: 14 }} /></button>
+        </div>
         <div style={{ flex: 1 }} />
         <button className="wp-icon-btn" onClick={() => window.print()} data-testid="button-download"><Download style={{ width: 16, height: 16 }} /></button>
         <button className="wp-icon-btn" onClick={() => window.print()} data-testid="button-print"><Printer style={{ width: 16, height: 16 }} /></button>
       </div>
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <div style={{
+        <div className="wp-sidebar" style={{
           width: 200, minWidth: 200, background: "#404040", borderRight: "1px solid #4a4a4a",
           display: "flex", flexDirection: "column", overflow: "hidden",
         }}>

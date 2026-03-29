@@ -1115,6 +1115,10 @@ export default function Docs() {
           .docs-left-sidebar { display: none !important; }
           .docs-left-sidebar.mobile-open { display: flex !important; position: fixed !important; z-index: 50 !important; top: 0 !important; left: 0 !important; bottom: 0 !important; width: 280px !important; box-shadow: 4px 0 24px rgba(0,0,0,0.1); }
           .docs-mobile-overlay { display: block !important; }
+          .docs-content-area { left: 0 !important; }
+          .docs-main { padding: 24px 16px 80px !important; }
+          .docs-prev-next { flex-direction: column !important; gap: 12px !important; }
+          .docs-prev-next button { width: 100% !important; text-align: center !important; }
         }
       `}</style>
 
@@ -1198,7 +1202,7 @@ export default function Docs() {
         </div>
       </div>
 
-      <div style={{ display: "flex", flex: 1, height: "100%", overflow: "hidden", position: "absolute", top: 0, left: 260, right: 0, bottom: 0 }}>
+      <div className="docs-content-area" style={{ display: "flex", flex: 1, height: "100%", overflow: "hidden", position: "absolute", top: 0, left: 260, right: 0, bottom: 0 }}>
         <div
           ref={mainRef}
           className="docs-main"
@@ -1219,7 +1223,7 @@ export default function Docs() {
 
             <ActiveContent />
 
-            <div style={{ marginTop: 60, padding: "24px 0", borderTop: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between" }}>
+            <div className="docs-prev-next" style={{ marginTop: 60, padding: "24px 0", borderTop: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between" }}>
               {navSections.findIndex(s => s.id === activeSection) > 0 && (
                 <button
                   onClick={() => handleNavClick(navSections[navSections.findIndex(s => s.id === activeSection) - 1].id)}
