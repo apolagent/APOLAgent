@@ -20,8 +20,8 @@ const navSections: { id: SectionId; label: string; icon: typeof BookOpen }[] = [
 ];
 
 const sectionOutlines: Record<SectionId, string[]> = {
-  "getting-started": ["Add the Bot", "First Health Check", "Running Your First Scan", "Understanding Results"],
-  "bot-commands": ["Core Commands", "Forensic Commands", "Community Commands", "Admin Commands", "Command Reference Table"],
+  "getting-started": ["Add the Bot", "Quick Start", "Running Your First Scan", "Understanding Results"],
+  "bot-commands": ["Core Commands", "Forensic Commands", "Community Commands", "Command Reference Table"],
   "forensic-verdicts": ["Verdict Overview", "Green Status", "Yellow Status", "Red Status", "Score Breakdown"],
   "security-standards": ["Heuristic Logic Scan", "On-Chain Analysis", "Behavioral Detection", "Economic Resilience"],
   "api": ["Authentication", "Endpoints", "Rate Limits", "Response Format"],
@@ -101,10 +101,10 @@ function GettingStarted() {
       <CopyBlock code="https://t.me/ApolAgentBot" label="Telegram Bot Link" />
       <Callout type="info">The bot is fully operational in Telegram groups and DMs. Add it to your project's group chat for real-time forensic monitoring.</Callout>
 
-      <SubTitle id="first-health-check">First Health Check</SubTitle>
-      <Para>Once you have added the bot, verify that it is online and responsive by running the health check command:</Para>
-      <CopyBlock code="/health" label="Telegram Command" />
-      <Para>If the bot is operational, it will respond with its current status, uptime, and network connection details. This confirms the forensic engine is live and ready to process requests.</Para>
+      <SubTitle id="first-health-check">Quick Start</SubTitle>
+      <Para>Once you have added the bot, verify that it is online and responsive by running the help command:</Para>
+      <CopyBlock code="/help" label="Telegram Command" />
+      <Para>If the bot is operational, it will respond with the full list of available commands. This confirms the forensic engine is live and ready to process requests.</Para>
 
       <SubTitle id="running-your-first-scan">Running Your First Scan</SubTitle>
       <Para>To scan a token contract on Base, use the /scan command followed by the contract address:</Para>
@@ -134,8 +134,6 @@ function BotCommands() {
         </thead>
         <tbody>
           {([
-            ["/start", "Initialize the bot and display the welcome message"],
-            ["/health", "Check bot status, uptime, and network connectivity"],
             ["/help", "Display the full list of available commands"],
           ]).map(([cmd, desc], i) => (
             <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
@@ -156,11 +154,10 @@ function BotCommands() {
         </thead>
         <tbody>
           {([
-            ["/scan <address>", "Run a full forensic scan on a token contract"],
-            ["/wallet <address>", "Analyze a wallet's transaction history and risk profile"],
-            ["/larp <address>", "Detect AI agent LARP behavior via Cognition Score"],
-            ["/xscan <username>", "Run social forensics on an X/Twitter account"],
-            ["/deepdive <address>", "Premium: Generate a comprehensive forensic dossier"],
+            ["/scan <contract>", "Token security check"],
+            ["/scanx <username>", "X/Twitter social forensics"],
+            ["/scanagent <name or CA>", "AI agent audit"],
+            ["/checkwallet <address>", "Wallet investigation"],
           ]).map(([cmd, desc], i) => (
             <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
               <td style={{ padding: "10px 14px" }}><code style={{ fontFamily: mono, fontSize: 13, color: ACCENT, background: "#f0f9ff", padding: "2px 8px", borderRadius: 4 }}>{cmd}</code></td>
@@ -169,9 +166,10 @@ function BotCommands() {
           ))}
         </tbody>
       </table>
-      <CopyBlock code="/scan 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" label="Example: Full Contract Scan" />
-      <CopyBlock code="/wallet 0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18" label="Example: Wallet Forensics" />
-      <CopyBlock code="/larp 0x1234567890abcdef1234567890abcdef12345678" label="Example: AI Agent LARP Check" />
+      <CopyBlock code="/scan 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" label="Example: Token Security Check" />
+      <CopyBlock code="/scanx elonmusk" label="Example: X/Twitter Social Forensics" />
+      <CopyBlock code="/scanagent 0x1234567890abcdef1234567890abcdef12345678" label="Example: AI Agent Audit" />
+      <CopyBlock code="/checkwallet 0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18" label="Example: Wallet Investigation" />
 
       <SubTitle id="community-commands">Community Commands</SubTitle>
       <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: sans, fontSize: 14, margin: "16px 0" }}>
@@ -183,32 +181,9 @@ function BotCommands() {
         </thead>
         <tbody>
           {([
-            ["/nominate <address>", "Nominate a community hero for recognition"],
-            ["/report <address>", "Report a suspicious contract or wallet"],
-            ["/leaderboard", "View the community contributor leaderboard"],
-          ]).map(([cmd, desc], i) => (
-            <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
-              <td style={{ padding: "10px 14px" }}><code style={{ fontFamily: mono, fontSize: 13, color: ACCENT, background: "#f0f9ff", padding: "2px 8px", borderRadius: 4 }}>{cmd}</code></td>
-              <td style={{ padding: "10px 14px", color: "#475569" }}>{desc}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <SubTitle id="admin-commands">Admin Commands</SubTitle>
-      <Callout type="warning">Admin commands are restricted to authorized wallets only. Unauthorized access attempts are logged and flagged.</Callout>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: sans, fontSize: 14, margin: "16px 0" }}>
-        <thead>
-          <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
-            <th style={{ textAlign: "left", padding: "10px 14px", fontWeight: 600, color: "#0f172a", fontSize: 13 }}>Command</th>
-            <th style={{ textAlign: "left", padding: "10px 14px", fontWeight: 600, color: "#0f172a", fontSize: 13 }}>Description</th>
-          </tr>
-        </thead>
-        <tbody>
-          {([
-            ["/verify <address>", "Manually verify a project (admin only)"],
-            ["/blacklist <address>", "Add a contract to the threat blacklist"],
-            ["/status", "View system metrics and scan queue depth"],
+            ["/report", "Submit scam evidence"],
+            ["/map", "Wall of Shame"],
+            ["/verified", "Certified projects"],
           ]).map(([cmd, desc], i) => (
             <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
               <td style={{ padding: "10px 14px" }}><code style={{ fontFamily: mono, fontSize: 13, color: ACCENT, background: "#f0f9ff", padding: "2px 8px", borderRadius: 4 }}>{cmd}</code></td>
@@ -231,14 +206,13 @@ function BotCommands() {
         <tbody>
           {([
             ["/scan", "Public", "Free"],
-            ["/wallet", "Public", "Free"],
-            ["/larp", "Public", "Free"],
-            ["/xscan", "Public", "Free"],
-            ["/deepdive", "Public", "0.005 ETH"],
-            ["/nominate", "Public", "Free"],
+            ["/scanx", "Public", "Free"],
+            ["/scanagent", "Public", "Free"],
+            ["/checkwallet", "Public", "Free"],
             ["/report", "Public", "Free"],
-            ["/verify", "Admin", "0.05 ETH"],
-            ["/health", "Public", "Free"],
+            ["/map", "Public", "Free"],
+            ["/verified", "Public", "Free"],
+            ["/help", "Public", "Free"],
           ]).map(([cmd, access, fee], i) => (
             <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
               <td style={{ padding: "8px 14px" }}><code style={{ fontFamily: mono, fontSize: 13, color: ACCENT }}>{cmd}</code></td>
