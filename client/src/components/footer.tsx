@@ -90,7 +90,7 @@ export default function Footer() {
             </a>
             <span style={{ color: "rgba(255,255,255,0.2)", margin: "0 10px", fontSize: "10px" }}>|</span>
             <a
-              href="https://x.com/apolagent"
+              href="https://x.com/Apol_Agent"
               target="_blank"
               rel="noopener noreferrer"
               data-testid="link-twitter"

@@ -261,7 +261,7 @@ export default function Navigation() {
           {/* Right actions */}
           <div className="flex items-center gap-2 justify-self-end">
             <ForensicCounter />
-            <a href="https://x.com/apolagent" target="_blank" rel="noopener noreferrer" data-testid="link-nav-twitter" style={{ color: "rgba(255,255,255,0.6)", display: "flex", padding: 4 }} onMouseEnter={e => (e.currentTarget.style.color = "#fff")} onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.6)")}><SiX size={13} /></a>
+            <a href="https://x.com/Apol_Agent" target="_blank" rel="noopener noreferrer" data-testid="link-nav-twitter" style={{ color: "rgba(255,255,255,0.6)", display: "flex", padding: 4 }} onMouseEnter={e => (e.currentTarget.style.color = "#fff")} onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.6)")}><SiX size={13} /></a>
             <a href="https://t.me/ApolAgentBot" target="_blank" rel="noopener noreferrer" data-testid="link-nav-telegram" style={{ color: "rgba(255,255,255,0.6)", display: "flex", padding: 4 }} onMouseEnter={e => (e.currentTarget.style.color = "#fff")} onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.6)")}><SiTelegram size={13} /></a>
             <Link href="/agent-scanner">
               <span style={actionBtnStyle} data-testid="link-nav-agent-scanner">
