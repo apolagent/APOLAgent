@@ -856,8 +856,8 @@ export default function AgentScanner() {
                         { label: "Honeypot", value: checkResult.isHoneypot, bad: true },
                         { label: "Mintable", value: checkResult.isMintable, bad: true },
                         { label: "Open Source", value: checkResult.isOpenSource, bad: false },
-                        { label: `Buy Tax ${checkResult.buyTax !== undefined ? checkResult.buyTax.toFixed(1) + "%" : ""}`, value: (checkResult.buyTax ?? 0) > 10, bad: true },
-                        { label: `Sell Tax ${checkResult.sellTax !== undefined ? checkResult.sellTax.toFixed(1) + "%" : ""}`, value: (checkResult.sellTax ?? 0) > 10, bad: true },
+                        { label: `Buy Tax ${checkResult.buyTax != null ? checkResult.buyTax.toFixed(1) + "%" : ""}`, value: (checkResult.buyTax ?? 0) > 10, bad: true },
+                        { label: `Sell Tax ${checkResult.sellTax != null ? checkResult.sellTax.toFixed(1) + "%" : ""}`, value: (checkResult.sellTax ?? 0) > 10, bad: true },
                         { label: "On DEX", value: checkResult.isInDex, bad: false },
                       ].map((item, i) => {
                         const isWarning = item.bad ? item.value : !item.value;
