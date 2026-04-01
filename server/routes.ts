@@ -329,12 +329,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch { /* non-fatal */ }
       }
 
+      let hpData: any = null;
+      if (chainId !== "solana" && chainId !== "tron") {
+        try {
+          const r = await fetch(
+            `https://api.honeypot.is/v2/IsHoneypot?address=${encodeURIComponent(address)}&chainID=${chainId}`,
+            { signal: AbortSignal.timeout(12000) }
+          );
+          if (r.ok) hpData = await r.json() as any;
+        } catch { /* non-fatal */ }
+      }
+
       const isContract = tokenData !== null;
 
       if (isContract) {
-        const isHoneypot = tokenData.is_honeypot === "1" || tokenData.is_honeypot === 1;
-        const buyTax = taxPct(tokenData.buy_tax);
-        const sellTax = taxPct(tokenData.sell_tax);
+        const isHoneypotGP = tokenData.is_honeypot === "1" || tokenData.is_honeypot === 1;
+        const isHoneypotHP = hpData?.honeypotResult?.isHoneypot === true;
+        const isHoneypot = isHoneypotGP || isHoneypotHP;
+        const buyTax = hpData?.simulationResult?.buyTax != null ? hpData.simulationResult.buyTax * 100 : taxPct(tokenData.buy_tax);
+        const sellTax = hpData?.simulationResult?.sellTax != null ? hpData.simulationResult.sellTax * 100 : taxPct(tokenData.sell_tax);
         const isMintable = tokenData.is_mintable === "1" || tokenData.is_mintable === 1;
         const isOpenSource = tokenData.is_open_source === "1" || tokenData.is_open_source === 1;
         const isInDex = tokenData.is_in_dex === "1" || tokenData.is_in_dex === 1;

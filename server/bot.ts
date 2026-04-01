@@ -80,6 +80,15 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const goplusData = (await goplusRes.json()) as any;
     const dexData    = (await dexRes.json())    as any;
 
+    let hpData: any = null;
+    try {
+      const hpRes = await fetch(
+        `https://api.honeypot.is/v2/IsHoneypot?address=${encodeURIComponent(address)}&chainID=8453`,
+        { signal: AbortSignal.timeout(12_000) }
+      );
+      if (hpRes.ok) hpData = await hpRes.json() as any;
+    } catch { /* non-fatal */ }
+
     // ── Parse GoPlus ──────────────────────────────────────────────────────────
     const tKey  = Object.keys(goplusData?.result ?? {})[0];
     const token = tKey ? (goplusData.result[tKey] as any) : null;
@@ -147,8 +156,12 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     // ── Risk flags (GoPlus simulation data) ───────────────────────────────────
     const flags: string[] = [];
 
+    const isHoneypotGP = token ? flag(token.is_honeypot) : false;
+    const isHoneypotHP = hpData?.honeypotResult?.isHoneypot === true;
+    const isHoneypot = isHoneypotGP || isHoneypotHP;
+
     if (token) {
-      if (flag(token.is_honeypot))                 flags.push("⛔ HONEYPOT DETECTED");
+      if (isHoneypot)                               flags.push("⛔ HONEYPOT DETECTED");
       if (parseFloat(token.buy_tax  ?? "0") > 0.1) flags.push(`💸 High Buy Tax: ${pct(token.buy_tax)}`);
       if (parseFloat(token.sell_tax ?? "0") > 0.1) flags.push(`💸 High Sell Tax: ${pct(token.sell_tax)}`);
       if (flag(token.can_take_back_ownership))     flags.push("⚠️ Recoverable Ownership");
@@ -158,6 +171,8 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       if (flag(token.trading_cooldown))            flags.push("⏱️ Trading Cooldown");
       if (flag(token.anti_whale_modifiable))       flags.push("🐋 Anti-Whale Modifiable");
       if (!flag(token.is_open_source))             flags.push("👁️ Contract Not Verified");
+    } else if (isHoneypotHP) {
+      flags.push("⛔ HONEYPOT DETECTED");
     }
     if (lpLockedPct < 50 && lpBurnedPct < 50 && (token || topPair)) {
       flags.push("🔓 LP Not Locked");
