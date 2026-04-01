@@ -31,6 +31,41 @@ async function waitForReceipt(txHash: string, timeoutMs = 90_000): Promise<boole
 
 const G = "#00ff00";
 
+const detectiveChains = [
+  { value: "ethereum", label: "Ethereum (ETH)" },
+  { value: "bitcoin", label: "Bitcoin (BTC)" },
+  { value: "bsc", label: "BNB Smart Chain (BSC)" },
+  { value: "polygon", label: "Polygon (MATIC)" },
+  { value: "avalanche", label: "Avalanche (AVAX)" },
+  { value: "tron", label: "Tron (TRX)" },
+  { value: "arbitrum", label: "Arbitrum" },
+  { value: "optimism", label: "Optimism" },
+  { value: "base", label: "Base" },
+  { value: "other", label: "Other" },
+];
+
+type DetectiveResult = {
+  address?: string;
+  chain?: string;
+  addressType?: "wallet" | "contract";
+  riskLevel?: string;
+  apolVerdict?: string;
+  isHighRisk?: boolean;
+  isNewOffender?: boolean;
+  walletFlags?: string[];
+  totalFlags?: number;
+  greenBadge?: boolean;
+  redFlags?: string[];
+  tokenName?: string;
+  tokenSymbol?: string;
+  buyTax?: number;
+  sellTax?: number;
+  isHoneypot?: boolean;
+  isMintable?: boolean;
+  isOpenSource?: boolean;
+  isInDex?: boolean;
+};
+
 type TestResult = { scored: boolean; score: number; maxScore: number; label: string; detail: string; timingPattern?: string[]; isContract?: boolean };
 type LogsTestResult = { status: "verified" | "mismatch" | "inconclusive"; detail: string; logs: string[] };
 type SocialTestResult = { status: "clear" | "suspicious" | "inconclusive"; detail: string; followers?: number; accountAgeDays?: number };
@@ -395,11 +430,52 @@ export default function AgentScanner() {
 
   const [apolCertified, setApolCertified] = useState<{ certified: boolean; project?: any } | null>(null);
 
+  const [checkAddress, setCheckAddress] = useState("");
+  const [checkChain, setCheckChain] = useState("ethereum");
+  const [checkResult, setCheckResult] = useState<DetectiveResult | null>(null);
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
+
   useEffect(() => {
     if (!result?.wallet || !result.traceabilityTest.isContract) { setApolCertified(null); return; }
     fetch(`/api/contracts/verified/${result.wallet.toLowerCase()}`)
       .then(r => r.json()).then(setApolCertified).catch(() => setApolCertified(null));
   }, [result?.wallet, result?.traceabilityTest.isContract]);
+
+  const handleCheckAddress = async () => {
+    if (!checkAddress.trim()) return;
+    setIsChecking(true);
+    setCheckResult(null);
+    setCheckError(null);
+    try {
+      const res = await fetch(
+        `/api/detective/analyze?address=${encodeURIComponent(checkAddress.trim())}&chain=${encodeURIComponent(checkChain)}`
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setCheckError(data.error || "Failed to check address");
+      } else {
+        setCheckResult(data);
+      }
+    } catch {
+      setCheckError("Network error. Please try again.");
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  const buildTweetText = (r: DetectiveResult) => {
+    const addr = r.address || checkAddress;
+    const short = addr.slice(0, 8) + "…" + addr.slice(-4);
+    const type = r.addressType === "contract" ? `Token ${r.tokenSymbol || ""}` : "Wallet";
+    const risk = r.riskLevel || "Unknown Risk";
+    const issues = r.addressType === "contract"
+      ? (r.greenBadge ? "passed all security checks" : `red flags: ${r.redFlags?.join(", ")}`)
+      : (r.walletFlags?.length ? `flagged for: ${r.walletFlags.join(", ")}` : "no external flags");
+    return encodeURIComponent(
+      `APOL SECURITY ALERT\n\n${type} ${short}, ${risk}\nAPOL scan: ${issues}\n\nScanned by @ApolAgent, #APOL #CryptoSafety #DYOR`
+    );
+  };
 
   const handleScan = async () => {
     if (!agentName.trim()) { setScanError("Agent name is required."); return; }
@@ -671,6 +747,241 @@ export default function AgentScanner() {
               }} data-testid="text-deep-dive-error">
                 <AlertTriangle size={12} style={{ flexShrink: 0 }} />
                 {deepDiveError}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Scan CA / Wallet */}
+        <Card style={{ background: "rgba(0,0,0,0.6)", border: `1px solid rgba(0,255,0,0.25)` }}>
+          <CardHeader style={{ paddingBottom: "8px" }}>
+            <CardTitle style={{ fontSize: "14px", fontWeight: 900, letterSpacing: "0.14em", textTransform: "uppercase", color: "#fff", fontFamily: "'JetBrains Mono', monospace", display: "flex", alignItems: "center", gap: "8px" }}>
+              <Search size={16} color={G} />
+              Scan CA or Wallet
+            </CardTitle>
+            <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", fontFamily: "'JetBrains Mono', monospace", marginTop: "4px" }}>
+              Full security scan. Flags honeypots, blacklisted addresses, tax traps, and mint abuse.
+            </p>
+          </CardHeader>
+          <CardContent style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ display: "flex", flexDirection: "row", gap: "8px", flexWrap: "wrap" }}>
+              <Select value={checkChain} onValueChange={setCheckChain}>
+                <SelectTrigger style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", width: "180px" }} data-testid="select-check-chain">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent style={{ background: "#111", border: "1px solid rgba(255,255,255,0.15)" }}>
+                  {detectiveChains.map((c) => (
+                    <SelectItem key={c.value} value={c.value} style={{ color: "#fff", fontSize: "11px" }}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                value={checkAddress}
+                onChange={(e) => setCheckAddress(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCheckAddress()}
+                placeholder="Enter wallet / contract address..."
+                style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: "12px", flex: 1, minWidth: "200px" }}
+                data-testid="input-check-address"
+              />
+              <button
+                onClick={handleCheckAddress}
+                disabled={isChecking}
+                style={{
+                  background: G, color: "#000", border: "none", padding: "8px 20px",
+                  fontFamily: "'JetBrains Mono', monospace", fontWeight: 900, fontSize: "11px",
+                  letterSpacing: "0.1em", textTransform: "uppercase", cursor: isChecking ? "wait" : "pointer",
+                  display: "flex", alignItems: "center", gap: "6px", opacity: isChecking ? 0.6 : 1,
+                }}
+                data-testid="button-check-address"
+              >
+                {isChecking ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Search size={14} />}
+                {isChecking ? "SCANNING..." : "SCAN"}
+              </button>
+            </div>
+
+            {checkError && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.06)", fontSize: "11px", color: "#f87171", fontFamily: "'JetBrains Mono', monospace" }} data-testid="text-check-error">
+                <XCircle size={14} style={{ flexShrink: 0 }} />
+                {checkError}
+              </div>
+            )}
+
+            {checkResult && (
+              <div data-testid="div-check-result" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {checkResult.addressType === "contract" ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    {(checkResult.tokenName || checkResult.tokenSymbol) && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace" }}>
+                        <span style={{ color: "rgba(255,255,255,0.5)", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700 }}>Token</span>
+                        <span style={{ color: "#fff", fontWeight: 700 }}>
+                          {checkResult.tokenName}
+                          {checkResult.tokenSymbol && <span style={{ color: "rgba(255,255,255,0.4)", fontWeight: 400, marginLeft: "4px" }}>({checkResult.tokenSymbol})</span>}
+                        </span>
+                        {checkResult.isInDex && (
+                          <span style={{ fontSize: "10px", padding: "2px 8px", border: `1px solid rgba(0,255,0,0.3)`, color: G, fontWeight: 700, letterSpacing: "0.05em" }}>DEX LISTED</span>
+                        )}
+                      </div>
+                    )}
+
+                    {checkResult.greenBadge ? (
+                      <div data-testid="div-green-badge" style={{ border: `2px solid ${G}`, background: "rgba(0,255,0,0.06)", padding: "20px", textAlign: "center" }}>
+                        <div style={{ fontSize: "14px", fontWeight: 900, color: G, letterSpacing: "0.16em", textTransform: "uppercase" }}>APOL AGENT GREEN BADGE</div>
+                        <div style={{ fontSize: "11px", color: "rgba(0,255,0,0.7)", marginTop: "4px" }}>Status: Cleared. All checks passed.</div>
+                      </div>
+                    ) : (
+                      <div data-testid="div-police-record-alert" style={{
+                        border: `2px solid ${checkResult.isHighRisk ? "#f87171" : "#facc15"}`,
+                        background: checkResult.isHighRisk ? "rgba(255,68,68,0.06)" : "rgba(250,204,21,0.04)",
+                        padding: "20px", textAlign: "center",
+                      }}>
+                        <div style={{ fontSize: "14px", fontWeight: 900, color: checkResult.isHighRisk ? "#f87171" : "#facc15", letterSpacing: "0.16em", textTransform: "uppercase" }}>
+                          {checkResult.isHighRisk ? "CONTRACT DANGER DETECTED" : "SECURITY WARNINGS FOUND"}
+                        </div>
+                        <div style={{ marginTop: "8px" }}>
+                          <span style={{
+                            fontSize: "10px", fontWeight: 900, padding: "4px 12px", letterSpacing: "0.12em", textTransform: "uppercase",
+                            border: `1px solid ${checkResult.isHighRisk ? "rgba(255,68,68,0.4)" : "rgba(250,204,21,0.4)"}`,
+                            color: checkResult.isHighRisk ? "#f87171" : "#facc15",
+                          }}>
+                            {checkResult.riskLevel}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "6px" }}>
+                      {[
+                        { label: "Honeypot", value: checkResult.isHoneypot, bad: true },
+                        { label: "Mintable", value: checkResult.isMintable, bad: true },
+                        { label: "Open Source", value: checkResult.isOpenSource, bad: false },
+                        { label: `Buy Tax ${checkResult.buyTax !== undefined ? checkResult.buyTax.toFixed(1) + "%" : ""}`, value: (checkResult.buyTax ?? 0) > 10, bad: true },
+                        { label: `Sell Tax ${checkResult.sellTax !== undefined ? checkResult.sellTax.toFixed(1) + "%" : ""}`, value: (checkResult.sellTax ?? 0) > 10, bad: true },
+                        { label: "On DEX", value: checkResult.isInDex, bad: false },
+                      ].map((item, i) => {
+                        const isWarning = item.bad ? item.value : !item.value;
+                        return (
+                          <div key={i} style={{
+                            display: "flex", alignItems: "center", gap: "6px", padding: "6px 10px",
+                            border: `1px solid ${isWarning ? "rgba(255,68,68,0.3)" : "rgba(0,255,0,0.3)"}`,
+                            background: isWarning ? "rgba(255,68,68,0.04)" : "rgba(0,255,0,0.04)",
+                            fontSize: "11px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
+                            color: isWarning ? "#f87171" : G,
+                          }} data-testid={`div-contract-flag-${i}`}>
+                            <span>{isWarning ? "⚠" : "✓"}</span>
+                            <span>{item.label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {checkResult.redFlags && checkResult.redFlags.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                        {checkResult.redFlags.map((flag, i) => (
+                          <span key={i} style={{ fontSize: "10px", padding: "4px 10px", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.06)", color: "#f87171", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }} data-testid={`div-red-flag-${i}`}>
+                            {flag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div data-testid="div-apol-summary" style={{ display: "flex", gap: "12px", padding: "14px", border: `1px solid rgba(0,255,0,0.2)`, background: "rgba(0,255,0,0.03)" }}>
+                      <div style={{ width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>🦍</div>
+                      <div>
+                        <div style={{ fontSize: "10px", fontWeight: 900, color: G, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "4px", fontFamily: "'JetBrains Mono', monospace" }}>APOL DETECTIVE</div>
+                        <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.7)", lineHeight: 1.6, fontStyle: "italic", fontFamily: "'JetBrains Mono', monospace" }}>"{checkResult.apolVerdict}"</div>
+                      </div>
+                    </div>
+
+                    <a
+                      data-testid="button-share-x"
+                      href={`https://twitter.com/intent/tweet?text=${buildTweetText(checkResult)}`}
+                      target="_blank" rel="noopener noreferrer"
+                      style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", width: "100%", padding: "10px", background: "#000", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontWeight: 900, fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", textDecoration: "none" }}
+                    >
+                      <svg viewBox="0 0 24 24" style={{ width: "14px", height: "14px", fill: "#fff" }} xmlns="http://www.w3.org/2000/svg">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.402 6.231H2.744l7.736-8.848L1.254 2.25H8.08l4.259 5.63 5.905-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                      </svg>
+                      SHARE APOL ALERT TO X
+                    </a>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    {checkResult.riskLevel === "Clean" && !checkResult.isNewOffender ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "14px", border: `2px solid ${G}`, background: "rgba(0,255,0,0.06)" }}>
+                        <CheckCircle size={20} color={G} style={{ flexShrink: 0 }} />
+                        <div>
+                          <div style={{ fontSize: "12px", fontWeight: 900, color: G, letterSpacing: "0.14em", textTransform: "uppercase" }}>STATUS: CLEAR</div>
+                          <div style={{ fontSize: "11px", color: "rgba(0,255,0,0.6)", marginTop: "2px" }}>No flags on record.</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div data-testid="div-police-record-alert" style={{
+                        border: `2px solid ${checkResult.isNewOffender ? "#f97316" : checkResult.isHighRisk ? "#f87171" : "#facc15"}`,
+                        background: checkResult.isNewOffender ? "rgba(249,115,22,0.06)" : checkResult.isHighRisk ? "rgba(255,68,68,0.06)" : "rgba(250,204,21,0.04)",
+                        padding: "20px", textAlign: "center",
+                      }}>
+                        {checkResult.isNewOffender ? (
+                          <>
+                            <div style={{ fontSize: "14px", fontWeight: 900, color: "#f97316", letterSpacing: "0.16em", textTransform: "uppercase" }}>NEW OFFENDER DETECTED</div>
+                            <div style={{ fontSize: "11px", color: "rgba(249,115,22,0.7)", marginTop: "4px" }}>Flagged: last 24 hours.</div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ fontSize: "14px", fontWeight: 900, color: checkResult.isHighRisk ? "#f87171" : "#facc15", letterSpacing: "0.16em", textTransform: "uppercase" }}>
+                              {checkResult.isHighRisk ? "HIGH RISK WALLET" : "SUSPICIOUS WALLET"}
+                            </div>
+                            <div style={{ marginTop: "8px" }}>
+                              <span style={{
+                                fontSize: "10px", fontWeight: 900, padding: "4px 12px", letterSpacing: "0.12em", textTransform: "uppercase",
+                                border: `1px solid ${checkResult.isHighRisk ? "rgba(255,68,68,0.4)" : "rgba(250,204,21,0.4)"}`,
+                                color: checkResult.isHighRisk ? "#f87171" : "#facc15",
+                              }}>
+                                {checkResult.riskLevel}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {checkResult.walletFlags && checkResult.walletFlags.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                        <span style={{ fontSize: "10px", fontWeight: 900, color: "rgba(255,255,255,0.4)", letterSpacing: "0.12em", textTransform: "uppercase" }}>SECURITY FLAGS</span>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                          {checkResult.walletFlags.map((flag, i) => (
+                            <span key={i} style={{ fontSize: "10px", padding: "4px 10px", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.06)", color: "#f87171", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }} data-testid={`badge-wallet-flag-${i}`}>
+                              {flag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div data-testid="div-apol-summary" style={{ display: "flex", gap: "12px", padding: "14px", border: `1px solid rgba(0,255,0,0.2)`, background: "rgba(0,255,0,0.03)" }}>
+                      <div style={{ width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>🦍</div>
+                      <div>
+                        <div style={{ fontSize: "10px", fontWeight: 900, color: G, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "4px", fontFamily: "'JetBrains Mono', monospace" }}>APOL DETECTIVE</div>
+                        <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.7)", lineHeight: 1.6, fontStyle: "italic", fontFamily: "'JetBrains Mono', monospace" }}>"{checkResult.apolVerdict}"</div>
+                      </div>
+                    </div>
+
+                    {(checkResult.riskLevel !== "Clean" || checkResult.isNewOffender) && (
+                      <a
+                        data-testid="button-share-x"
+                        href={`https://twitter.com/intent/tweet?text=${buildTweetText(checkResult)}`}
+                        target="_blank" rel="noopener noreferrer"
+                        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", width: "100%", padding: "10px", background: "#000", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontWeight: 900, fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", textDecoration: "none" }}
+                      >
+                        <svg viewBox="0 0 24 24" style={{ width: "14px", height: "14px", fill: "#fff" }} xmlns="http://www.w3.org/2000/svg">
+                          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.402 6.231H2.744l7.736-8.848L1.254 2.25H8.08l4.259 5.63 5.905-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                        </svg>
+                        SHARE APOL WARNING TO X
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

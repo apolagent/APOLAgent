@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, AlertTriangle, ArrowLeft, ThumbsUp, Clock, ExternalLink, Search, CheckCircle, XCircle, Loader2, Send, Bot, Share2, Upload, ImageIcon, X } from "lucide-react";
+import { Shield, AlertTriangle, ArrowLeft, ThumbsUp, Clock, ExternalLink, Upload, ImageIcon, X } from "lucide-react";
 import { Link } from "wouter";
 import { insertScamReportSchema, type InsertScamReport, type ScamReport } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
@@ -28,52 +28,13 @@ const scamTypes = [
   "Other"
 ];
 
-const chains = [
-  { value: "ethereum", label: "Ethereum (ETH)" },
-  { value: "bitcoin", label: "Bitcoin (BTC)" },
-  { value: "bsc", label: "BNB Smart Chain (BSC)" },
-  { value: "polygon", label: "Polygon (MATIC)" },
-  { value: "avalanche", label: "Avalanche (AVAX)" },
-  { value: "tron", label: "Tron (TRX)" },
-  { value: "arbitrum", label: "Arbitrum" },
-  { value: "optimism", label: "Optimism" },
-  { value: "base", label: "Base" },
-  { value: "other", label: "Other" },
-];
-
-type DetectiveResult = {
-  address?: string;
-  chain?: string;
-  addressType?: "wallet" | "contract";
-  riskLevel?: string;
-  apolVerdict?: string;
-  isHighRisk?: boolean;
-  isNewOffender?: boolean;
-  // Wallet fields
-  walletFlags?: string[];
-  totalFlags?: number;
-  // Contract fields
-  greenBadge?: boolean;
-  redFlags?: string[];
-  tokenName?: string;
-  tokenSymbol?: string;
-  buyTax?: number;
-  sellTax?: number;
-  isHoneypot?: boolean;
-  isMintable?: boolean;
-  isOpenSource?: boolean;
-  isInDex?: boolean;
-};
 
 export default function ReportScam() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [checkAddress, setCheckAddress] = useState("");
-  const [checkChain, setCheckChain] = useState("ethereum");
-  const [checkResult, setCheckResult] = useState<DetectiveResult | null>(null);
-  const [checkError, setCheckError] = useState<string | null>(null);
-  const [isChecking, setIsChecking] = useState(false);
+
+
 
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
@@ -125,20 +86,6 @@ export default function ReportScam() {
     e.target.value = "";
   };
 
-  const buildTweetText = (result: DetectiveResult) => {
-    const addr = result.address || checkAddress;
-    const short = addr.slice(0, 8) + "…" + addr.slice(-4);
-    const type = result.addressType === "contract"
-      ? `Token ${result.tokenSymbol || ""}`
-      : "Wallet";
-    const risk = result.riskLevel || "Unknown Risk";
-    const issues = result.addressType === "contract"
-      ? (result.greenBadge ? "passed all security checks ✅" : `red flags: ${result.redFlags?.join(", ")}`)
-      : (result.walletFlags?.length ? `flagged for: ${result.walletFlags.join(", ")}` : "no external flags");
-    return encodeURIComponent(
-      `🚨 APOL SECURITY ALERT 🚨\n\n${type} ${short}, ${risk}\nAPOL scan: ${issues}\n\nScanned by @ApolAgent, #APOL #CryptoSafety #DYOR`
-    );
-  };
 
   const form = useForm<InsertScamReport>({
     resolver: zodResolver(insertScamReportSchema),
@@ -198,33 +145,6 @@ export default function ReportScam() {
     createReportMutation.mutate({ ...data, evidenceImage: uploadedImage ?? undefined });
   };
 
-  const handleCheckAddress = async () => {
-    if (!checkAddress.trim()) {
-      toast({ title: "Address Required", description: "Enter a wallet or contract address.", variant: "destructive" });
-      return;
-    }
-    setIsChecking(true);
-    setCheckResult(null);
-    setCheckError(null);
-    try {
-      const res = await fetch(
-        `/api/detective/analyze?address=${encodeURIComponent(checkAddress.trim())}&chain=${encodeURIComponent(checkChain)}`
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        setCheckError(data.error || "Failed to check address");
-      } else {
-        setCheckResult(data);
-        if (data.reports && data.reports.length > 0) {
-          queryClient.invalidateQueries({ queryKey: ["/api/detective/flagged"] });
-        }
-      }
-    } catch {
-      setCheckError("Network error. Please try again.");
-    } finally {
-      setIsChecking(false);
-    }
-  };
 
 
   const getScamTypeColor = (type: string) => {
@@ -262,258 +182,6 @@ export default function ReportScam() {
             </Button>
           </Link>
         </div>
-
-        {/* APOL Detective Scanner */}
-        <Card className="bg-gradient-to-br from-blue-900/30 to-blue-800/20 border-blue-600/50 mb-10">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold text-white flex items-center gap-2">
-              <Search className="w-5 h-5 text-blue-400" />
-              Scan CA or Wallet
-            </CardTitle>
-            <CardDescription className="text-gray-300">
-              Full security scan. Flags honeypots, blacklisted addresses, tax traps, and mint abuse.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col sm:flex-row gap-3 mb-4">
-              <Select value={checkChain} onValueChange={setCheckChain}>
-                <SelectTrigger className="bg-slate-800 border-slate-600 text-white sm:w-48" data-testid="select-check-chain">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-600">
-                  {chains.map((c) => (
-                    <SelectItem key={c.value} value={c.value} className="text-white hover:bg-slate-700">
-                      {c.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                value={checkAddress}
-                onChange={(e) => setCheckAddress(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCheckAddress()}
-                placeholder="Enter wallet / contract address..."
-                className="bg-slate-800 border-slate-600 text-white placeholder:text-gray-400 flex-1"
-                data-testid="input-check-address"
-              />
-              <Button
-                onClick={handleCheckAddress}
-                disabled={isChecking}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold"
-                data-testid="button-check-address"
-              >
-                {isChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                <span className="ml-2">{isChecking ? "Scanning..." : "Scan"}</span>
-              </Button>
-            </div>
-
-            {checkError && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-900/30 border border-red-600/40 text-red-300" data-testid="text-check-error">
-                <XCircle className="w-5 h-5 flex-shrink-0" />
-                <span>{checkError}</span>
-              </div>
-            )}
-
-            {checkResult && (
-              <div data-testid="div-check-result" className="space-y-4">
-                {/* ── CONTRACT RESULT ───────────────────────────────── */}
-                {checkResult.addressType === "contract" ? (
-                  <div className="space-y-4">
-                    {/* Token header */}
-                    {(checkResult.tokenName || checkResult.tokenSymbol) && (
-                      <div className="flex items-center gap-3 px-1">
-                        <span className="text-xs uppercase tracking-widest text-gray-400 font-bold">Token</span>
-                        <span className="text-white font-bold">
-                          {checkResult.tokenName}
-                          {checkResult.tokenSymbol && <span className="text-gray-400 font-normal ml-1">({checkResult.tokenSymbol})</span>}
-                        </span>
-                        {checkResult.isInDex && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">Listed on DEX</span>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Green badge OR red alert */}
-                    {checkResult.greenBadge ? (
-                      <div
-                        data-testid="div-green-badge"
-                        className="relative overflow-hidden rounded-xl border-2 border-green-500 bg-green-950/50 p-5 text-center"
-                        style={{ boxShadow: "0 0 30px rgba(34,197,94,0.3)" }}
-                      >
-                        <div className="text-5xl mb-2">✅</div>
-                        <h3 className="text-2xl font-black text-green-400 tracking-widest uppercase">APOL AGENT Green Badge</h3>
-                        <p className="text-green-300 mt-1 font-semibold">Status: Cleared. All checks passed.</p>
-                      </div>
-                    ) : (
-                      <div
-                        data-testid="div-police-record-alert"
-                        className={`relative overflow-hidden rounded-xl border-2 p-5 text-center ${
-                          checkResult.isHighRisk ? "border-red-500 bg-red-950/60" : "border-yellow-500 bg-yellow-950/40"
-                        }`}
-                        style={{ boxShadow: checkResult.isHighRisk ? "0 0 30px rgba(239,68,68,0.4)" : "0 0 20px rgba(234,179,8,0.25)" }}
-                      >
-                        <div className="text-5xl mb-2">{checkResult.isHighRisk ? "🚨" : "⚠️"}</div>
-                        <h3 className={`text-2xl font-black tracking-widest uppercase ${checkResult.isHighRisk ? "text-red-400" : "text-yellow-400"}`}>
-                          {checkResult.isHighRisk ? "Contract Danger Detected" : "Security Warnings Found"}
-                        </h3>
-                        <div className="mt-2 flex justify-center">
-                          <span className={`text-xs font-black px-3 py-1 rounded-full uppercase tracking-widest border ${checkResult.isHighRisk ? "bg-red-500/20 text-red-300 border-red-500/40" : "bg-yellow-500/20 text-yellow-300 border-yellow-500/40"}`}>
-                            {checkResult.riskLevel}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Contract security grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {[
-                        { label: "Honeypot", value: checkResult.isHoneypot, bad: true },
-                        { label: "Mintable", value: checkResult.isMintable, bad: true },
-                        { label: "Open Source", value: checkResult.isOpenSource, bad: false },
-                        { label: `Buy Tax ${checkResult.buyTax !== undefined ? checkResult.buyTax.toFixed(1) + "%" : ""}`, value: (checkResult.buyTax ?? 0) > 10, bad: true },
-                        { label: `Sell Tax ${checkResult.sellTax !== undefined ? checkResult.sellTax.toFixed(1) + "%" : ""}`, value: (checkResult.sellTax ?? 0) > 10, bad: true },
-                        { label: "On DEX", value: checkResult.isInDex, bad: false },
-                      ].map((item, i) => {
-                        const isWarning = item.bad ? item.value : !item.value;
-                        const icon = isWarning ? "⚠" : "✓";
-                        const color = isWarning ? "text-red-400 border-red-500/30 bg-red-900/20" : "text-green-400 border-green-500/30 bg-green-900/20";
-                        return (
-                          <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-semibold ${color}`} data-testid={`div-contract-flag-${i}`}>
-                            <span>{icon}</span>
-                            <span>{item.label}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Red flag chips */}
-                    {checkResult.redFlags && checkResult.redFlags.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {checkResult.redFlags.map((flag, i) => (
-                          <span key={i} className="text-xs px-3 py-1 rounded-full bg-red-900/40 border border-red-500/40 text-red-300 font-semibold" data-testid={`div-red-flag-${i}`}>
-                            🚩 {flag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* APOL Verdict */}
-                    <div data-testid="div-apol-summary" className="flex gap-3 p-4 rounded-xl bg-blue-950/50 border border-blue-500/40">
-                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-sm">🦍</div>
-                      <div>
-                        <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1 flex items-center gap-1">
-                          <Bot className="w-3 h-3" /> APOL Detective
-                        </p>
-                        <p className="text-blue-100 text-sm leading-relaxed italic">"{checkResult.apolVerdict}"</p>
-                      </div>
-                    </div>
-
-                    {/* Share to X */}
-                    <a
-                      data-testid="button-share-x"
-                      href={`https://twitter.com/intent/tweet?text=${buildTweetText(checkResult)}`}
-                      target="_blank" rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl font-bold text-white transition-all"
-                      style={{ background: "#000", border: "1px solid #333" }}
-                      onMouseEnter={e => (e.currentTarget.style.background = "#1a1a1a")}
-                      onMouseLeave={e => (e.currentTarget.style.background = "#000")}
-                    >
-                      <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.402 6.231H2.744l7.736-8.848L1.254 2.25H8.08l4.259 5.63 5.905-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                      </svg>
-                      Share APOL Alert to X
-                    </a>
-                  </div>
-
-                ) : (
-                  /* ── WALLET RESULT ─────────────────────────────────── */
-                  <div className="space-y-4">
-                    {/* Status banner */}
-                    {checkResult.riskLevel === "Clean" && !checkResult.isNewOffender ? (
-                      <div className="flex items-center gap-3 p-4 rounded-xl bg-green-900/30 border border-green-600/40 text-green-300">
-                        <CheckCircle className="w-6 h-6 flex-shrink-0" />
-                        <div>
-                          <p className="font-bold text-green-200 tracking-widest uppercase">Status: Clear</p>
-                          <p className="text-sm text-green-400 mt-0.5">No flags on record.</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div
-                        data-testid="div-police-record-alert"
-                        className={`relative overflow-hidden rounded-xl border-2 p-5 text-center ${
-                          checkResult.isNewOffender ? "border-orange-500 bg-orange-950/50" : checkResult.isHighRisk ? "border-red-500 bg-red-950/60" : "border-yellow-500 bg-yellow-950/40"
-                        }`}
-                        style={{ boxShadow: checkResult.isNewOffender ? "0 0 30px rgba(249,115,22,0.35)" : checkResult.isHighRisk ? "0 0 30px rgba(239,68,68,0.4)" : "0 0 20px rgba(234,179,8,0.25)" }}
-                      >
-                        <div className="text-5xl mb-2">🚨</div>
-                        {checkResult.isNewOffender ? (
-                          <>
-                            <h3 className="text-2xl font-black text-orange-400 tracking-widest uppercase">New Offender Detected</h3>
-                            <p className="text-orange-300 mt-1 font-semibold">Flagged: last 24 hours.</p>
-                          </>
-                        ) : (
-                          <>
-                            <h3 className={`text-2xl font-black tracking-widest uppercase ${checkResult.isHighRisk ? "text-red-400" : "text-yellow-400"}`}>
-                              {checkResult.isHighRisk ? "High Risk Wallet" : "Suspicious Wallet"}
-                            </h3>
-                            <div className="mt-2 flex justify-center">
-                              <span className={`text-xs font-black px-3 py-1 rounded-full uppercase tracking-widest border ${checkResult.isHighRisk ? "bg-red-500/20 text-red-300 border-red-500/40" : "bg-yellow-500/20 text-yellow-300 border-yellow-500/40"}`}>
-                                {checkResult.riskLevel}
-                              </span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Wallet flags */}
-                    {checkResult.walletFlags && checkResult.walletFlags.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Security Flags</p>
-                        <div className="flex flex-wrap gap-2">
-                          {checkResult.walletFlags.map((flag, i) => (
-                            <span key={i} className="text-xs px-3 py-1 rounded-full bg-red-900/40 border border-red-500/40 text-red-300 font-semibold" data-testid={`badge-wallet-flag-${i}`}>
-                              🚩 {flag}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* APOL Verdict */}
-                    <div data-testid="div-apol-summary" className="flex gap-3 p-4 rounded-xl bg-blue-950/50 border border-blue-500/40">
-                      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-sm">🦍</div>
-                      <div>
-                        <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1 flex items-center gap-1">
-                          <Bot className="w-3 h-3" /> APOL Detective
-                        </p>
-                        <p className="text-blue-100 text-sm leading-relaxed italic">"{checkResult.apolVerdict}"</p>
-                      </div>
-                    </div>
-
-                    {/* Share to X, only if flagged */}
-                    {(checkResult.riskLevel !== "Clean" || checkResult.isNewOffender) && (
-                      <a
-                        data-testid="button-share-x"
-                        href={`https://twitter.com/intent/tweet?text=${buildTweetText(checkResult)}`}
-                        target="_blank" rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-2 w-full py-3 rounded-xl font-bold text-white transition-all"
-                        style={{ background: "#000", border: "1px solid #333" }}
-                        onMouseEnter={e => (e.currentTarget.style.background = "#1a1a1a")}
-                        onMouseLeave={e => (e.currentTarget.style.background = "#000")}
-                      >
-                        <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.402 6.231H2.744l7.736-8.848L1.254 2.25H8.08l4.259 5.63 5.905-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                        </svg>
-                        Share APOL Warning to X
-                      </a>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         <div className="grid lg:grid-cols-2 gap-12">
           <Card className="bg-gradient-to-br from-red-900/20 to-red-800/30 border-red-600/50">
