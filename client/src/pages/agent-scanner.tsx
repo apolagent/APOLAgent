@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft, Bot, AlertTriangle, CheckCircle,
   XCircle, Loader2, ChevronRight, Search, Brain, HelpCircle, Info,
   Zap, Lock, ExternalLink, ShieldAlert, Activity, Clock, Shield,
-  ShieldCheck, Droplets, Users, TrendingUp, FileBarChart2,
+  ShieldCheck, Droplets, Users, TrendingUp, FileBarChart2, Eye,
 } from "lucide-react";
 import { BrowserProvider, JsonRpcProvider, parseEther } from "ethers";
 import { getSelectedProvider } from "@/hooks/use-wallet";
@@ -357,6 +358,23 @@ function AdvancedResults({ result }: { result: AgentResult }) {
   );
 }
 
+function ForensicLookups() {
+  const { data } = useQuery<{ total: number }>({ queryKey: ["/api/lookups/total"], refetchInterval: 30000 });
+  const total = data?.total ?? 0;
+  if (!total) return null;
+  return (
+    <div data-testid="text-total-lookups" style={{
+      display: "inline-flex", alignItems: "center", gap: 6,
+      fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
+      color: "rgba(255,255,255,0.5)", letterSpacing: "0.05em",
+    }}>
+      <Eye size={12} style={{ color: "#00FF00" }} />
+      <span style={{ color: "#00FF00", fontWeight: 700 }}>{total.toLocaleString()}</span>
+      <span>lookups</span>
+    </div>
+  );
+}
+
 export default function AgentScanner() {
   const [agentName, setAgentName] = useState("");
   const [socialLink, setSocialLink] = useState("");
@@ -486,6 +504,7 @@ export default function AgentScanner() {
             <Bot className="w-4 h-4" /> Scan Agent Utility
           </div>
           <h1 className="font-meme text-4xl md:text-5xl gradient-text">Agent-LARP Detector</h1>
+          <ForensicLookups />
           <p className="text-slate-400 text-sm max-w-xl mx-auto">
             The Patrol only deals in hard evidence. No data = no verdict.
           </p>

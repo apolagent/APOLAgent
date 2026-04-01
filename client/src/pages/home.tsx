@@ -42,10 +42,10 @@ function ScanTicker() {
         fontSize: 11, letterSpacing: "0.05em",
       }}>
         <span style={{ color: "rgba(255,255,255,0.4)" }}>LAST SCANNED: </span>
-        <span style={{ color: "#00D1FF" }}>{tickerContent}</span>
+        <span style={{ color: "#00FF00" }}>{tickerContent}</span>
         <span style={{ color: "rgba(255,255,255,0.2)", margin: "0 40px" }}>|</span>
         <span style={{ color: "rgba(255,255,255,0.4)" }}>LAST SCANNED: </span>
-        <span style={{ color: "#00D1FF" }}>{tickerContent}</span>
+        <span style={{ color: "#00FF00" }}>{tickerContent}</span>
       </div>
       <style>{`
         @keyframes ticker-scroll {
