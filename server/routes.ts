@@ -340,18 +340,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const isInDex = tokenData.is_in_dex === "1" || tokenData.is_in_dex === 1;
         const slippageModifiable = tokenData.slippage_modifiable === "1" || tokenData.slippage_modifiable === 1;
 
+        const canTakeBackOwnership = tokenData.can_take_back_ownership === "1" || tokenData.can_take_back_ownership === 1;
+        const ownerChangeBalance = tokenData.owner_change_balance === "1" || tokenData.owner_change_balance === 1;
+        const holderCount = parseInt(tokenData.holder_count ?? "0");
+
+        const lpHolders: any[] = tokenData.lp_holders ?? [];
+        const lpBurnedPct = lpHolders
+          .filter((h: any) => (h.tag ?? "").toLowerCase().includes("burn") || (h.address ?? "").toLowerCase() === "0x000000000000000000000000000000000000dead")
+          .reduce((acc: number, h: any) => acc + parseFloat(h.percent ?? "0") * 100, 0);
+        const lpLockedPct = lpHolders
+          .filter((h: any) => h.is_locked === "1" || h.is_locked === 1)
+          .reduce((acc: number, h: any) => acc + parseFloat(h.percent ?? "0") * 100, 0);
+        const lpSecure = lpBurnedPct >= 50 || lpLockedPct >= 50;
+
         const redFlags: string[] = [];
         if (isHoneypot) redFlags.push("Honeypot, cannot sell");
-        if (buyTax > 10) redFlags.push(`High buy tax: ${buyTax.toFixed(1)}%`);
-        if (sellTax > 10) redFlags.push(`High sell tax: ${sellTax.toFixed(1)}%`);
+        if (buyTax !== null && buyTax > 10) redFlags.push(`High buy tax: ${buyTax.toFixed(1)}%`);
+        if (sellTax !== null && sellTax > 10) redFlags.push(`High sell tax: ${sellTax.toFixed(1)}%`);
         if (isMintable) redFlags.push("Owner can mint unlimited tokens");
         if (!isOpenSource) redFlags.push("Contract not verified / open source");
         if (slippageModifiable) redFlags.push("Owner can modify slippage");
+        if (canTakeBackOwnership) redFlags.push("Recoverable ownership");
+        if (ownerChangeBalance) redFlags.push("Owner can change balances");
+        if (!lpSecure) redFlags.push("LP not locked");
+        if (holderCount > 0 && holderCount < 200) redFlags.push("Low holder count");
 
-        const greenBadge = redFlags.length === 0 && isOpenSource && !isHoneypot;
-        const riskLevel = isHoneypot || buyTax > 25 || sellTax > 25
-          ? "High Risk"
-          : redFlags.length > 0 ? "Caution" : "Clean";
+        const hasHoneypot = isHoneypot;
+        const hasCriticalFlag = isHoneypot || ownerChangeBalance || canTakeBackOwnership;
+        const hasUnlockedLP = !lpSecure;
+
+        const greenBadge = redFlags.length === 0 && isOpenSource && !isHoneypot && lpSecure;
+        const riskLevel = hasHoneypot ? "High Risk"
+          : hasCriticalFlag ? "High Risk"
+          : hasUnlockedLP || redFlags.length >= 2 ? "High Risk"
+          : redFlags.length >= 1 ? "Caution"
+          : "Clean";
 
         const apolVerdict = buildContractVerdict(tokenData.token_name, tokenData.token_symbol, riskLevel, greenBadge, redFlags);
 

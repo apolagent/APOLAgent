@@ -162,13 +162,25 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     if (lpLockedPct < 50 && lpBurnedPct < 50 && (token || topPair)) {
       flags.push("🔓 LP Not Locked");
     }
+    if (holderRaw > 0 && holderRaw < 200) {
+      flags.push("👥 Low Holder Count");
+    }
+    if (liqUsd !== null && liqUsd < 5000) {
+      flags.push("💧 Very Low Liquidity");
+    }
 
-    // ── Risk level ────────────────────────────────────────────────────────────
+    // ── Risk level (strict — protect users) ──────────────────────────────────
+    const hasHoneypot = flags.some(f => f.includes("HONEYPOT"));
+    const hasUnlockedLP = flags.some(f => f.includes("LP Not Locked"));
+    const hasCriticalFlag = flags.some(f =>
+      f.includes("HONEYPOT") || f.includes("Owner Can Change Balance") || f.includes("Recoverable Ownership")
+    );
     let riskEmoji: string;
-    if (flags.some(f => f.includes("HONEYPOT"))) riskEmoji = "🚨 CRITICAL";
-    else if (flags.length >= 4)                  riskEmoji = "🔴 HIGH RISK";
-    else if (flags.length >= 1)                  riskEmoji = "🟡 MEDIUM RISK";
-    else                                         riskEmoji = "🟢 LOW RISK";
+    if (hasHoneypot)                              riskEmoji = "🚨 CRITICAL";
+    else if (hasCriticalFlag)                     riskEmoji = "🔴 HIGH RISK";
+    else if (hasUnlockedLP || flags.length >= 2)  riskEmoji = "🔴 HIGH RISK";
+    else if (flags.length >= 1)                   riskEmoji = "🟡 MEDIUM RISK";
+    else                                          riskEmoji = "🟢 LOW RISK";
 
     // ── Build message ─────────────────────────────────────────────────────────
     let msg = "";
