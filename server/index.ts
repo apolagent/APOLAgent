@@ -123,14 +123,14 @@ app.use((req, res, next) => {
       }).catch((err: any) => {
         const msg = err?.message ?? String(err);
         log(`Telegram bot failed to start (attempt ${attempt}): ${msg}`, "bot");
-        if (msg.includes("409") && attempt <= 5) {
-          const delay = attempt * 3_000;
+        if (msg.includes("409") && attempt <= 10) {
+          const delay = Math.min(attempt * 5_000, 30_000);
           log(`Retrying bot launch in ${delay / 1000}s...`, "bot");
           setTimeout(() => launchBot(attempt + 1), delay);
         }
       });
     };
-    launchBot();
+    setTimeout(() => launchBot(), 10_000);
 
     const shutdown = () => { bot.stop("SIGTERM"); };
     process.once("SIGTERM", shutdown);
