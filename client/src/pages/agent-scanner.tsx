@@ -987,8 +987,8 @@ export default function AgentScanner() {
           </CardContent>
         </Card>
 
-        {/* Evidence Filing — pre-scan */}
-        {!result && (
+        {/* Evidence Filing — pre-scan (only show for LARP scanner, not CA/wallet) */}
+        {!result && !checkResult && (
           <div>
             <p className="text-xs text-slate-600 uppercase tracking-widest font-semibold mb-3 px-1">Evidence Filing</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
