@@ -218,14 +218,16 @@ export default function Navigation() {
           style={{ gridTemplateColumns: "1fr auto 1fr" }}
         >
           {/* Logo */}
-          <div className="flex items-center gap-2 justify-self-start">
-            <img
-              src="/apol-agent-logo.png"
-              alt="APOL Agent logo"
-              className="w-7 h-7 object-cover"
-            />
-            <span className="font-meme text-lg" style={{ color: G }}>APOL AGENT</span>
-          </div>
+          <Link href="/">
+            <div className="flex items-center gap-2 justify-self-start cursor-pointer" data-testid="link-desktop-home">
+              <img
+                src="/apol-agent-logo.png"
+                alt="APOL Agent logo"
+                className="w-7 h-7 object-cover"
+              />
+              <span className="font-meme text-lg" style={{ color: G }}>APOL AGENT</span>
+            </div>
+          </Link>
 
           {/* Center nav links */}
           <div className="flex items-center gap-5">
@@ -262,14 +264,16 @@ export default function Navigation() {
 
         {/* Mobile / tablet bar */}
         <div className="flex lg:hidden items-center justify-between h-14">
-          <div className="flex items-center gap-2">
-            <img
-              src="/apol-agent-logo.png"
-              alt="APOL Agent logo"
-              className="w-7 h-7 object-cover flex-shrink-0"
-            />
-            <span className="font-meme text-base" style={{ color: G }}>APOL AGENT</span>
-          </div>
+          <Link href="/">
+            <div className="flex items-center gap-2 cursor-pointer" data-testid="link-mobile-home">
+              <img
+                src="/apol-agent-logo.png"
+                alt="APOL Agent logo"
+                className="w-7 h-7 object-cover flex-shrink-0"
+              />
+              <span className="font-meme text-base" style={{ color: G }}>APOL AGENT</span>
+            </div>
+          </Link>
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             data-testid="button-mobile-menu"
@@ -284,6 +288,15 @@ export default function Navigation() {
       {isMobileMenuOpen && (
         <div style={{ background: "#000000", borderTop: "1px solid rgba(0,255,0,0.2)" }}>
           <div className="px-4 pt-3 pb-5 flex flex-col gap-1">
+            <Link href="/" onClick={() => setIsMobileMenuOpen(false)}>
+              <span
+                className="block w-full text-left py-2 text-xs uppercase tracking-widest hover:text-[#00ff00] transition-colors"
+                style={{ fontFamily: "'JetBrains Mono', monospace", color: G, fontWeight: 700 }}
+                data-testid="link-mobile-menu-home"
+              >
+                ← Home
+              </span>
+            </Link>
             {navLinks.map(({ id, label }) => (
               <button
                 key={id}
