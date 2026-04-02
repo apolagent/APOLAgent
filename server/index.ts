@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import { execFile } from "child_process";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createBot } from "./bot";
@@ -136,5 +137,28 @@ app.use((req, res, next) => {
     process.once("SIGINT",  shutdown);
   } else if (bot) {
     log("Bot skipped in dev — only runs in production to avoid conflicts", "bot");
+  }
+
+  // ── Scheduled Tweet Poster (every 12 hours, production only) ──────────────
+  if (isProduction) {
+    const TWELVE_HOURS = 12 * 60 * 60 * 1000;
+
+    const postTweet = () => {
+      log("Running scheduled tweet (main.py)...", "scheduler");
+      execFile("python", ["main.py"], (err, stdout, stderr) => {
+        if (err) {
+          log(`Tweet script error: ${err.message}`, "scheduler");
+        }
+        if (stderr) log(`Tweet stderr: ${stderr}`, "scheduler");
+        if (stdout) log(stdout.trim(), "scheduler");
+      });
+    };
+
+    setTimeout(() => {
+      postTweet();
+      setInterval(postTweet, TWELVE_HOURS);
+    }, 30_000);
+
+    log(`Tweet scheduler active — posting every 12 hours`, "scheduler");
   }
 })();
