@@ -473,7 +473,7 @@ export default function AgentScanner() {
       ? (r.greenBadge ? "passed all security checks" : `red flags: ${r.redFlags?.join(", ")}`)
       : (r.walletFlags?.length ? `flagged for: ${r.walletFlags.join(", ")}` : "no external flags");
     return encodeURIComponent(
-      `APOL SECURITY ALERT\n\n${type} ${short}, ${risk}\nAPOL scan: ${issues}\n\nScanned by @ApolAgent, #APOL #CryptoSafety #DYOR`
+      `APOL SECURITY ALERT\n\n${type} ${short}, ${risk}\nAPOL scan: ${issues}\n\nScanned by @Apol_Agent, #APOL #CryptoSafety #DYOR`
     );
   };
 
