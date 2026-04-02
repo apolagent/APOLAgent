@@ -1,6 +1,23 @@
 import os
+import json
+import time
 import random
 import tweepy
+
+LOCK_FILE = "/tmp/apol_last_tweet.json"
+MIN_INTERVAL = 6 * 60 * 60
+
+now = time.time()
+if os.path.exists(LOCK_FILE):
+    try:
+        with open(LOCK_FILE, "r") as f:
+            last = json.load(f).get("timestamp", 0)
+        if now - last < MIN_INTERVAL:
+            minutes_ago = int((now - last) / 60)
+            print(f"Skipped — last tweet was {minutes_ago} minutes ago. Minimum interval is {MIN_INTERVAL // 3600}h.")
+            exit(0)
+    except Exception:
+        pass
 
 API_KEY = os.environ["API_KEY"]
 API_SECRET = os.environ["API_SECRET"]
@@ -46,6 +63,8 @@ tweet_text = random.choice(tweets)
 try:
     response = client.create_tweet(text=tweet_text)
     tweet_id = response.data["id"]
+    with open(LOCK_FILE, "w") as f:
+        json.dump({"timestamp": now, "tweet_id": tweet_id}, f)
     print(f"Tweet posted successfully! Tweet ID: {tweet_id}")
     print(f"URL: https://x.com/Apol_Agent/status/{tweet_id}")
     print(f"\nPosted:\n{tweet_text}")

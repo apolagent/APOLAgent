@@ -154,10 +154,7 @@ app.use((req, res, next) => {
       });
     };
 
-    setTimeout(() => {
-      postTweet();
-      setInterval(postTweet, TWELVE_HOURS);
-    }, 30_000);
+    setInterval(postTweet, TWELVE_HOURS);
 
     log(`Tweet scheduler active — posting every 12 hours`, "scheduler");
   }
