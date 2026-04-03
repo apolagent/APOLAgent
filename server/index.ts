@@ -144,7 +144,7 @@ app.use((req, res, next) => {
     const CHECK_INTERVAL = 10 * 60 * 1000;
 
     const postTweet = () => {
-      execFile("python", ["main.py"], (err, stdout, stderr) => {
+      execFile("python3", ["main.py"], (err, stdout, stderr) => {
         if (err) {
           log(`Tweet script error: ${err.message}`, "scheduler");
         }
@@ -156,7 +156,7 @@ app.use((req, res, next) => {
     setTimeout(() => {
       postTweet();
       setInterval(postTweet, CHECK_INTERVAL);
-    }, 60_000);
+    }, 15_000);
 
     log("Tweet scheduler active — checking every 10 min, posting every 12h", "scheduler");
   }
