@@ -467,6 +467,11 @@ export default function AgentScanner() {
   const [checkError, setCheckError] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(false);
 
+  const [scanXHandle, setScanXHandle] = useState("");
+  const [scanXResult, setScanXResult] = useState<AgentResult | null>(null);
+  const [scanXError, setScanXError] = useState<string | null>(null);
+  const [isScanningX, setIsScanningX] = useState(false);
+
   useEffect(() => {
     if (!result?.wallet || !result.traceabilityTest.isContract) { setApolCertified(null); return; }
     fetch(`/api/contracts/verified/${result.wallet.toLowerCase()}`)
@@ -492,6 +497,31 @@ export default function AgentScanner() {
       setCheckError("Network error. Please try again.");
     } finally {
       setIsChecking(false);
+    }
+  };
+
+  const handleScanX = async () => {
+    const raw = scanXHandle.trim().replace(/^@/, "").replace(/^https?:\/\/(x|twitter)\.com\//i, "").replace(/\/$/, "").split("/")[0].split("?")[0];
+    if (!raw) return;
+    setIsScanningX(true);
+    setScanXResult(null);
+    setScanXError(null);
+    try {
+      const res = await fetch("/api/agent/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentName: raw, socialLink: `https://x.com/${raw}` }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setScanXError(data.error || "Scan failed");
+      } else {
+        setScanXResult(data);
+      }
+    } catch {
+      setScanXError("Network error. Please try again.");
+    } finally {
+      setIsScanningX(false);
     }
   };
 
@@ -1015,6 +1045,102 @@ export default function AgentScanner() {
                     )}
                   </div>
                 )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Scan X Profile */}
+        <Card style={{ background: "rgba(0,0,0,0.6)", border: `1px solid rgba(0,255,0,0.25)` }}>
+          <CardHeader style={{ paddingBottom: "8px" }}>
+            <CardTitle style={{ fontSize: "14px", fontWeight: 900, letterSpacing: "0.14em", textTransform: "uppercase", color: "#fff", fontFamily: "'JetBrains Mono', monospace", display: "flex", alignItems: "center", gap: "8px" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", fill: G }} xmlns="http://www.w3.org/2000/svg">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.402 6.231H2.744l7.736-8.848L1.254 2.25H8.08l4.259 5.63 5.905-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+              </svg>
+              Scan X Profile
+            </CardTitle>
+            <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", fontFamily: "'JetBrains Mono', monospace", marginTop: "4px" }}>
+              Social forensics scan. Checks account age, follower quality, engagement, and AI agent verification.
+            </p>
+          </CardHeader>
+          <CardContent style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ display: "flex", flexDirection: "row", gap: "8px", flexWrap: "wrap" }}>
+              <Input
+                value={scanXHandle}
+                onChange={(e) => setScanXHandle(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleScanX()}
+                placeholder="@username or https://x.com/username"
+                style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: "12px", flex: 1, minWidth: "200px" }}
+                data-testid="input-scan-x-handle"
+              />
+              <button
+                onClick={handleScanX}
+                disabled={isScanningX}
+                style={{
+                  background: G, color: "#000", border: "none", padding: "8px 20px",
+                  fontFamily: "'JetBrains Mono', monospace", fontWeight: 900, fontSize: "11px",
+                  letterSpacing: "0.1em", textTransform: "uppercase", cursor: isScanningX ? "wait" : "pointer",
+                  display: "flex", alignItems: "center", gap: "6px", opacity: isScanningX ? 0.6 : 1,
+                }}
+                data-testid="button-scan-x"
+              >
+                {isScanningX ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Search size={14} />}
+                {isScanningX ? "SCANNING..." : "SCAN"}
+              </button>
+            </div>
+
+            {scanXError && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.06)", fontSize: "11px", color: "#f87171", fontFamily: "'JetBrains Mono', monospace" }} data-testid="text-scan-x-error">
+                <XCircle size={14} style={{ flexShrink: 0 }} />
+                {scanXError}
+              </div>
+            )}
+
+            {scanXResult && (
+              <div data-testid="div-scan-x-result" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{
+                  border: `2px solid ${scanXResult.verdict === "Fully Autonomous" ? G : scanXResult.verdict === "Digital Puppet" ? "#f87171" : "#facc15"}`,
+                  background: scanXResult.verdict === "Fully Autonomous" ? "rgba(0,255,0,0.06)" : scanXResult.verdict === "Digital Puppet" ? "rgba(255,68,68,0.06)" : "rgba(250,204,21,0.04)",
+                  padding: "20px", textAlign: "center",
+                }}>
+                  <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "6px", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{scanXResult.agentName}</div>
+                  <div style={{
+                    fontSize: "28px", fontWeight: 900, letterSpacing: "0.04em", fontFamily: "'JetBrains Mono', monospace",
+                    color: scanXResult.cognitionScore !== null && scanXResult.cognitionScore >= 71 ? G : scanXResult.cognitionScore !== null && scanXResult.cognitionScore >= 31 ? "#facc15" : scanXResult.cognitionScore !== null ? "#f87171" : "#6b7280",
+                  }}>
+                    {scanXResult.cognitionScore !== null ? `${scanXResult.cognitionScore}%` : "N/A"}
+                  </div>
+                  <div style={{
+                    fontSize: "12px", fontWeight: 900, marginTop: "4px", letterSpacing: "0.12em", textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace",
+                    color: scanXResult.verdict === "Fully Autonomous" ? G : scanXResult.verdict === "Digital Puppet" ? "#f87171" : "#facc15",
+                  }}>
+                    {scanXResult.verdict}
+                  </div>
+                </div>
+
+                {scanXResult.missingData && scanXResult.missingData.length > 0 && (
+                  <div style={{ padding: "10px 14px", border: "1px solid rgba(250,204,21,0.3)", background: "rgba(250,204,21,0.04)" }}>
+                    <div style={{ fontSize: "9px", color: "#facc15", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 900, marginBottom: "6px", fontFamily: "'JetBrains Mono', monospace" }}>Missing Data</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "6px" }}>
+                      {scanXResult.missingData.map((item, i) => (
+                        <span key={i} style={{ fontSize: "10px", padding: "2px 8px", border: "1px solid rgba(250,204,21,0.3)", color: "#facc15", fontFamily: "'JetBrains Mono', monospace" }}>
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.5)", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.4 }}>
+                      This scan is based on social data only. Use the full Agent LARP Scanner above for a complete assessment with wallet and logs.
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: "12px", padding: "14px", border: `1px solid rgba(0,255,0,0.2)`, background: "rgba(0,255,0,0.03)" }}>
+                  <div style={{ width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>🦍</div>
+                  <div>
+                    <div style={{ fontSize: "10px", fontWeight: 900, color: G, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "4px", fontFamily: "'JetBrains Mono', monospace" }}>APOL OFFICER VERDICT</div>
+                    <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.7)", lineHeight: 1.6, fontStyle: "italic", fontFamily: "'JetBrains Mono', monospace" }}>"{scanXResult.apolVerdict}"</div>
+                  </div>
+                </div>
               </div>
             )}
           </CardContent>
