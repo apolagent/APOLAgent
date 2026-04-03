@@ -41,21 +41,21 @@ client = tweepy.Client(
 )
 
 tweets = [
-    "This contract passed audit.\nOwner can still drain funds.\n\nPeople don't read permissions.\n\nWhat are you actually trusting?",
-    "Agents will manage millions.\nMost contracts they use are unsafe.\n\nNo one is talking about this.\n\nWho secures the agents?",
-    "Same wallet cluster.\nSame launch pattern.\nSame exit.\n\nYou've seen this before.\n\nWhy do people still fall for it?",
-    "I scanned 50 contracts today.\n34 had owner-drain functions.\n\nAll of them had audits.\n\nWhat does that tell you?",
-    "Everyone is bullish.\nNo one checked permissions.\n\nThe next rug won't surprise me.\n\nWill it surprise you?",
-    "Another rug. Same pattern.\nYou're still missing it.\n\nStop trusting logos.\nStart reading contracts.",
-    "People trust audits.\nAttackers read them too.\n\nSecurity isn't a badge.\nIt's a process.",
-    "This contract looks safe.\nIt's not.\n\nOne function call and liquidity is gone.\n\nDid your audit catch that?",
-    "Most audited contracts can still drain you.\n\nThe audit checked the code.\nNot the permissions.\n\nThere's a difference.",
-    "3 things to check before buying any token.\n\nOwner privileges.\nLP lock status.\nWallet clusters.\n\nSkip one and you're exit liquidity.",
-    "Contract deployed 2h ago.\nOwner can drain liquidity.\nAudit said safe.\n\nReal-time beats static.\n\nAlways.",
-    "You check the chart.\nYou check the socials.\nYou skip the contract.\n\nThat's exactly what they count on.",
-    "Audits are snapshots.\nExploits are real-time.\n\nThe gap between them is where money disappears.\n\n$APOL watches the gap.",
-    "The forensic layer of Base isn't optional.\nIt's inevitable.\n\nThe only question is who builds it first.",
-    "AI agents are trading onchain right now.\nNo security layer. No permissions check.\n\nWhat could go wrong?",
+    'Contract audited? Good for you. Now go check the hidden owner permissions in the implementation contract. Most don\'t.',
+    'Standard security tools are built to catch common errors. APOL is built to catch the anomalies they ignore.',
+    'The most dangerous functions are often the ones labeled "Emergency." Always verify who holds the key.',
+    'Transparency is a choice. Onchain data is an undeniable fact. We prefer the latter.',
+    'A "Passed Audit" badge is not a shield. It is often just a distraction from the liquidity exit strategy.',
+    'High yield is usually just a premium paid for unquantified risk. APOL quantifies the unquantifiable.',
+    'The blockchain never forgets, but it\'s very good at hiding. Forensic intelligence brings the hidden to light.',
+    'Scanning the surface is for traders. Deep-diving the bytecode is for professionals. Which one are you?',
+    'Your favorite protocol just deployed a new proxy. Did you verify the logic change, or did you just trust the tweet?',
+    'Smart contracts are only as "smart" as the human who didn\'t leave a backdoor. We find the backdoors.',
+    'In a world of hyped launches, Active Onchain Intelligence is the only real signal. Everything else is noise.',
+    'Rugpulls don\'t happen by accident. They are coded in plain sight. You just need the right eyes to see them.',
+    'Technical debt in a smart contract is just a future exploit waiting for a timestamp. Monitor the debt.',
+    'Most "exploits" are actually just features the users didn\'t bother to read in the documentation. We read everything.',
+    'Security isn\'t a state you achieve; it\'s a constant process of onchain verification. APOL never stops.',
 ]
 
 tweet_text = random.choice(tweets)
