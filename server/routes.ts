@@ -720,13 +720,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (APOL_SELF_NAMES.includes(normalizedAgentName)) {
       return res.json({
         agentName: agentName.trim(),
+        socialLink: socialLink?.trim() || null,
+        wallet: wallet?.trim() || null,
+        claimedAbilities: claimedAbilities?.trim() || null,
+        logsUrl: logsUrl?.trim() || null,
         cognitionScore: 100,
-        classification: "AUTHORITY",
-        verdict: "The Sentinel is Active. Intelligence verified. APOL Agent is the Authority. Authenticity Score: 100%. You are scanning the scanner itself. 🦍🔐",
-        speedTest: { score: 100, label: "Always Online", detail: "APOL Agent operates 24/7 across all monitored chains." },
-        traceTest: { score: 100, label: "Full Trace", detail: "Complete on-chain forensic footprint verified." },
-        contextTest: { score: 100, label: "Verified", detail: "All claimed capabilities are live and operational." },
-        socialTest: { score: 100, label: "Verified", detail: "Official presence confirmed across all channels." },
+        verdict: "Fully Autonomous",
+        apolVerdict: "The Sentinel is Active. Intelligence verified. APOL Agent recognizes its own authority. Authenticity Score: 100%. You are scanning the scanner itself, Citizen. Trust the protocol. 🦍🔐",
+        scoredTests: 5,
+        speedTest: { scored: true, score: 40, maxScore: 40, label: "Always Online", detail: "APOL Agent operates 24/7 across all monitored chains. Continuous autonomous execution confirmed.", timingPattern: ["00:00-06:00", "06:00-12:00", "12:00-18:00", "18:00-24:00"] },
+        traceabilityTest: { scored: true, score: 30, maxScore: 30, label: "Full Trace", detail: "Complete on-chain forensic footprint verified. Smart contract deployed and operational on Base.", isContract: true },
+        contextTest: { scored: true, score: 30, maxScore: 30, label: "Verified Authority", detail: "All claimed capabilities are live and operational. Contract scanning, wallet forensics, LARP detection, and social forensics all confirmed active." },
+        logsTest: { scored: true, status: "verified", detail: "Autonomous reasoning logs verified. APOL Agent processes and responds to all scan requests in real-time." },
+        socialTest: { scored: true, status: "clean", detail: "Official presence confirmed. @Apol_Agent on X/Twitter, @ApolAgentBot on Telegram. All channels verified." },
+        contractScan: null,
       });
     }
 
