@@ -928,6 +928,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     if (scoredCount === 0) verdict = "Inconclusive";
 
+    const missingData: string[] = [];
+    if (!w) missingData.push("Agent Wallet / CA");
+    if (!lu) missingData.push("Logs URL / API Endpoint");
+    if (!claims) missingData.push("Claimed Abilities");
+    if (!sl) missingData.push("Social Link");
+    const isPartial = missingData.length >= 2;
+
     const apolVerdict = buildAgentVerdict(agentName.trim(), cognitionScore, verdict);
 
     // ── Contract Scan summary (only when wallet is a token contract) ──────────
@@ -981,6 +988,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({
       agentName: agentName.trim(), socialLink: sl, wallet: w, claimedAbilities: claims, logsUrl: lu,
       cognitionScore, verdict, apolVerdict, scoredTests: scoredCount,
+      missingData, isPartial,
       speedTest: { scored: speedScored, score: speedScore, maxScore: 40, label: speedLabel, detail: speedDetail, timingPattern: timingPattern.slice(0, 5) },
       traceabilityTest: { scored: traceScored, score: traceScore, maxScore: 30, label: traceLabel, detail: traceDetail, isContract },
       contextTest: { scored: contextScored, score: contextScore, maxScore: 30, label: contextLabel, detail: contextDetail },

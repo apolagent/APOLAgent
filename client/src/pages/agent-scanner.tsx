@@ -87,6 +87,8 @@ type AgentResult = {
   verdict: "Digital Puppet" | "Semi-Autonomous" | "Fully Autonomous" | "Low Autonomy" | "Inconclusive";
   apolVerdict: string;
   scoredTests: number;
+  missingData?: string[];
+  isPartial?: boolean;
   speedTest: TestResult;
   traceabilityTest: TestResult;
   contextTest: TestResult;
@@ -118,6 +120,7 @@ function StatusBadge({ status, label }: { status: StatusColor; label: string }) 
 function oneLineSummary(r: AgentResult): string {
   if (r.verdict === "Inconclusive") return "No verifiable evidence submitted.";
   if (r.verdict === "Low Autonomy") return "Contract security verified but AI identity could not be confirmed. Not necessarily a risk.";
+  if (r.isPartial) return "Verdict based on limited data. Provide wallet and logs for a complete assessment.";
   const parts: string[] = [];
   if (r.speedTest.scored) {
     if (r.speedTest.score >= 25) parts.push("24/7 on-chain activity");
@@ -291,6 +294,28 @@ function AdvancedResults({ result }: { result: AgentResult }) {
           <div style={{ fontSize: "10px", color: riskColor, fontWeight: 700, letterSpacing: "0.06em" }}>{result.verdict.toUpperCase()}</div>
         </div>
       </div>
+
+      {/* ── Missing Data Notice ── */}
+      {result.missingData && result.missingData.length > 0 && (
+        <div style={{ padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(250,204,21,0.04)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+            <AlertTriangle size={12} color="#facc15" />
+            <span style={{ fontSize: "9px", color: "#facc15", letterSpacing: "0.12em", textTransform: "uppercase" }}>Incomplete Data</span>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "8px" }}>
+            {result.missingData.map((item, i) => (
+              <span key={i} style={{ fontSize: "10px", padding: "2px 8px", border: "1px solid rgba(250,204,21,0.3)", color: "#facc15", letterSpacing: "0.04em" }} data-testid={`missing-data-${i}`}>
+                {item}
+              </span>
+            ))}
+          </div>
+          <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.5)", lineHeight: 1.4 }}>
+            {result.isPartial
+              ? "Verdict is based on limited data. Provide wallet address and logs URL for a complete AI autonomy assessment."
+              : "Some optional data is missing. Results may be more accurate with additional inputs."}
+          </div>
+        </div>
+      )}
 
       {/* ── Contract Security (only if contract data exists) ── */}
       {cs && (

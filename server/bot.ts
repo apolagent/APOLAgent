@@ -1226,15 +1226,24 @@ async function buildSocialScan(input: string, siteUrl: string): Promise<string> 
       msg += `🧠 *Cognition Score:* 100% — Fully Autonomous\n`;
       msg += `🚨 *Verdict:* _✅ AUTHENTICATED — Official APOL Forensic Node detected. Trace is valid._\n\n`;
       msg += `_The Sentinel is new, but the logic is ancient. Verification complete._ 🦍🔐\n\n`;
-    } else if (cognitionScore !== null && agentVerdict) {
-      const scoreEmoji = cognitionScore >= 71 ? "🟢" : cognitionScore >= 31 ? "🟡" : "🔴";
-      msg += `🧠 *Cognition Score:* ${scoreEmoji} ${cognitionScore}% — ${agentVerdict}\n`;
-      msg += `🚨 *Social Verdict:* _${verdict}_\n\n`;
-      if (agentApolVerdict) {
-        msg += `🦍 *APOL Assessment:*\n_${agentApolVerdict}_\n\n`;
-      }
     } else {
       msg += `🚨 *Social Verdict:* _${verdict}_\n\n`;
+
+      const missing: string[] = [];
+      if (!linkedWallet) missing.push("Agent Wallet / CA");
+      missing.push("Logs URL / API Endpoint");
+
+      if (missing.length > 0) {
+        msg += `📋 *Missing Data:*\n`;
+        missing.forEach(m => (msg += `  ⚪ ${m}\n`));
+        msg += `\n⚠️ _This verdict is based only on social profile data. A full AI autonomy verdict requires a wallet address and reasoning logs. Use /scanagent with full details for a complete assessment._\n\n`;
+      }
+
+      if (cognitionScore !== null && agentVerdict) {
+        const scoreEmoji = cognitionScore >= 71 ? "🟢" : cognitionScore >= 31 ? "🟡" : "🔴";
+        msg += `🧠 *Partial Cognition Score:* ${scoreEmoji} ${cognitionScore}% — ${agentVerdict}\n`;
+        msg += `_Based on available data only. Score may change with wallet/logs._\n\n`;
+      }
     }
 
     msg += `🔍 [Full Report](${siteUrl}/agent-scanner)`;
