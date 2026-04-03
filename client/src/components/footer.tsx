@@ -88,46 +88,6 @@ export default function Footer() {
             >
               Paragraph
             </a>
-            <span style={{ color: "rgba(255,255,255,0.2)", margin: "0 10px", fontSize: "10px" }}>|</span>
-            <a
-              href="https://x.com/Apol_Agent"
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid="link-twitter"
-              style={{
-                fontSize: "10px",
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                color: "rgba(255,255,255,0.5)",
-                textDecoration: "none",
-                fontFamily: "JetBrains Mono, monospace",
-                transition: "color 0.15s",
-              }}
-              onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
-              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}
-            >
-              X / Twitter
-            </a>
-            <span style={{ color: "rgba(255,255,255,0.2)", margin: "0 10px", fontSize: "10px" }}>|</span>
-            <a
-              href="https://t.me/ApolAgentBot"
-              target="_blank"
-              rel="noopener noreferrer"
-              data-testid="link-telegram"
-              style={{
-                fontSize: "10px",
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                color: "rgba(255,255,255,0.5)",
-                textDecoration: "none",
-                fontFamily: "JetBrains Mono, monospace",
-                transition: "color 0.15s",
-              }}
-              onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
-              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}
-            >
-              Telegram
-            </a>
           </div>
 
           {/* Operational disclaimer */}
