@@ -1004,6 +1004,18 @@ async function buildSocialScan(input: string, siteUrl: string): Promise<string> 
       );
     }
 
+    const apolOwnHandles = ["apol_agent", "apolagent"];
+    if (apolOwnHandles.includes(username.toLowerCase())) {
+      return (
+        `🦍 *APOL AGENT — SELF RECOGNITION*\n\n` +
+        `*The Sentinel is Active. Intelligence verified.*\n\n` +
+        `🐦 Profile: @${username}\n` +
+        `Authenticity Score: *100%*\n` +
+        `Status: *AUTHORITY CONFIRMED* ✅\n\n` +
+        `You are scanning the scanner itself, Citizen. APOL Agent recognizes its own authority. All social channels verified. Trust the protocol. 🔐`
+      );
+    }
+
     const headers: Record<string, string> = {
       "x-rapidapi-key":  RAPIDAPI_KEY,
       "x-rapidapi-host": RAPIDAPI_HOST,
