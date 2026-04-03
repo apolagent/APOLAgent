@@ -2,6 +2,13 @@ import os
 import json
 import time
 import random
+import sys
+
+PAUSED = True
+if PAUSED:
+    print("Tweet posting is PAUSED. Set PAUSED=False to re-enable.")
+    sys.exit(0)
+
 import tweepy
 
 LOCK_FILE = "/tmp/apol_last_tweet.json"
