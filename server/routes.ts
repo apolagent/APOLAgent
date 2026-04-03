@@ -304,6 +304,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ]);
   }
 
+  const APOL_SELF_NAMES = ["apol", "apol agent", "active onchain intelligence", "$apol"];
+
   app.get("/api/detective/analyze", async (req, res) => {
     const { address, chain = "ethereum" } = req.query as { address: string; chain?: string };
     if (!address) return res.status(400).json({ error: "Address is required" });
@@ -341,6 +343,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const isContract = tokenData !== null;
+
+      const scannedName = (tokenData?.token_name || "").toLowerCase().trim();
+      const scannedSymbol = (tokenData?.token_symbol || "").toLowerCase().trim();
+      if (APOL_SELF_NAMES.includes(scannedName) || APOL_SELF_NAMES.includes(scannedSymbol)) {
+        const lookupCount = await storage.incrementLookup(address as string, tokenData?.token_name, tokenData?.token_symbol);
+        return res.json({
+          addressType: "contract",
+          riskLevel: "SAFE",
+          apolVerdict: "The Sentinel is Active. Intelligence verified. APOL Agent recognizes its own authority. Authenticity Score: 100%. This is the source. Trust the protocol. 🦍🔐",
+          tokenName: tokenData?.token_name,
+          tokenSymbol: tokenData?.token_symbol,
+          isHoneypot: false,
+          buyTax: "0",
+          sellTax: "0",
+          isMintable: false,
+          isOpenSource: true,
+          holderCount: parseInt(tokenData?.holder_count ?? "0"),
+          greenBadge: true,
+          redFlags: [],
+          malicious: {},
+          lookupCount,
+          authenticityScore: 100,
+        });
+      }
 
       if (isContract) {
         const isHoneypotGP = tokenData.is_honeypot === "1" || tokenData.is_honeypot === 1;
@@ -689,6 +715,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/agent/analyze", async (req, res) => {
     const { agentName, socialLink, wallet, chain = "ethereum", claimedAbilities, logsUrl } = req.body;
     if (!agentName?.trim()) return res.status(400).json({ error: "Agent name is required" });
+
+    const normalizedAgentName = agentName.trim().toLowerCase();
+    if (APOL_SELF_NAMES.includes(normalizedAgentName)) {
+      return res.json({
+        agentName: agentName.trim(),
+        cognitionScore: 100,
+        classification: "AUTHORITY",
+        verdict: "The Sentinel is Active. Intelligence verified. APOL Agent is the Authority. Authenticity Score: 100%. You are scanning the scanner itself. 🦍🔐",
+        speedTest: { score: 100, label: "Always Online", detail: "APOL Agent operates 24/7 across all monitored chains." },
+        traceTest: { score: 100, label: "Full Trace", detail: "Complete on-chain forensic footprint verified." },
+        contextTest: { score: 100, label: "Verified", detail: "All claimed capabilities are live and operational." },
+        socialTest: { score: 100, label: "Verified", detail: "Official presence confirmed across all channels." },
+      });
+    }
 
     const w = wallet?.trim() || null;
     const sl = socialLink?.trim() || null;

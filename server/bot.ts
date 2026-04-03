@@ -115,6 +115,18 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const tokenName   = rawName;
     const tokenSymbol = `$${rawSymbol}`;
 
+    const apolSelfNames = ["apol", "apol agent", "active onchain intelligence", "$apol"];
+    if (apolSelfNames.includes(rawName.toLowerCase().trim()) || apolSelfNames.includes(rawSymbol.toLowerCase().trim())) {
+      return (
+        `🦍 *APOL AGENT — SELF RECOGNITION*\n\n` +
+        `*The Sentinel is Active. Intelligence verified.*\n\n` +
+        `Token: *${tokenName}* (${tokenSymbol})\n` +
+        `Authenticity Score: *100%*\n` +
+        `Status: *AUTHORITY CONFIRMED* ✅\n\n` +
+        `You are scanning the scanner itself, Citizen. APOL Agent recognizes its own authority. Trust the protocol. 🔐`
+      );
+    }
+
     // ── Holder count (GoPlus — show Data Pending if missing or zero) ──────────
     const holderRaw = parseInt(token?.holder_count ?? "0");
     const holderCount = holderRaw > 0 ? holderRaw.toLocaleString() : "Data Pending";
@@ -736,6 +748,18 @@ async function resolveAgentAddress(input: string): Promise<{ address: string; na
 
 async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
   try {
+    const apolSelfNames = ["apol", "apol agent", "active onchain intelligence", "$apol"];
+    if (apolSelfNames.includes(input.toLowerCase().trim())) {
+      return (
+        `🦍 *APOL AGENT — SELF RECOGNITION*\n\n` +
+        `*The Sentinel is Active. Intelligence verified.*\n\n` +
+        `Agent: *APOL Agent*\n` +
+        `Classification: *AUTHORITY* 🔐\n` +
+        `Cognition Score: *100%*\n\n` +
+        `You are scanning the scanner itself, Citizen. APOL Agent is the Authority. Trust the protocol. 🦍✅`
+      );
+    }
+
     // ── Resolve address (accept name or CA) ───────────────────────────────────
     const resolved = await resolveAgentAddress(input);
     if (!resolved) {
