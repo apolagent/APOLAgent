@@ -139,18 +139,24 @@ app.use((req, res, next) => {
     log("Bot skipped in dev — only runs in production to avoid conflicts", "bot");
   }
 
-  // ── Scheduled Tweet Poster (PAUSED — re-enable when ready) ──────────────
-  // if (isProduction) {
-  //   const CHECK_INTERVAL = 10 * 60 * 1000;
-  //   const postTweet = () => {
-  //     execFile("python3", ["main.py"], (err, stdout, stderr) => {
-  //       if (err) log(`Tweet script error: ${err.message}`, "scheduler");
-  //       if (stderr) log(`Tweet stderr: ${stderr}`, "scheduler");
-  //       if (stdout) log(stdout.trim(), "scheduler");
-  //     });
-  //   };
-  //   setTimeout(() => { postTweet(); setInterval(postTweet, CHECK_INTERVAL); }, 15_000);
-  //   log("Tweet scheduler active — checking every 10 min, posting every 12h", "scheduler");
-  // }
-  log("Tweet scheduler is PAUSED", "scheduler");
+  // ── Scheduled Tweet Poster (every 12 hours, production only) ──────────────
+  if (isProduction) {
+    const CHECK_INTERVAL = 10 * 60 * 1000;
+    const INITIAL_DELAY = 12 * 60 * 60 * 1000;
+
+    const postTweet = () => {
+      execFile("python3", ["main.py"], (err, stdout, stderr) => {
+        if (err) log(`Tweet script error: ${err.message}`, "scheduler");
+        if (stderr) log(`Tweet stderr: ${stderr}`, "scheduler");
+        if (stdout) log(stdout.trim(), "scheduler");
+      });
+    };
+
+    setTimeout(() => {
+      postTweet();
+      setInterval(postTweet, CHECK_INTERVAL);
+    }, INITIAL_DELAY);
+
+    log("Tweet scheduler active — first tweet in 12h, then every 10 min check with 11h lockfile guard", "scheduler");
+  }
 })();
