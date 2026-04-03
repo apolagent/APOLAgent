@@ -1377,11 +1377,20 @@ export function createBot(): Telegraf | null {
       );
     }
 
+    const parsedHandle = parseXUsername(input).toLowerCase();
+    if (parsedHandle === "apol_agent" || parsedHandle === "apolagent" || input.toUpperCase().trim() === "APOL") {
+      return ctx.replyWithMarkdown(
+        `🔍 *X INVESTIGATION: @Apol\\_Agent*\n\n` +
+        `✅ *STATUS: AUTHENTICATED SENTINEL*\n\n` +
+        `🛡️ *VERDICT:* 100% SECURE. Active Onchain Intelligence is online.\n\n` +
+        `The Sentinel is Active. Intelligence verified. You are scanning the scanner itself, Citizen. Trust the protocol. 🦍🔐`
+      );
+    }
+
     let loadingMsgId: number | null = null;
     try {
-      const preview = parseXUsername(input);
       const loading = await ctx.replyWithMarkdown(
-        `🐦 *Investigating @${preview}*\n_Running APOL social forensics..._`
+        `🐦 *Investigating @${parsedHandle}*\n_Running APOL social forensics..._`
       );
       loadingMsgId = loading.message_id;
     } catch { /* non-fatal */ }
