@@ -33,28 +33,12 @@ proxy_url = f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_IP}:{PROXY_PORT}"
 os.environ["HTTP_PROXY"] = proxy_url
 os.environ["HTTPS_PROXY"] = proxy_url
 
-auth = tweepy.OAuth1UserHandler(API_KEY, API_SECRET, ACCESS_TOKEN, ACCESS_SECRET)
-api_v1 = tweepy.API(auth)
-
 client = tweepy.Client(
     consumer_key=API_KEY,
     consumer_secret=API_SECRET,
     access_token=ACCESS_TOKEN,
     access_token_secret=ACCESS_SECRET,
 )
-
-banners = [
-    "tweet_images/banner_01.png",
-    "tweet_images/banner_02.png",
-    "tweet_images/banner_03.png",
-    "tweet_images/banner_04.png",
-    "tweet_images/banner_05.png",
-    "tweet_images/banner_06.png",
-    "tweet_images/banner_07.png",
-    "tweet_images/banner_08.png",
-    "tweet_images/banner_09.png",
-    "tweet_images/banner_10.png",
-]
 
 tweets = [
     "This contract passed audit.\nOwner can still drain funds.\n\nPeople don't read permissions.\n\nWhat are you actually trusting?",
@@ -75,17 +59,14 @@ tweets = [
 ]
 
 tweet_text = random.choice(tweets)
-banner = random.choice(banners)
 
 try:
-    media = api_v1.media_upload(filename=banner)
-    response = client.create_tweet(text=tweet_text, media_ids=[media.media_id])
+    response = client.create_tweet(text=tweet_text)
     tweet_id = response.data["id"]
     with open(LOCK_FILE, "w") as f:
         json.dump({"timestamp": now, "tweet_id": tweet_id}, f)
     print(f"Tweet posted successfully! Tweet ID: {tweet_id}")
     print(f"URL: https://x.com/Apol_Agent/status/{tweet_id}")
-    print(f"Banner: {banner}")
     print(f"\nPosted:\n{tweet_text}")
 except Exception as e:
     print(f"Failed to post tweet: {e}")
