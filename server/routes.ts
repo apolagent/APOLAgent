@@ -1012,6 +1012,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // ── /api/scanx — Social forensics (same data as Telegram /scanx) ────────
+  app.get("/api/scanx", async (req, res) => {
+    const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
+    const RAPIDAPI_HOST = "twitter241.p.rapidapi.com";
+    const input = (req.query.username as string || "").trim();
+
+    if (!RAPIDAPI_KEY) return res.status(503).json({ error: "Social forensics module offline." });
+
+    const username = input.replace(/^@/, "").replace(/^https?:\/\/(x|twitter)\.com\//i, "").replace(/\/$/, "").split("/")[0].split("?")[0];
+    if (!username || username.length < 1 || username.length > 50) return res.status(400).json({ error: "Invalid username." });
+
+    const apolHandles = ["apol_agent", "apolagent"];
+    const isApolSelf = apolHandles.includes(username.toLowerCase());
+
+    try {
+      const headers: Record<string, string> = { "x-rapidapi-key": RAPIDAPI_KEY, "x-rapidapi-host": RAPIDAPI_HOST };
+
+      const userRes = await fetch(`https://${RAPIDAPI_HOST}/user?username=${encodeURIComponent(username)}`, { headers, signal: AbortSignal.timeout(12_000) });
+      const userRaw: any = await userRes.json();
+      const userResult: any = userRaw?.result?.data?.user?.result ?? {};
+      const legacy: any = userResult?.legacy ?? {};
+      const core: any = userResult?.core ?? {};
+
+      if (!legacy?.followers_count && !core?.name) return res.status(404).json({ error: `No X profile found for "${username}".` });
+
+      const userId = userResult?.rest_id ?? "";
+      let tweets: any[] = [];
+      if (userId) {
+        try {
+          const tweetsRes = await fetch(`https://${RAPIDAPI_HOST}/user-tweets?user_id=${encodeURIComponent(userId)}&count=5`, { headers, signal: AbortSignal.timeout(12_000) });
+          const tweetsData: any = await tweetsRes.json();
+          const instructions: any[] = tweetsData?.result?.timeline?.instructions ?? [];
+          const entries: any[] = instructions.find((i: any) => i?.type === "TimelineAddEntries")?.entries ?? [];
+          tweets = entries.map((e: any) => e?.content?.itemContent?.tweet_results?.result?.legacy).filter(Boolean).slice(0, 5);
+        } catch { /* non-fatal */ }
+      }
+
+      const displayName = core.name ?? username;
+      const followers = parseInt(legacy.followers_count ?? "0");
+      const following = parseInt(legacy.friends_count ?? "0");
+      const isVerified = !!(userResult.is_blue_verified || legacy.verified);
+      const totalTweets = parseInt(legacy.statuses_count ?? "0");
+      const bio = legacy.description ?? "";
+      const profileImage = legacy.profile_image_url_https ?? null;
+
+      let joinedDate = "Unknown";
+      let ageDays = 0;
+      if (core.created_at) {
+        const createdAt = new Date(core.created_at);
+        if (!isNaN(createdAt.getTime())) {
+          joinedDate = createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+          ageDays = Math.floor((Date.now() - createdAt.getTime()) / 86_400_000);
+        }
+      }
+
+      const avgLikes = tweets.length > 0 ? Math.round(tweets.reduce((s: number, t: any) => s + parseInt(t.favorite_count ?? "0"), 0) / tweets.length) : 0;
+      const avgRetweets = tweets.length > 0 ? Math.round(tweets.reduce((s: number, t: any) => s + parseInt(t.retweet_count ?? "0"), 0) / tweets.length) : 0;
+      const followRatio = following > 0 ? (followers / following).toFixed(2) : "∞";
+      const engagementPct = followers > 0 ? ((avgLikes + avgRetweets) / followers * 100) : 0;
+
+      const flags: { type: "critical" | "warning" | "info"; text: string }[] = [];
+      if (isApolSelf) {
+        if (ageDays > 0 && ageDays < 90) flags.push({ type: "info", text: "PLANNED DEPLOYMENT — Sentinel Initial Phase" });
+      } else {
+        if (ageDays > 0 && ageDays < 30) flags.push({ type: "critical", text: "HIGH RISK FRESH ACCOUNT — Profile less than 30 days old" });
+        else if (ageDays > 0 && ageDays < 90) flags.push({ type: "warning", text: "New account — less than 90 days old" });
+        if (followers > 10_000 && tweets.length > 0 && avgLikes < 10) flags.push({ type: "critical", text: "BOTTED FOLLOWERS — 10K+ followers but avg < 10 likes" });
+        if (following > followers * 3 && followers < 2_000) flags.push({ type: "warning", text: "Follow-back pattern — following far exceeds followers" });
+        if (totalTweets < 5 && followers > 500) flags.push({ type: "warning", text: "Ghost account — very few posts for follower count" });
+        if (engagementPct > 20 && followers > 500) flags.push({ type: "warning", text: "Unusually high engagement — verify authenticity" });
+      }
+
+      let engagementRating: string;
+      if (tweets.length === 0) engagementRating = "Data Pending";
+      else if (engagementPct >= 2.0) engagementRating = "High";
+      else if (engagementPct >= 0.3) engagementRating = "Average";
+      else engagementRating = "Low";
+
+      let verdict: string;
+      if (isApolSelf) {
+        verdict = "AUTHENTICATED — Official APOL Forensic Node";
+      } else {
+        const critFlags = flags.filter(f => f.type === "critical").length;
+        const warnFlags = flags.filter(f => f.type === "warning").length;
+        if (critFlags >= 1) verdict = "BOT ACTIVITY DETECTED";
+        else if (warnFlags >= 2) verdict = "Multiple Suspicious Patterns";
+        else if (warnFlags === 1) verdict = "Suspicious Patterns Detected";
+        else if (ageDays > 365 && followers > 1_000 && engagementPct >= 0.3) verdict = "Likely Authentic";
+        else if (ageDays < 180 || followers < 100) verdict = "Inconclusive — Insufficient History";
+        else verdict = "No Red Flags Detected";
+      }
+
+      const verdictLevel: "green" | "yellow" | "red" | "grey" =
+        isApolSelf ? "green" :
+        flags.some(f => f.type === "critical") ? "red" :
+        flags.some(f => f.type === "warning") ? "yellow" :
+        verdict === "Likely Authentic" || verdict === "No Red Flags Detected" ? "green" : "grey";
+
+      let linkedCA: string | null = null;
+      let linkedSymbol: string | null = null;
+      try {
+        const dexSearch: any = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(username)}`, { signal: AbortSignal.timeout(8_000) }).then(r => r.json());
+        const basePairs: any[] = (dexSearch?.pairs ?? []).filter((p: any) => p.chainId === "base");
+        const match = basePairs.find((p: any) => (p.info?.socials ?? []).some((s: any) => s.type === "twitter" && s.url.toLowerCase().includes(username.toLowerCase())));
+        if (match) { linkedCA = match.baseToken.address; linkedSymbol = match.baseToken.symbol; }
+      } catch { /* non-fatal */ }
+
+      res.json({
+        username, displayName, bio, profileImage,
+        followers, following, followRatio, totalTweets,
+        isVerified, joinedDate, ageDays,
+        engagement: { rating: engagementRating, avgLikes, avgRetweets, pct: parseFloat(engagementPct.toFixed(2)) },
+        flags,
+        verdict, verdictLevel,
+        linkedCA, linkedSymbol,
+        isApolSelf,
+      });
+    } catch (err: any) {
+      console.error("[scanx] error:", err?.message ?? err);
+      res.status(500).json({ error: "Social scan failed. Please try again." });
+    }
+  });
+
   app.get("/api/detective/flagged", async (req, res) => {
     try {
       const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);

@@ -468,7 +468,7 @@ export default function AgentScanner() {
   const [isChecking, setIsChecking] = useState(false);
 
   const [scanXHandle, setScanXHandle] = useState("");
-  const [scanXResult, setScanXResult] = useState<AgentResult | null>(null);
+  const [scanXResult, setScanXResult] = useState<any | null>(null);
   const [scanXError, setScanXError] = useState<string | null>(null);
   const [isScanningX, setIsScanningX] = useState(false);
 
@@ -501,17 +501,13 @@ export default function AgentScanner() {
   };
 
   const handleScanX = async () => {
-    const raw = scanXHandle.trim().replace(/^@/, "").replace(/^https?:\/\/(x|twitter)\.com\//i, "").replace(/\/$/, "").split("/")[0].split("?")[0];
+    const raw = scanXHandle.trim();
     if (!raw) return;
     setIsScanningX(true);
     setScanXResult(null);
     setScanXError(null);
     try {
-      const res = await fetch("/api/agent/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentName: raw, socialLink: `https://x.com/${raw}` }),
-      });
+      const res = await fetch(`/api/scanx?username=${encodeURIComponent(raw)}`);
       const data = await res.json();
       if (!res.ok) {
         setScanXError(data.error || "Scan failed");
@@ -1096,53 +1092,102 @@ export default function AgentScanner() {
               </div>
             )}
 
-            {scanXResult && (
+            {scanXResult && (() => {
+              const r = scanXResult;
+              const vc = r.verdictLevel === "green" ? G : r.verdictLevel === "red" ? "#f87171" : r.verdictLevel === "yellow" ? "#facc15" : "#6b7280";
+              return (
               <div data-testid="div-scan-x-result" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div style={{
-                  border: `2px solid ${scanXResult.verdict === "Fully Autonomous" ? G : scanXResult.verdict === "Digital Puppet" ? "#f87171" : "#facc15"}`,
-                  background: scanXResult.verdict === "Fully Autonomous" ? "rgba(0,255,0,0.06)" : scanXResult.verdict === "Digital Puppet" ? "rgba(255,68,68,0.06)" : "rgba(250,204,21,0.04)",
-                  padding: "20px", textAlign: "center",
-                }}>
-                  <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "6px", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{scanXResult.agentName}</div>
-                  <div style={{
-                    fontSize: "28px", fontWeight: 900, letterSpacing: "0.04em", fontFamily: "'JetBrains Mono', monospace",
-                    color: scanXResult.cognitionScore !== null && scanXResult.cognitionScore >= 71 ? G : scanXResult.cognitionScore !== null && scanXResult.cognitionScore >= 31 ? "#facc15" : scanXResult.cognitionScore !== null ? "#f87171" : "#6b7280",
-                  }}>
-                    {scanXResult.cognitionScore !== null ? `${scanXResult.cognitionScore}%` : "N/A"}
-                  </div>
-                  <div style={{
-                    fontSize: "12px", fontWeight: 900, marginTop: "4px", letterSpacing: "0.12em", textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace",
-                    color: scanXResult.verdict === "Fully Autonomous" ? G : scanXResult.verdict === "Digital Puppet" ? "#f87171" : "#facc15",
-                  }}>
-                    {scanXResult.verdict}
+                {/* Profile header */}
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "14px", border: "1px solid rgba(255,255,255,0.1)", background: "rgba(0,0,0,0.3)" }}>
+                  {r.profileImage && <img src={r.profileImage.replace("_normal", "_200x200")} alt="" style={{ width: "48px", height: "48px", borderRadius: "0" }} />}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ fontSize: "14px", fontWeight: 900, color: "#fff", fontFamily: "'JetBrains Mono', monospace" }}>{r.displayName}</span>
+                      {r.isVerified && <span style={{ fontSize: "10px", padding: "1px 6px", background: "rgba(29,155,240,0.2)", color: "#1d9bf0", fontWeight: 700 }}>✓</span>}
+                    </div>
+                    <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", fontFamily: "'JetBrains Mono', monospace" }}>@{r.username}</div>
                   </div>
                 </div>
 
-                {scanXResult.missingData && scanXResult.missingData.length > 0 && (
-                  <div style={{ padding: "10px 14px", border: "1px solid rgba(250,204,21,0.3)", background: "rgba(250,204,21,0.04)" }}>
-                    <div style={{ fontSize: "9px", color: "#facc15", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 900, marginBottom: "6px", fontFamily: "'JetBrains Mono', monospace" }}>Missing Data</div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "6px" }}>
-                      {scanXResult.missingData.map((item, i) => (
-                        <span key={i} style={{ fontSize: "10px", padding: "2px 8px", border: "1px solid rgba(250,204,21,0.3)", color: "#facc15", fontFamily: "'JetBrains Mono', monospace" }}>
-                          {item}
-                        </span>
-                      ))}
-                    </div>
-                    <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.5)", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.4 }}>
-                      This scan is based on social data only. Use the full Agent LARP Scanner above for a complete assessment with wallet and logs.
-                    </div>
+                {/* Bio */}
+                {r.bio && (
+                  <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)", fontFamily: "'JetBrains Mono', monospace", padding: "0 4px", lineHeight: 1.5, fontStyle: "italic" }}>
+                    "{r.bio.slice(0, 200)}"
                   </div>
                 )}
 
-                <div style={{ display: "flex", gap: "12px", padding: "14px", border: `1px solid rgba(0,255,0,0.2)`, background: "rgba(0,255,0,0.03)" }}>
-                  <div style={{ width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>🦍</div>
-                  <div>
-                    <div style={{ fontSize: "10px", fontWeight: 900, color: G, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "4px", fontFamily: "'JetBrains Mono', monospace" }}>APOL OFFICER VERDICT</div>
-                    <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.7)", lineHeight: 1.6, fontStyle: "italic", fontFamily: "'JetBrains Mono', monospace" }}>"{scanXResult.apolVerdict}"</div>
+                {/* Stats grid */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
+                  {[
+                    { label: "Followers", value: r.followers.toLocaleString() },
+                    { label: "Following", value: r.following.toLocaleString() },
+                    { label: "Ratio", value: `${r.followRatio}:1` },
+                    { label: "Joined", value: r.joinedDate },
+                    { label: "Age", value: `${r.ageDays} days` },
+                    { label: "Tweets", value: r.totalTweets.toLocaleString() },
+                  ].map((s, i) => (
+                    <div key={i} style={{ padding: "8px 10px", border: "1px solid rgba(255,255,255,0.08)", background: "rgba(0,0,0,0.3)", textAlign: "center" }}>
+                      <div style={{ fontSize: "8px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", marginBottom: "4px" }}>{s.label}</div>
+                      <div style={{ fontSize: "12px", fontWeight: 900, color: "#fff", fontFamily: "'JetBrains Mono', monospace" }}>{s.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Engagement */}
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <div style={{ flex: 1, padding: "8px 12px", border: `1px solid rgba(255,255,255,0.08)`, background: "rgba(0,0,0,0.3)" }}>
+                    <div style={{ fontSize: "8px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", marginBottom: "4px" }}>Engagement</div>
+                    <div style={{ fontSize: "11px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: r.engagement.rating === "High" ? G : r.engagement.rating === "Low" ? "#f87171" : "#facc15" }}>
+                      {r.engagement.rating} {r.engagement.rating !== "Data Pending" && `(${r.engagement.avgLikes}❤ / ${r.engagement.avgRetweets}🔁 avg)`}
+                    </div>
                   </div>
                 </div>
+
+                {/* Risk Flags */}
+                {r.flags.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <div style={{ fontSize: "9px", color: "#f87171", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 900, fontFamily: "'JetBrains Mono', monospace" }}>Risk Flags</div>
+                    {r.flags.map((f: any, i: number) => (
+                      <div key={i} style={{
+                        display: "flex", alignItems: "center", gap: "8px", padding: "6px 10px", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700,
+                        border: `1px solid ${f.type === "critical" ? "rgba(255,68,68,0.4)" : f.type === "info" ? "rgba(0,255,0,0.3)" : "rgba(250,204,21,0.4)"}`,
+                        color: f.type === "critical" ? "#f87171" : f.type === "info" ? G : "#facc15",
+                        background: f.type === "critical" ? "rgba(255,68,68,0.04)" : f.type === "info" ? "rgba(0,255,0,0.04)" : "rgba(250,204,21,0.04)",
+                      }}>
+                        <span>{f.type === "critical" ? "⛔" : f.type === "info" ? "🟢" : "⚠️"}</span>
+                        <span>{f.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ padding: "8px 12px", border: `1px solid rgba(0,255,0,0.3)`, background: "rgba(0,255,0,0.04)", fontSize: "11px", fontWeight: 700, color: G, fontFamily: "'JetBrains Mono', monospace" }}>
+                    ✅ No social risk flags detected.
+                  </div>
+                )}
+
+                {/* Linked CA */}
+                {r.linkedCA && (
+                  <div style={{ padding: "8px 12px", border: "1px solid rgba(255,255,255,0.08)", background: "rgba(0,0,0,0.3)", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>
+                    <span style={{ color: "rgba(255,255,255,0.4)", fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700 }}>Linked CA: </span>
+                    <span style={{ color: G, fontWeight: 700 }}>{r.linkedSymbol} — {r.linkedCA}</span>
+                  </div>
+                )}
+
+                {/* Verdict */}
+                <div style={{ border: `2px solid ${vc}`, background: vc === G ? "rgba(0,255,0,0.06)" : vc === "#f87171" ? "rgba(255,68,68,0.06)" : "rgba(250,204,21,0.04)", padding: "16px", textAlign: "center" }}>
+                  <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", marginBottom: "6px" }}>Social Verdict</div>
+                  <div style={{ fontSize: "14px", fontWeight: 900, color: vc, letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace" }}>
+                    {r.verdict}
+                  </div>
+                </div>
+
+                {/* Note about full scan */}
+                <div style={{ padding: "10px 14px", border: "1px solid rgba(255,255,255,0.08)", background: "rgba(0,0,0,0.2)", fontSize: "10px", color: "rgba(255,255,255,0.5)", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.5 }}>
+                  This is a social-only scan based on X profile data. For a full AI autonomy assessment, use the Agent LARP Scanner above with wallet address, logs URL, and claimed abilities.
+                </div>
               </div>
-            )}
+              );
+            })()}
           </CardContent>
         </Card>
 
