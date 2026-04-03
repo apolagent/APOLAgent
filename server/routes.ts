@@ -548,6 +548,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         `Citizen, "${agentName}" remains unclassified. The APOL Agent Protocol requires hard evidence before issuing a Cognition Score. I will not fabricate certainty where none exists. 📊`,
       ]);
     }
+    if (verdict === "Insufficient Data") {
+      return pickRandom([
+        `Citizen, I cannot give "${agentName}" a definitive AI verdict — too much data is missing. No wallet, no reasoning logs, no claimed abilities. I see a social link but that alone doesn't prove autonomy. Provide the agent's wallet address and a logs/API endpoint for a proper assessment. 📋🟡`,
+        `"${agentName}" — INSUFFICIENT DATA, Citizen. A social profile alone isn't enough for APOL to classify an agent. I need an on-chain wallet, reasoning logs, and claimed capabilities to run a real autonomy check. This is not a guilty verdict, it's a data gap. 🔍🟡`,
+        `Citizen, "${agentName}" scores ${score}% but I'm working with almost nothing here — no wallet, no logs, no verifiable claims. I cannot call this a LARP or a real agent without evidence. Submit more data for a proper verdict. The Patrol doesn't guess. 🦍🟡`,
+        `INSUFFICIENT DATA on "${agentName}", Citizen. Current score: ${score}%, but most test categories have no inputs. This is not a condemnation — it's a request for evidence. Wallet address, API logs, claimed abilities — bring me something real and I'll give you a real answer. 📊🟡`,
+        `Citizen, "${agentName}" has a ${score}% preliminary reading, but critical data is missing. No wallet to trace, no logs to verify, no abilities to cross-check. I refuse to issue a final verdict on incomplete evidence. This agent needs to prove itself. Provide the missing data. 🔐🟡`,
+      ]);
+    }
     if (verdict === "Low Autonomy") {
       return pickRandom([
         `Citizen, "${agentName}" scores ${score}% on the Cognition Scale. The contract security checks out — LP locked, no honeypot flags — but the AI identity is unverifiable. This is NOT a scam verdict. It's an INCONCLUSIVE autonomy reading. The project may be legitimate but lacks AI proof. 🔍🟡`,
@@ -915,12 +924,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       cognitionScore = Math.min(100, Math.max(0, raw));
 
+      const _missingCount = [!w, !lu, !claims, !sl].filter(Boolean).length;
+      const _isPartial = _missingCount >= 2;
+
       if (contractSecure && logsResult.status === "inconclusive" && contextScored === false) {
         verdict = "Low Autonomy";
         if (cognitionScore < 50) cognitionScore = 50;
       } else if (contractSecure && cognitionScore <= 50 && logsResult.status !== "mismatch" && socialResult.status !== "suspicious") {
         verdict = "Low Autonomy";
         if (cognitionScore < 45) cognitionScore = 45;
+      } else if (_isPartial && !lu && cognitionScore <= 50) {
+        verdict = "Insufficient Data";
       } else {
         verdict = cognitionScore <= 30 ? "Digital Puppet" : cognitionScore <= 70 ? "Semi-Autonomous" : "Fully Autonomous";
       }
