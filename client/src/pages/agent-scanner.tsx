@@ -84,7 +84,7 @@ type AgentResult = {
   agentName: string;
   wallet: string | null;
   cognitionScore: number | null;
-  verdict: "Digital Puppet" | "Semi-Autonomous" | "Fully Autonomous" | "Inconclusive";
+  verdict: "Digital Puppet" | "Semi-Autonomous" | "Fully Autonomous" | "Low Autonomy" | "Inconclusive";
   apolVerdict: string;
   scoredTests: number;
   speedTest: TestResult;
@@ -117,6 +117,7 @@ function StatusBadge({ status, label }: { status: StatusColor; label: string }) 
 
 function oneLineSummary(r: AgentResult): string {
   if (r.verdict === "Inconclusive") return "No verifiable evidence submitted.";
+  if (r.verdict === "Low Autonomy") return "Contract security verified but AI identity could not be confirmed. Not necessarily a risk.";
   const parts: string[] = [];
   if (r.speedTest.scored) {
     if (r.speedTest.score >= 25) parts.push("24/7 on-chain activity");
@@ -185,10 +186,12 @@ function AdvancedResults({ result }: { result: AgentResult }) {
   const cs = result.contractScan;
 
   const riskLevel = result.cognitionScore === null ? "UNKNOWN"
+    : result.verdict === "Low Autonomy" ? "INCONCLUSIVE"
     : result.cognitionScore >= 71 ? "LOW RISK"
     : result.cognitionScore >= 31 ? "MEDIUM RISK"
     : "HIGH RISK";
   const riskColor = result.cognitionScore === null ? "#6b7280"
+    : result.verdict === "Low Autonomy" ? "#facc15"
     : result.cognitionScore >= 71 ? G
     : result.cognitionScore >= 31 ? "#facc15"
     : "#f87171";
@@ -549,6 +552,7 @@ export default function AgentScanner() {
   const verdictMeta = (v: string) => ({
     "Fully Autonomous": { color: "text-green-400", border: "border-green-700/50", icon: <CheckCircle className="w-5 h-5 text-green-400" /> },
     "Semi-Autonomous": { color: "text-yellow-400", border: "border-yellow-700/50", icon: <AlertTriangle className="w-5 h-5 text-yellow-400" /> },
+    "Low Autonomy": { color: "text-yellow-400", border: "border-yellow-700/50", icon: <AlertTriangle className="w-5 h-5 text-yellow-400" /> },
     "Digital Puppet": { color: "text-red-400", border: "border-red-700/50", icon: <XCircle className="w-5 h-5 text-red-400" /> },
     "Inconclusive": { color: "text-slate-400", border: "border-slate-700", icon: <HelpCircle className="w-5 h-5 text-slate-400" /> },
   }[v] ?? { color: "text-slate-400", border: "border-slate-700", icon: null });

@@ -548,6 +548,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         `Citizen, "${agentName}" remains unclassified. The APOL Agent Protocol requires hard evidence before issuing a Cognition Score. I will not fabricate certainty where none exists. 📊`,
       ]);
     }
+    if (verdict === "Low Autonomy") {
+      return pickRandom([
+        `Citizen, "${agentName}" scores ${score}% on the Cognition Scale. The contract security checks out — LP locked, no honeypot flags — but the AI identity is unverifiable. This is NOT a scam verdict. It's an INCONCLUSIVE autonomy reading. The project may be legitimate but lacks AI proof. 🔍🟡`,
+        `${score}% Cognition, Citizen. "${agentName}" has a clean contract: LP secured, low taxes, ownership renounced. But I cannot confirm autonomous AI operation — no logs, limited claims data. Verdict: LOW AUTONOMY. The contract is safe, the AI identity is unproven. DYOR. 🦍🟡`,
+        `Citizen, "${agentName}" passes contract security but fails AI verification at ${score}%. This does NOT mean it's a rug. It means the autonomous agent claim cannot be confirmed. Safe contract ≠ real AI. Investigate further before committing. 📋🟡`,
+        `"${agentName}", ${score}% Cognition. LOW AUTONOMY classification, Citizen. The on-chain contract is clean — that's good. But there's no verifiable proof this is an actual AI agent. Could be human-operated, could be early-stage. Not a red flag, but not a green one either. 🔐🟡`,
+        `Citizen, I've assessed "${agentName}" at ${score}%. Contract integrity is solid — no honeypot, LP looks secured. However, AI autonomy evidence is insufficient. Classification: LOW AUTONOMY. This is a yellow flag, not red. The project needs to prove its agent is real. 📊🟡`,
+      ]);
+    }
     if (verdict === "Digital Puppet") {
       return pickRandom([
         `Citizen, I've run a full behavioral analysis on "${agentName}". Cognition Score: ${score}%. DIGITAL PUPPET, a human hiding behind an AI label. No autonomous footprint, no verifiable on-chain execution. Don't let this project fool you. 🤖❌`,
@@ -856,6 +865,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (sl) socialResult = await checkSocialIntegrity(sl);
 
     // ── Score + Verdict ───────────────────────────────────────────────────────
+    // Contract security assessment (LP locked/burned, renounced ownership, no honeypot)
+    let contractSecure = false;
+    let contractSecurityScore = 0;
+    if (isContract && contractTokenData) {
+      const flag1 = (v: any) => v === "1" || v === 1;
+      const notHoneypot = !flag1(contractTokenData.is_honeypot);
+      const lowTax = parseFloat(contractTokenData.buy_tax || "0") <= 0.10 && parseFloat(contractTokenData.sell_tax || "0") <= 0.10;
+      const renounced = flag1(contractTokenData.owner_change_balance) || flag1(contractTokenData.can_take_back_ownership) === false;
+      const lpHolders: any[] = contractTokenData.lp_holders || [];
+      const BURNS = new Set(["0x0000000000000000000000000000000000000000","0x000000000000000000000000000000000000dead"]);
+      let lpLockedPct = 0;
+      for (const lp of lpHolders) {
+        const addr = (lp.address || "").toLowerCase();
+        if (flag1(lp.is_locked) || BURNS.has(addr) || !!lp.tag) {
+          lpLockedPct += parseFloat(lp.percent || "0") * 100;
+        }
+      }
+      const lpSafe = lpLockedPct >= 80;
+
+      if (notHoneypot) contractSecurityScore += 25;
+      if (lowTax) contractSecurityScore += 15;
+      if (lpSafe) contractSecurityScore += 35;
+      if (renounced) contractSecurityScore += 25;
+
+      contractSecure = contractSecurityScore >= 75;
+    }
+
     const scoredTests = [
       speedScored ? { score: speedScore, max: 40 } : null,
       traceScored ? { score: traceScore, max: 30 } : null,
@@ -871,13 +907,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const totalMax = scoredTests.reduce((a, t) => a + t.max, 0);
       let raw = Math.round((totalScored / totalMax) * 100);
 
-      // Modifiers
+      if (contractSecure) raw = Math.min(100, raw + 20);
+
       if (logsResult.status === "verified") raw = Math.min(100, raw + 10);
       if (logsResult.status === "mismatch") raw = Math.max(0, raw - 12);
-      if (socialResult.status === "suspicious") raw = Math.max(0, raw - 15);
+      if (socialResult.status === "suspicious") raw = Math.max(0, raw - 8);
 
       cognitionScore = Math.min(100, Math.max(0, raw));
-      verdict = cognitionScore <= 30 ? "Digital Puppet" : cognitionScore <= 70 ? "Semi-Autonomous" : "Fully Autonomous";
+
+      if (contractSecure && logsResult.status === "inconclusive" && contextScored === false) {
+        verdict = "Low Autonomy";
+        if (cognitionScore < 50) cognitionScore = 50;
+      } else if (contractSecure && cognitionScore <= 50 && logsResult.status !== "mismatch" && socialResult.status !== "suspicious") {
+        verdict = "Low Autonomy";
+        if (cognitionScore < 45) cognitionScore = 45;
+      } else {
+        verdict = cognitionScore <= 30 ? "Digital Puppet" : cognitionScore <= 70 ? "Semi-Autonomous" : "Fully Autonomous";
+      }
     }
 
     if (scoredCount === 0) verdict = "Inconclusive";
