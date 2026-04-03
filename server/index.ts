@@ -141,10 +141,9 @@ app.use((req, res, next) => {
 
   // ── Scheduled Tweet Poster (every 12 hours, production only) ──────────────
   if (isProduction) {
-    const TWELVE_HOURS = 12 * 60 * 60 * 1000;
+    const CHECK_INTERVAL = 10 * 60 * 1000;
 
     const postTweet = () => {
-      log("Running scheduled tweet (main.py)...", "scheduler");
       execFile("python", ["main.py"], (err, stdout, stderr) => {
         if (err) {
           log(`Tweet script error: ${err.message}`, "scheduler");
@@ -154,8 +153,11 @@ app.use((req, res, next) => {
       });
     };
 
-    setInterval(postTweet, TWELVE_HOURS);
+    setTimeout(() => {
+      postTweet();
+      setInterval(postTweet, CHECK_INTERVAL);
+    }, 60_000);
 
-    log(`Tweet scheduler active — posting every 12 hours`, "scheduler");
+    log("Tweet scheduler active — checking every 10 min, posting every 12h", "scheduler");
   }
 })();

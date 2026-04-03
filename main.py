@@ -5,7 +5,7 @@ import random
 import tweepy
 
 LOCK_FILE = "/tmp/apol_last_tweet.json"
-MIN_INTERVAL = 6 * 60 * 60
+MIN_INTERVAL = 11 * 60 * 60
 
 now = time.time()
 if os.path.exists(LOCK_FILE):
