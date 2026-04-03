@@ -1155,6 +1155,7 @@ async function buildSocialScan(input: string, siteUrl: string): Promise<string> 
 
     // ── Linked CA from DexScreener ────────────────────────────────────────────
     let linkedCA = "Not Found";
+    let linkedWallet: string | null = null;
     try {
       const dexSearch: any = await fetch(
         `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(username)}`,
@@ -1169,8 +1170,33 @@ async function buildSocialScan(input: string, siteUrl: string): Promise<string> 
       );
       if (match) {
         linkedCA = `${match.baseToken.symbol} — \`${match.baseToken.address}\``;
+        linkedWallet = match.baseToken.address;
       }
     } catch { /* non-fatal */ }
+
+    // ── Agent Cognition Cross-Reference ─────────────────────────────────────
+    let cognitionScore: number | null = null;
+    let agentVerdict: string | null = null;
+    let agentApolVerdict: string | null = null;
+    if (!isApolSelf) {
+      try {
+        const agentRes = await fetch(`${siteUrl}/api/agent/analyze`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            agentName: displayName || username,
+            socialLink: `https://x.com/${username}`,
+            wallet: linkedWallet,
+            chain: "base",
+          }),
+          signal: AbortSignal.timeout(15_000),
+        });
+        const agentData: any = await agentRes.json();
+        cognitionScore = agentData.cognitionScore;
+        agentVerdict = agentData.verdict;
+        agentApolVerdict = agentData.apolVerdict;
+      } catch { /* non-fatal — social-only fallback */ }
+    }
 
     // ── Build message ─────────────────────────────────────────────────────────
     let msg = "";
@@ -1186,18 +1212,29 @@ async function buildSocialScan(input: string, siteUrl: string): Promise<string> 
     msg += `📈 *Engagement:* ${engagementRating}\n\n`;
 
     if (flags.length > 0) {
-      msg += `🚨 *RISK FLAGS:*\n`;
+      msg += `🚨 *SOCIAL FLAGS:*\n`;
       flags.forEach(f => (msg += `  ${f}\n`));
       msg += "\n";
     } else {
-      msg += `✅ *No risk flags detected.*\n\n`;
+      msg += `✅ *No social risk flags detected.*\n\n`;
     }
 
     msg += `⛓️ *Linked CA:* ${linkedCA}\n\n`;
-    msg += `🚨 *Social Verdict:* _${verdict}_\n\n`;
 
+    // ── Unified verdict: combine social + agent cognition ───────────────────
     if (isApolSelf) {
+      msg += `🧠 *Cognition Score:* 100% — Fully Autonomous\n`;
+      msg += `🚨 *Verdict:* _✅ AUTHENTICATED — Official APOL Forensic Node detected. Trace is valid._\n\n`;
       msg += `_The Sentinel is new, but the logic is ancient. Verification complete._ 🦍🔐\n\n`;
+    } else if (cognitionScore !== null && agentVerdict) {
+      const scoreEmoji = cognitionScore >= 71 ? "🟢" : cognitionScore >= 31 ? "🟡" : "🔴";
+      msg += `🧠 *Cognition Score:* ${scoreEmoji} ${cognitionScore}% — ${agentVerdict}\n`;
+      msg += `🚨 *Social Verdict:* _${verdict}_\n\n`;
+      if (agentApolVerdict) {
+        msg += `🦍 *APOL Assessment:*\n_${agentApolVerdict}_\n\n`;
+      }
+    } else {
+      msg += `🚨 *Social Verdict:* _${verdict}_\n\n`;
     }
 
     msg += `🔍 [Full Report](${siteUrl}/agent-scanner)`;
