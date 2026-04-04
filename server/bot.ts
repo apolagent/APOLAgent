@@ -76,6 +76,19 @@ const BOT_PLATFORM_DEPLOYERS: Record<string, string> = {
   "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
 };
 
+const VIRTUALS_FACTORY = "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b";
+const VIRTUALS_DEPLOYER = "0x97cf38bb06da57b6418083998b09976ec40a90a3";
+const VIRTUALS_ADDRESSES = new Set([VIRTUALS_FACTORY, VIRTUALS_DEPLOYER]);
+
+function isVirtualsOrigin(creatorAddress: string, lpHolders: { address: string }[]): boolean {
+  const creatorLower = (creatorAddress || "").toLowerCase();
+  if (VIRTUALS_ADDRESSES.has(creatorLower)) return true;
+  for (const lp of lpHolders) {
+    if (VIRTUALS_ADDRESSES.has((lp.address ?? "").toLowerCase())) return true;
+  }
+  return false;
+}
+
 // ─── Master timeout helper ───────────────────────────────────────────────────
 
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -135,7 +148,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       );
     }
 
-    const holderCount = (api?.holderCount && api.holderCount > 0) ? api.holderCount.toLocaleString() : "Data Pending";
+    const holderCount = (api?.holderCount && api.holderCount > 0) ? api.holderCount.toLocaleString() : "Calculating...";
     const buyTaxFmt  = api ? `${(api.buyTax ?? 0).toFixed(1)}%` : "Data Pending";
     const sellTaxFmt = api ? `${(api.sellTax ?? 0).toFixed(1)}%` : "Data Pending";
 
@@ -810,8 +823,21 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     const totalSupply = token?.total_supply ? parseFloat(token.total_supply) / (10 ** parseInt(token.decimals ?? "18")) : null;
     const fdvRaw     = topPair?.fdv ?? null;
     const mcapFmt    = fdvRaw ? fmtUsd(fdvRaw) : fmtMcap(priceRaw, totalSupply);
-    const holderRaw  = parseInt(token?.holder_count ?? "0");
-    const holderFmt  = holderRaw > 0 ? holderRaw.toLocaleString() : "Data Pending";
+    let holderRaw  = parseInt(token?.holder_count ?? "0");
+    if (holderRaw <= 0 && address) {
+      try {
+        const hcRes = await fetch(
+          `https://base.blockscout.com/api/v2/tokens/${encodeURIComponent(address)}/counters`,
+          { signal: AbortSignal.timeout(6_000) },
+        );
+        if (hcRes.ok) {
+          const hcData = await hcRes.json() as any;
+          const fallback = parseInt(hcData?.token_holders_count ?? "0");
+          if (fallback > 0) holderRaw = fallback;
+        }
+      } catch { /* non-fatal */ }
+    }
+    const holderFmt  = holderRaw > 0 ? holderRaw.toLocaleString() : "Calculating...";
 
     // Social links from DexScreener
     const website  = topPair?.info?.websites?.[0]?.url ?? null;
@@ -845,7 +871,12 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     let agentIsKnownFactory = false;
 
     const agentCreatorLower = (token?.creator_address || "").toLowerCase();
-    if (BOT_PLATFORM_LOCKERS[agentCreatorLower]) {
+    const agentIsVirtuals = isVirtualsOrigin(agentCreatorLower, lpHolders);
+
+    if (agentIsVirtuals) {
+      agentLpEscrowName = "Virtuals";
+      agentIsKnownFactory = true;
+    } else if (BOT_PLATFORM_LOCKERS[agentCreatorLower]) {
       agentLpEscrowName = BOT_PLATFORM_LOCKERS[agentCreatorLower];
       agentIsKnownFactory = true;
     }
@@ -922,6 +953,12 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
       exfilRisk = "LOW"; exfilDetail = "No fund drain mechanisms detected";
     }
 
+    // ── Virtuals override — reduce risk for Virtuals tokens (unless honeypot) ──
+    if (agentIsVirtuals && !isHoneypot) {
+      if (promptRisk !== "CRITICAL") { promptRisk = "LOW"; promptDetail = "Virtuals Protocol — trusted factory"; }
+      if (exfilRisk !== "CRITICAL") { exfilRisk = "LOW"; exfilDetail = "LP managed by Virtuals Protocol"; }
+    }
+
     // ── Final verdict ─────────────────────────────────────────────────────────
     const criticalCount  = [promptRisk, exfilRisk].filter(r => r === "CRITICAL").length;
     const highCount      = [promptRisk, exfilRisk].filter(r => r === "HIGH").length;
@@ -941,6 +978,9 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
       verdictLine = tinyLiquidity && noContract
         ? "No contract data and negligible liquidity. Likely a LARP operation."
         : "High-severity attack vectors detected. This agent fails the APOL Agent audit.";
+    } else if (agentIsVirtuals) {
+      verdict = "✅ CERTIFIED UNIT";
+      verdictLine = "Virtuals Protocol origin verified. LP managed by trusted factory.";
     } else if (promptRisk === "MEDIUM" || exfilRisk === "MEDIUM" || !isVerified) {
       verdict = "⚠️ CAUTION ADVISED";
       verdictLine = "Moderate risks present. Not certified — due diligence required before interaction.";
@@ -1373,22 +1413,31 @@ export function createBot(): Telegraf | null {
       );
     }
 
-    let loadingMsgId: number | null = null;
+    let loadingMsg: { message_id: number; chat: { id: number } } | null = null;
     try {
-      const loading = await ctx.replyWithMarkdown(
-        `🔄 *Scanning* \`${shortAddr(address)}\`\n_Consulting APOL intelligence database..._`
+      loadingMsg = await ctx.replyWithMarkdown(
+        `🔍 *Analyzing Forensic Data...*\n\n` +
+        `📍 \`${shortAddr(address)}\`\n` +
+        `_Consulting APOL intelligence database. This may take a moment..._`
       );
-      loadingMsgId = loading.message_id;
     } catch { /* non-fatal */ }
 
     const SCAN_TIMEOUT_MSG =
       `⚠️ *Scan Timeout*\n\n` +
       `The scan is taking longer than expected. External APIs may be slow.\n\n` +
       `Try the full scanner at [${site}](${site}/agent-scanner) for faster results.`;
-    const snapshot = await withTimeout(buildSnapshot(address, site), 30_000, SCAN_TIMEOUT_MSG);
+    const snapshot = await withTimeout(buildSnapshot(address, site), 60_000, SCAN_TIMEOUT_MSG);
 
-    if (loadingMsgId !== null) {
-      try { await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsgId); } catch { /* non-fatal */ }
+    if (loadingMsg) {
+      try {
+        await ctx.telegram.editMessageText(
+          loadingMsg.chat.id, loadingMsg.message_id, undefined,
+          snapshot, { parse_mode: "Markdown", disable_web_page_preview: true } as any,
+        );
+        return;
+      } catch {
+        try { await ctx.telegram.deleteMessage(loadingMsg.chat.id, loadingMsg.message_id); } catch { /* non-fatal */ }
+      }
     }
 
     return ctx.replyWithMarkdown(snapshot, { disable_web_page_preview: true });
@@ -1411,21 +1460,30 @@ export function createBot(): Telegraf | null {
       );
     }
 
-    let loadingMsgId: number | null = null;
+    let loadingMsg: { message_id: number; chat: { id: number } } | null = null;
     try {
-      const loading = await ctx.replyWithMarkdown(
-        `🔄 *Investigating* \`${shortAddr(address)}\`\n_Checking APOL intelligence records..._`
+      loadingMsg = await ctx.replyWithMarkdown(
+        `🔍 *Analyzing Forensic Data...*\n\n` +
+        `📍 \`${shortAddr(address)}\`\n` +
+        `_Checking APOL intelligence records..._`
       );
-      loadingMsgId = loading.message_id;
     } catch { /* non-fatal */ }
 
     const WALLET_TIMEOUT_MSG =
       `⚠️ *Wallet Check Timeout*\n\n` +
       `The investigation is taking longer than expected. Try again in a moment.`;
-    const report = await withTimeout(buildWalletCheck(address), 30_000, WALLET_TIMEOUT_MSG);
+    const report = await withTimeout(buildWalletCheck(address), 60_000, WALLET_TIMEOUT_MSG);
 
-    if (loadingMsgId !== null) {
-      try { await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsgId); } catch { /* non-fatal */ }
+    if (loadingMsg) {
+      try {
+        await ctx.telegram.editMessageText(
+          loadingMsg.chat.id, loadingMsg.message_id, undefined,
+          report, { parse_mode: "Markdown", disable_web_page_preview: true } as any,
+        );
+        return;
+      } catch {
+        try { await ctx.telegram.deleteMessage(loadingMsg.chat.id, loadingMsg.message_id); } catch { /* non-fatal */ }
+      }
     }
 
     return ctx.replyWithMarkdown(report, { disable_web_page_preview: true });
@@ -1446,22 +1504,31 @@ export function createBot(): Telegraf | null {
       );
     }
 
-    let loadingMsgId: number | null = null;
+    let loadingMsg: { message_id: number; chat: { id: number } } | null = null;
     try {
-      const loading = await ctx.replyWithMarkdown(
-        `🤖 *Scanning agent:* _${input}_\n_Running APOL AgentGuard intelligence..._`
+      loadingMsg = await ctx.replyWithMarkdown(
+        `🔍 *Analyzing Forensic Data...*\n\n` +
+        `🤖 _${input}_\n` +
+        `_Running APOL AgentGuard intelligence. This may take a moment..._`
       );
-      loadingMsgId = loading.message_id;
     } catch { /* non-fatal */ }
 
     const AGENT_TIMEOUT_MSG =
       `⚠️ *Agent Scan Timeout*\n\n` +
       `The scan is taking longer than expected. External APIs may be slow.\n\n` +
       `Try the full scanner at [${site}](${site}/agent-scanner) for faster results.`;
-    const report = await withTimeout(buildAgentScan(input, site), 30_000, AGENT_TIMEOUT_MSG);
+    const report = await withTimeout(buildAgentScan(input, site), 60_000, AGENT_TIMEOUT_MSG);
 
-    if (loadingMsgId !== null) {
-      try { await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsgId); } catch { /* non-fatal */ }
+    if (loadingMsg) {
+      try {
+        await ctx.telegram.editMessageText(
+          loadingMsg.chat.id, loadingMsg.message_id, undefined,
+          report, { parse_mode: "Markdown", disable_web_page_preview: true } as any,
+        );
+        return;
+      } catch {
+        try { await ctx.telegram.deleteMessage(loadingMsg.chat.id, loadingMsg.message_id); } catch { /* non-fatal */ }
+      }
     }
 
     return ctx.replyWithMarkdown(report, { disable_web_page_preview: true });
@@ -1482,22 +1549,31 @@ export function createBot(): Telegraf | null {
       );
     }
 
-    let loadingMsgId: number | null = null;
+    let loadingMsg: { message_id: number; chat: { id: number } } | null = null;
     try {
       const preview = parseXUsername(input);
-      const loading = await ctx.replyWithMarkdown(
-        `🐦 *Investigating @${preview}*\n_Running APOL social forensics..._`
+      loadingMsg = await ctx.replyWithMarkdown(
+        `🔍 *Analyzing Forensic Data...*\n\n` +
+        `🐦 _@${preview}_\n` +
+        `_Running APOL social forensics..._`
       );
-      loadingMsgId = loading.message_id;
     } catch { /* non-fatal */ }
 
     const SOCIAL_TIMEOUT_MSG =
       `⚠️ *Social Scan Timeout*\n\n` +
       `The X forensics module is taking longer than expected. Try again in a moment.`;
-    const report = await withTimeout(buildSocialScan(input, site), 30_000, SOCIAL_TIMEOUT_MSG);
+    const report = await withTimeout(buildSocialScan(input, site), 60_000, SOCIAL_TIMEOUT_MSG);
 
-    if (loadingMsgId !== null) {
-      try { await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsgId); } catch { /* non-fatal */ }
+    if (loadingMsg) {
+      try {
+        await ctx.telegram.editMessageText(
+          loadingMsg.chat.id, loadingMsg.message_id, undefined,
+          report, { parse_mode: "Markdown", disable_web_page_preview: true } as any,
+        );
+        return;
+      } catch {
+        try { await ctx.telegram.deleteMessage(loadingMsg.chat.id, loadingMsg.message_id); } catch { /* non-fatal */ }
+      }
     }
 
     return ctx.replyWithMarkdown(report, { disable_web_page_preview: true });

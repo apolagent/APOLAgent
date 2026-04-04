@@ -75,11 +75,19 @@ shared/
   - `0xd466...1bd3` → "Clanker v4" (deploys Clanker locker + SingletonLpLocker/MultipleLpLockerUniV3)
   - `0x97cf...0a3` → "Virtuals" (deploys Virtuals Protocol)
 - **Why deployer tracing**: GoPlus never exposes factory addresses directly for V3/V4 tokens. LP holders are per-token locker contracts (e.g., SingletonLpLocker) created by platform deployer EOAs.
+- **Virtuals early override** (`isVirtualsOrigin` + `isVirtualsContract`):
+  - Matches tokens created by Virtuals factory `0x0b3e...7e1b` or deployer `0x97cf...0a3`
+  - Runs BEFORE `resolveProtocolLocker` and GoPlus risk assessment
+  - For Virtuals-origin tokens: clears LP/holder/hidden-owner flags, forces risk to Clean (or Caution if other real flags remain)
+  - For Virtuals contract addresses themselves: also clears GoPlus false-positive honeypot/mint flags
+  - Safety gate: honeypot/killer-tax flags still force High Risk for non-Virtuals-contract tokens even if Virtuals-origin
 - **Override behavior**: When protocol match found:
   - `isSecure = true`, LP shown as "Protocol Managed"
-  - Risk level forced to Clean (unless honeypot or killer tax)
-- **Response fields**: `protocolSecured: true`, `isKnownFactory: true`, `lpEscrow: { name, address, percent }`, `contractScan.protocolLocker`
-- **Risk hierarchy**: Honeypot or sell_tax > 20% → forced High Risk even if protocol-secured
+  - Risk level forced to Clean (unless honeypot or killer tax for non-Virtuals contracts)
+- **Holder count fallback**: If GoPlus returns 0 holders, falls back to Blockscout token counters API. Shows "Calculating..." instead of 0 on failure.
+- **Response fields**: `protocolSecured: true`, `isKnownFactory: true`, `holderCount`, `lpEscrow: { name, address, percent }`, `contractScan.protocolLocker`
+- **Risk hierarchy**: Honeypot or sell_tax > 20% → forced High Risk even if protocol-secured (except for Virtuals contract addresses)
+- **Bot async scanning**: All scan commands (`/scan`, `/checkwallet`, `/scanagent`, `/scanx`) use edit-message pattern — send "Analyzing..." immediately, then edit with results. 60s timeout. On edit failure, deletes loading message and sends reply.
 - **Used in**: `/api/detective/analyze`, `/api/agent/analyze` (contractScan), `/api/admin/audit`, `/api/verify/:address`, `bot.ts`
 
 ## Secrets

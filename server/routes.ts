@@ -80,6 +80,34 @@ const BURN_SET = new Set([
   "0x000000000000000000000000000000000000dead",
 ]);
 
+const VIRTUALS_FACTORY = "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b";
+const VIRTUALS_DEPLOYER = "0x97cf38bb06da57b6418083998b09976ec40a90a3";
+const VIRTUALS_ADDRESSES = new Set([VIRTUALS_FACTORY, VIRTUALS_DEPLOYER]);
+
+async function fetchHolderCountFallback(address: string): Promise<number | null> {
+  try {
+    const r = await fetch(
+      `https://base.blockscout.com/api/v2/tokens/${encodeURIComponent(address)}/counters`,
+      { signal: AbortSignal.timeout(6_000) },
+    );
+    if (!r.ok) return null;
+    const data = await r.json() as any;
+    const count = parseInt(data?.token_holders_count ?? "0");
+    return count > 0 ? count : null;
+  } catch {
+    return null;
+  }
+}
+
+function isVirtualsOrigin(creatorAddress: string, lpHolders: { address: string }[]): boolean {
+  const creatorLower = (creatorAddress || "").toLowerCase();
+  if (VIRTUALS_ADDRESSES.has(creatorLower)) return true;
+  for (const lp of lpHolders) {
+    if (VIRTUALS_ADDRESSES.has((lp.address ?? "").toLowerCase())) return true;
+  }
+  return false;
+}
+
 async function resolveProtocolLocker(
   creatorAddress: string,
   lpHolders: { address: string; percent: string }[],
@@ -471,7 +499,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const canTakeBackOwnership = tokenData.can_take_back_ownership === "1" || tokenData.can_take_back_ownership === 1;
         const ownerChangeBalance = tokenData.owner_change_balance === "1" || tokenData.owner_change_balance === 1;
-        const holderCount = parseInt(tokenData.holder_count ?? "0");
+        let holderCount = parseInt(tokenData.holder_count ?? "0");
+        if (holderCount <= 0) {
+          const fallbackCount = await fetchHolderCountFallback(address as string);
+          if (fallbackCount !== null) holderCount = fallbackCount;
+        }
 
         const flag1 = (v: any) => v === "1" || v === 1 || v === true;
         const isProxy = flag1(tokenData.is_proxy);
@@ -527,11 +559,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const lpHolders: any[] = tokenData.lp_holders ?? [];
 
-        const protocolMatch = await resolveProtocolLocker(
-          creatorAddress || "",
-          lpHolders,
-          chain,
-        );
+        const scannedAddrLower = (address as string).toLowerCase();
+        const isVirtualsContract = VIRTUALS_ADDRESSES.has(scannedAddrLower);
+        const virtualsEarlyMatch = isVirtualsContract || isVirtualsOrigin(creatorAddress || "", lpHolders);
+
+        const protocolMatch = virtualsEarlyMatch
+          ? { name: "Virtuals", address: VIRTUALS_FACTORY, percent: 100 }
+          : await resolveProtocolLocker(creatorAddress || "", lpHolders, chain);
         const lpEscrowName = protocolMatch?.name ?? null;
         const lpEscrowAddress = protocolMatch?.address ?? null;
         const lpEscrowPct = protocolMatch?.percent ?? 0;
@@ -577,9 +611,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const protocolSecured = isProtocolEscrow;
 
+        if (virtualsEarlyMatch && (isVirtualsContract || (!hasHoneypot && !hasKillerTax))) {
+          const filteredFlags = redFlags.filter(f => {
+            const fl = f.toLowerCase();
+            if (fl.includes("lp not locked")) return false;
+            if (fl.includes("low holder")) return false;
+            if (fl.includes("not verified")) return false;
+            if (fl.includes("hidden owner")) return false;
+            if (isVirtualsContract && (fl.includes("honeypot") || fl.includes("mint"))) return false;
+            return true;
+          });
+          redFlags.length = 0;
+          redFlags.push(...filteredFlags);
+          const filteredThreats = adminThreats.filter(t =>
+            t.severity === "critical" && !t.label.includes("HIDDEN OWNER")
+          );
+          adminThreats.length = 0;
+          adminThreats.push(...filteredThreats);
+        }
+
         let riskLevel: string;
-        if (hasHoneypot || hasKillerTax) {
+        if ((hasHoneypot || hasKillerTax) && !isVirtualsContract) {
           riskLevel = "High Risk";
+        } else if (virtualsEarlyMatch) {
+          riskLevel = redFlags.length > 0 ? "Caution" : "Clean";
         } else if (hasCriticalFlag) {
           riskLevel = "High Risk";
         } else if (isProtocolEscrow) {
@@ -628,6 +683,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           lookupCount,
           tokenName: tokenData.token_name,
           tokenSymbol: tokenData.token_symbol,
+          holderCount,
           buyTax,
           sellTax,
           isHoneypot,
