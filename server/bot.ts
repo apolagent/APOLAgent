@@ -177,7 +177,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       const labels: string[] = topPair.labels ?? [];
       const isV3 = labels.includes("v3") || labels.includes("v4");
       const liqCheck = topPair.liquidity?.usd ?? 0;
-      if (isV3 && liqCheck >= 10_000) {
+      if (isV3 && liqCheck >= 1_000) {
         const dexName = dexId.includes("uniswap") ? "Uniswap" : dexId.includes("aerodrome") ? "Aerodrome" : dexId.charAt(0).toUpperCase() + dexId.slice(1);
         const version = labels.includes("v4") ? "V4" : "V3";
         lpEscrowName = `${dexName} ${version} Direct-to-DEX`;

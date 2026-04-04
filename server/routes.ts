@@ -500,7 +500,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const labels: string[] = pair.labels ?? [];
               const isV3 = labels.includes("v3") || labels.includes("v4");
               const liqUsd = pair.liquidity?.usd ?? 0;
-              if (isV3 && liqUsd >= 10_000) {
+              if (isV3 && liqUsd >= 1_000) {
                 const dexName = dexId.includes("uniswap") ? "Uniswap" : dexId.includes("aerodrome") ? "Aerodrome" : dexId.charAt(0).toUpperCase() + dexId.slice(1);
                 const version = labels.includes("v4") ? "V4" : "V3";
                 lpEscrowName = `${dexName} ${version} Direct-to-DEX`;
