@@ -589,11 +589,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             name: lpEscrowName,
             address: lpEscrowAddress,
             percent: lpEscrowPct,
-          } : {
-            name: "Unknown Creator",
-            address: creatorAddress || null,
-            percent: 0,
-          },
+          } : null,
         });
       }
 
