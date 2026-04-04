@@ -141,11 +141,13 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
 
     // ── LP lock status from GoPlus on-chain data ───────────────────────────────
     const LAUNCHPAD_REGISTRY: Record<string, string> = {
-      "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "Ape.store",
-      "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
-      "0x1bc31e1f67e82b42ee5c5e3e21e50b7c390617da": "Clanker v3",
-      "0xc67e9eff4ce8eb984698e6a56c8b4b3d23c33041": "Virtuals Protocol",
-      "0x0c5c9bff9f5c5e5f1e5d5e5b5a5c5d5e5f5a5b5c": "Virtuals Factory",
+      "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "APESTORE",
+      "0x5d9a9143dca78a344d51ea722904b9a4669": "APESTORE",
+      "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "CLANKER",
+      "0xb923b8275f4ae65a280836211732dc961c414196": "CLANKER",
+      "0x1bc31e1f67e82b42ee5c5e3e21e50b7c390617da": "CLANKER",
+      "0xc67e9eff4ce8eb984698e6a56c8b4b3d23c33041": "VIRTUAL PROTOCOL",
+      "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "VIRTUAL PROTOCOL",
       "0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad": "Uniswap Universal Router",
       "0x2626664c2603336e57b271c5c0b26f421741e481": "Uniswap V3 Router (Base)",
       "0x03a520b32c04bf3beef7beb72e919cf822ed34f1": "Uniswap V3 NonfungiblePositionManager",
@@ -164,13 +166,13 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       }
     }
 
-    let isDirectToDex = !!lpEscrowName;
+    let isKnownFactory = !!lpEscrowName;
 
     const botCreatorLower = (token?.creator_address || "").toLowerCase();
     if (!lpEscrowName && LAUNCHPAD_REGISTRY[botCreatorLower]) {
       lpEscrowName = LAUNCHPAD_REGISTRY[botCreatorLower];
       lpEscrowPct = 100;
-      isDirectToDex = true;
+      isKnownFactory = true;
     }
     if (!lpEscrowName && topPair) {
       const dexId = (topPair.dexId || "").toLowerCase();
@@ -183,7 +185,6 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
         const version = hasV4 ? "V4" : "V3";
         lpEscrowName = `${dexName} ${version} Pool`;
         lpEscrowPct = 100;
-        isDirectToDex = false;
       }
     }
 
@@ -317,14 +318,14 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
 
     msg += `\n*RISK LEVEL: ${riskEmoji}*\n`;
 
-    if (isOwnershipRenounced && adminAlerts.length === 0) {
+    if (isOwnershipRenounced && adminAlerts.length === 0 && !isHoneypot) {
       msg += `\n✅ *CONTRACT RENOUNCED*\n`;
       msg += `• Ownership burned. No admin keys.\n`;
     }
 
     if (isProtocolEscrow && lpEscrowName) {
-      if (isDirectToDex) {
-        msg += `\n🏛️ *LP — ${lpEscrowName.toUpperCase()}*\n`;
+      if (isKnownFactory) {
+        msg += `\n🏛️ *LP — ${lpEscrowName}*\n`;
         msg += `• LP bound to ${lpEscrowName} factory.\n`;
         msg += `• No developer keys. Verified deployment.\n`;
       } else {

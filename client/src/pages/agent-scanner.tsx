@@ -75,7 +75,7 @@ type DetectiveResult = {
   hasBlacklist?: boolean;
   canPause?: boolean;
   protocolSecured?: boolean;
-  isDirectToDex?: boolean;
+  isKnownFactory?: boolean;
   lpEscrow?: { name: string; address: string; percent: number } | null;
 };
 
@@ -897,7 +897,7 @@ export default function AgentScanner() {
                       </div>
                     )}
 
-                    {checkResult.greenBadge ? (
+                    {checkResult.greenBadge && !checkResult.redFlags?.some(f => f.toLowerCase().includes("honeypot")) ? (
                       <div data-testid="div-green-badge" style={{ border: `2px solid ${G}`, background: "rgba(0,255,0,0.06)", padding: "20px", textAlign: "center" }}>
                         <div style={{ fontSize: "14px", fontWeight: 900, color: G, letterSpacing: "0.16em", textTransform: "uppercase" }}>APOL AGENT GREEN BADGE</div>
                         <div style={{ fontSize: "11px", color: "rgba(0,255,0,0.7)", marginTop: "4px" }}>Status: Cleared. All checks passed.</div>
@@ -923,7 +923,7 @@ export default function AgentScanner() {
                       </div>
                     )}
 
-                    {checkResult.isOwnershipRenounced && (!checkResult.adminThreats || checkResult.adminThreats.length === 0) && (
+                    {checkResult.isOwnershipRenounced && (!checkResult.adminThreats || checkResult.adminThreats.length === 0) && !checkResult.redFlags?.some(f => f.toLowerCase().includes("honeypot")) && (
                       <div data-testid="div-contract-renounced" style={{ border: `2px solid ${G}`, background: "rgba(0,255,0,0.06)", padding: "16px", display: "flex", alignItems: "center", gap: "12px" }}>
                         <ShieldCheck size={22} color={G} style={{ flexShrink: 0 }} />
                         <div>
@@ -947,11 +947,11 @@ export default function AgentScanner() {
                             </div>
                           </div>
                           <div style={{ marginLeft: "auto", background: "#00FF00", color: "#000", fontSize: "9px", fontWeight: 900, padding: "3px 8px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.1em" }}>
-                            {checkResult.isDirectToDex ? "FACTORY BOUND" : "PROTOCOL LP"}
+                            {checkResult.isKnownFactory ? "FACTORY BOUND" : "PROTOCOL LP"}
                           </div>
                         </div>
                         <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(0,255,0,0.15)", fontSize: "10px", color: "rgba(255,255,255,0.55)", lineHeight: 1.8, fontFamily: "'JetBrains Mono', monospace" }}>
-                          {checkResult.isDirectToDex ? (
+                          {checkResult.isKnownFactory ? (
                             <>
                               <div>• LP bound to {checkResult.lpEscrow.name} factory.</div>
                               <div>• No developer keys. Verified deployment.</div>
@@ -964,7 +964,7 @@ export default function AgentScanner() {
                           )}
                         </div>
                         <div style={{ padding: "6px 16px 10px", fontSize: "9px", color: "rgba(0,255,0,0.4)", fontFamily: "'JetBrains Mono', monospace" }}>
-                          {checkResult.isDirectToDex ? "Factory" : "Pool"}: {checkResult.lpEscrow.address}
+                          {checkResult.isKnownFactory ? "Factory" : "Pool"}: {checkResult.lpEscrow.address}
                         </div>
                       </div>
                     )}
