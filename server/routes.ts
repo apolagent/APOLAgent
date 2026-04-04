@@ -311,6 +311,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!address) return res.status(400).json({ error: "Address is required" });
     const chainId = GOPLUS_CHAIN[chain] || "1";
 
+    console.log(`${new Date().toLocaleTimeString()} [scanner] FRESH SCAN TRIGGERED — CACHE BYPASSED — ${address} on ${chain}`);
+
     try {
       // 1. Malicious Address check (always run)
       let malicious: any = {};
@@ -462,14 +464,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
+        let isDirectToDex = !!lpEscrowName;
+
         const creatorLower = (creatorAddress || "").toLowerCase();
         if (!lpEscrowName && LAUNCHPAD_REGISTRY[creatorLower]) {
           lpEscrowName = LAUNCHPAD_REGISTRY[creatorLower];
           lpEscrowAddress = creatorLower;
           lpEscrowPct = 100;
+          isDirectToDex = true;
+          console.log(`${new Date().toLocaleTimeString()} [scanner] Factory match: creator ${creatorLower} → ${lpEscrowName} — Protocol Secured`);
         }
-
-        let isDirectToDex = false;
         if (!lpEscrowName) {
           try {
             const dexRes: any = await fetch(
@@ -1368,9 +1372,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "0x000000000000000000000000000000000000dead",
   ]);
 
-  // In-memory audit cache — shared by admin audit + public verify (1 hr TTL)
   const auditResultCache = new Map<string, { data: Record<string, unknown>; cachedAt: number }>();
   const AUDIT_CACHE_TTL = 60 * 60 * 1000;
+  auditResultCache.clear();
 
   const LOCKER_LABELS: Record<string, string> = {
     "0x663a5c229c09b049e36dcc11a9b0d4a8eb9db214": "Unicrypt",

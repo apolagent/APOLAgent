@@ -164,13 +164,14 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       }
     }
 
+    let isDirectToDex = !!lpEscrowName;
+
     const botCreatorLower = (token?.creator_address || "").toLowerCase();
     if (!lpEscrowName && LAUNCHPAD_REGISTRY[botCreatorLower]) {
       lpEscrowName = LAUNCHPAD_REGISTRY[botCreatorLower];
       lpEscrowPct = 100;
+      isDirectToDex = true;
     }
-
-    let isDirectToDex = false;
     if (!lpEscrowName && topPair) {
       const dexId = (topPair.dexId || "").toLowerCase();
       const labels: string[] = topPair.labels ?? [];
