@@ -64,6 +64,17 @@ const GOPLUS_CHAIN: Record<string, string> = {
 
 export async function registerRoutes(app: Express): Promise<Server> {
 
+  // ── One-time startup purge: clear stale flagged wallets & scan lookups ──────
+  try {
+    const { db } = await import("./db");
+    const { flaggedWallets, scanLookups } = await import("@shared/schema");
+    const delFlagged = await db.delete(flaggedWallets);
+    const delLookups = await db.delete(scanLookups);
+    console.log(`[startup] PURGED flagged_wallets and scan_lookups — clean slate for 2026 logic`);
+  } catch (e: any) {
+    console.log(`[startup] Purge skipped: ${e.message}`);
+  }
+
   // ── Health check (for uptime monitors) ──────────────────────────────────────
   app.get("/health", (_req, res) => {
     res.json({
