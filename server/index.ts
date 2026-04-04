@@ -106,7 +106,8 @@ app.use((req, res, next) => {
   const bot = createBot();
   if (bot && isProduction) {
     const launchBot = (attempt = 1) => {
-      bot.launch({ dropPendingUpdates: true }).then(() => {
+      bot.telegram.deleteWebhook({ drop_pending_updates: true }).catch(() => {}).then(() =>
+      bot.launch({ dropPendingUpdates: true })).then(() => {
         log("Telegram bot polling started", "bot");
         const registerCommands = () =>
           bot.telegram.setMyCommands([
