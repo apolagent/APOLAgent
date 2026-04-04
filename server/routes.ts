@@ -448,21 +448,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        const FACTORY_REGISTRY: Record<string, string> = {
+        const WHITELIST: Record<string, string> = {
           "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "APESTORE",
           "0x5d9a9143dca78a344d51ea722904b9a4669": "APESTORE",
           "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "CLANKER",
           "0xb923b8275f4ae65a280836211732dc961c414196": "CLANKER",
           "0x1bc31e1f67e82b42ee5c5e3e21e50b7c390617da": "CLANKER",
+          "0xb1900f41d78d330a2a35c6771b3a6088a1b51309": "CLANKER",
+          "0xbb7784a4d481184283ed89619a3e3ed143e1adc0": "CLANKER",
+          "0xd59ce43e53d69f190e15d9822fb4540dccc91178": "CLANKER",
           "0xc67e9eff4ce8eb984698e6a56c8b4b3d23c33041": "VIRTUAL PROTOCOL",
           "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "VIRTUAL PROTOCOL",
-        };
-
-        const LP_HOLDER_REGISTRY: Record<string, string> = {
-          ...FACTORY_REGISTRY,
-          "0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad": "Uniswap Universal Router",
-          "0x2626664c2603336e57b271c5c0b26f421741e481": "Uniswap V3 Router (Base)",
-          "0x03a520b32c04bf3beef7beb72e919cf822ed34f1": "Uniswap V3 NonfungiblePositionManager",
         };
 
         const lpHolders: any[] = tokenData.lp_holders ?? [];
@@ -472,99 +468,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let lpEscrowAddress: string | null = null;
         let isKnownFactory = false;
 
-        for (const lp of lpHolders) {
-          const addr = (lp.address ?? "").toLowerCase();
-          const pct = parseFloat(lp.percent ?? "0") * 100;
-          if (LP_HOLDER_REGISTRY[addr] && pct > lpEscrowPct) {
-            lpEscrowName = LP_HOLDER_REGISTRY[addr];
-            lpEscrowPct = pct;
-            lpEscrowAddress = addr;
-            if (FACTORY_REGISTRY[addr]) isKnownFactory = true;
-          }
-        }
-
         const creatorLower = (creatorAddress || "").toLowerCase();
-        if (!lpEscrowName && FACTORY_REGISTRY[creatorLower]) {
-          lpEscrowName = FACTORY_REGISTRY[creatorLower];
+        if (WHITELIST[creatorLower]) {
+          lpEscrowName = WHITELIST[creatorLower];
           lpEscrowAddress = creatorLower;
           lpEscrowPct = 100;
           isKnownFactory = true;
-          console.log(`${new Date().toLocaleTimeString()} [scanner] Factory match: creator ${creatorLower} → ${lpEscrowName}`);
         }
-
-        const DEPLOY_MARKER_REGISTRY: Record<string, string> = {
-          ...FACTORY_REGISTRY,
-          "0xb1900f41d78d330a2a35c6771b3a6088a1b51309": "CLANKER",
-          "0xbb7784a4d481184283ed89619a3e3ed143e1adc0": "CLANKER",
-          "0xd59ce43e53d69f190e15d9822fb4540dccc91178": "CLANKER",
-        };
 
         if (!isKnownFactory) {
-          try {
-            const mintRes: any = await fetch(
-              `https://deep-index.moralis.io/api/v2.2/erc20/${address}/transfers?chain=base&order=ASC&limit=1`,
-              { headers: { "X-API-Key": process.env.MORALIS_API_KEY || "" }, signal: AbortSignal.timeout(5_000) }
-            ).then(r => r.json());
-            const mintTx = mintRes?.result?.[0];
-            if (mintTx) {
-              const mintTxHash = mintTx.transaction_hash;
-              const toAddr = (mintTx.to_address || "").toLowerCase();
-              if (DEPLOY_MARKER_REGISTRY[toAddr]) {
-                lpEscrowName = DEPLOY_MARKER_REGISTRY[toAddr];
-                lpEscrowAddress = toAddr;
-                lpEscrowPct = 100;
-                isKnownFactory = true;
-                console.log(`${new Date().toLocaleTimeString()} [scanner] Mint tx to-address match: ${toAddr} → ${lpEscrowName}`);
-              }
-              if (!isKnownFactory && mintTxHash) {
-                const txRes: any = await fetch(
-                  `https://deep-index.moralis.io/api/v2.2/transaction/${mintTxHash}/verbose?chain=base`,
-                  { headers: { "X-API-Key": process.env.MORALIS_API_KEY || "" }, signal: AbortSignal.timeout(5_000) }
-                ).then(r => r.json());
-                const logs: any[] = txRes?.logs ?? [];
-                const txTo = (txRes?.to_address || "").toLowerCase();
-                const txFrom = (txRes?.from_address || "").toLowerCase();
-                for (const candidate of [txTo, txFrom, ...logs.map((l: any) => (l.address || "").toLowerCase())]) {
-                  if (DEPLOY_MARKER_REGISTRY[candidate]) {
-                    lpEscrowName = DEPLOY_MARKER_REGISTRY[candidate];
-                    lpEscrowAddress = candidate;
-                    lpEscrowPct = 100;
-                    isKnownFactory = true;
-                    console.log(`${new Date().toLocaleTimeString()} [scanner] Mint tx log match: ${candidate} → ${lpEscrowName}`);
-                    break;
-                  }
-                }
-              }
+          for (const lp of lpHolders) {
+            const addr = (lp.address ?? "").toLowerCase();
+            const pct = parseFloat(lp.percent ?? "0") * 100;
+            if (WHITELIST[addr] && pct > lpEscrowPct) {
+              lpEscrowName = WHITELIST[addr];
+              lpEscrowPct = pct;
+              lpEscrowAddress = addr;
+              isKnownFactory = true;
             }
-          } catch { /* non-fatal — Moralis may be slow */ }
-        }
-
-        if (!lpEscrowName) {
-          try {
-            const dexRes: any = await fetch(
-              `https://api.dexscreener.com/latest/dex/tokens/${address}`,
-              { signal: AbortSignal.timeout(6_000) }
-            ).then(r => r.json());
-            const dexPairs: any[] = dexRes?.pairs ?? [];
-            const basePairs = dexPairs
-              .filter((p: any) => p.chainId === "base")
-              .sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
-            for (const pair of basePairs) {
-              const dexId = (pair.dexId || "").toLowerCase();
-              const labels: string[] = pair.labels ?? [];
-              const hasV3 = labels.includes("v3");
-              const hasV4 = labels.includes("v4");
-              const liqUsd = pair.liquidity?.usd ?? 0;
-              if ((hasV3 || hasV4) && liqUsd >= 1_000) {
-                const dexName = dexId.includes("uniswap") ? "Uniswap" : dexId.includes("aerodrome") ? "Aerodrome" : dexId.charAt(0).toUpperCase() + dexId.slice(1);
-                const version = hasV4 ? "V4" : "V3";
-                lpEscrowName = `${dexName} ${version} Pool`;
-                lpEscrowAddress = pair.pairAddress || null;
-                lpEscrowPct = 100;
-                break;
-              }
-            }
-          } catch { /* non-fatal — DexScreener may be slow */ }
+          }
         }
 
         const isProtocolEscrow = !!lpEscrowName;
@@ -667,11 +589,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           canPause,
           protocolSecured: isProtocolEscrow,
           isKnownFactory,
-          lpEscrow: isProtocolEscrow ? {
+          lpEscrow: isKnownFactory ? {
             name: lpEscrowName,
             address: lpEscrowAddress,
             percent: lpEscrowPct,
-          } : null,
+          } : {
+            name: "Unknown Creator",
+            address: creatorAddress || null,
+            percent: 0,
+          },
         });
       }
 

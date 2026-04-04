@@ -140,21 +140,17 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const liqFormatted = liqUsd !== null ? fmtUsd(liqUsd) : "Data Pending";
 
     // ── LP lock status from GoPlus on-chain data ───────────────────────────────
-    const FACTORY_REGISTRY: Record<string, string> = {
+    const WHITELIST: Record<string, string> = {
       "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "APESTORE",
       "0x5d9a9143dca78a344d51ea722904b9a4669": "APESTORE",
       "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "CLANKER",
       "0xb923b8275f4ae65a280836211732dc961c414196": "CLANKER",
       "0x1bc31e1f67e82b42ee5c5e3e21e50b7c390617da": "CLANKER",
+      "0xb1900f41d78d330a2a35c6771b3a6088a1b51309": "CLANKER",
+      "0xbb7784a4d481184283ed89619a3e3ed143e1adc0": "CLANKER",
+      "0xd59ce43e53d69f190e15d9822fb4540dccc91178": "CLANKER",
       "0xc67e9eff4ce8eb984698e6a56c8b4b3d23c33041": "VIRTUAL PROTOCOL",
       "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "VIRTUAL PROTOCOL",
-    };
-
-    const LP_HOLDER_REGISTRY: Record<string, string> = {
-      ...FACTORY_REGISTRY,
-      "0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad": "Uniswap Universal Router",
-      "0x2626664c2603336e57b271c5c0b26f421741e481": "Uniswap V3 Router (Base)",
-      "0x03a520b32c04bf3beef7beb72e919cf822ed34f1": "Uniswap V3 NonfungiblePositionManager",
     };
 
     const lpHolders: any[] = token?.lp_holders ?? [];
@@ -162,77 +158,23 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     let lpEscrowName: string | null = null;
     let lpEscrowPct = 0;
     let isKnownFactory = false;
-    for (const lp of lpHolders) {
-      const addr = (lp.address ?? "").toLowerCase();
-      const pctVal = parseFloat(lp.percent ?? "0") * 100;
-      if (LP_HOLDER_REGISTRY[addr] && pctVal > lpEscrowPct) {
-        lpEscrowName = LP_HOLDER_REGISTRY[addr];
-        lpEscrowPct = pctVal;
-        if (FACTORY_REGISTRY[addr]) isKnownFactory = true;
-      }
-    }
 
     const botCreatorLower = (token?.creator_address || "").toLowerCase();
-    if (!lpEscrowName && FACTORY_REGISTRY[botCreatorLower]) {
-      lpEscrowName = FACTORY_REGISTRY[botCreatorLower];
+    if (WHITELIST[botCreatorLower]) {
+      lpEscrowName = WHITELIST[botCreatorLower];
       lpEscrowPct = 100;
       isKnownFactory = true;
     }
 
-    const DEPLOY_MARKER_REGISTRY: Record<string, string> = {
-      ...FACTORY_REGISTRY,
-      "0xb1900f41d78d330a2a35c6771b3a6088a1b51309": "CLANKER",
-      "0xbb7784a4d481184283ed89619a3e3ed143e1adc0": "CLANKER",
-      "0xd59ce43e53d69f190e15d9822fb4540dccc91178": "CLANKER",
-    };
-
     if (!isKnownFactory) {
-      try {
-        const mintRes: any = await fetch(
-          `https://deep-index.moralis.io/api/v2.2/erc20/${address}/transfers?chain=base&order=ASC&limit=1`,
-          { headers: { "X-API-Key": process.env.MORALIS_API_KEY || "" }, signal: AbortSignal.timeout(5_000) }
-        ).then(r => r.json());
-        const mintTx = mintRes?.result?.[0];
-        if (mintTx) {
-          const mintTxHash = mintTx.transaction_hash;
-          const toAddr = (mintTx.to_address || "").toLowerCase();
-          if (DEPLOY_MARKER_REGISTRY[toAddr]) {
-            lpEscrowName = DEPLOY_MARKER_REGISTRY[toAddr];
-            lpEscrowPct = 100;
-            isKnownFactory = true;
-          }
-          if (!isKnownFactory && mintTxHash) {
-            const txRes: any = await fetch(
-              `https://deep-index.moralis.io/api/v2.2/transaction/${mintTxHash}/verbose?chain=base`,
-              { headers: { "X-API-Key": process.env.MORALIS_API_KEY || "" }, signal: AbortSignal.timeout(5_000) }
-            ).then(r => r.json());
-            const logs: any[] = txRes?.logs ?? [];
-            const txTo = (txRes?.to_address || "").toLowerCase();
-            const txFrom = (txRes?.from_address || "").toLowerCase();
-            for (const candidate of [txTo, txFrom, ...logs.map((l: any) => (l.address || "").toLowerCase())]) {
-              if (DEPLOY_MARKER_REGISTRY[candidate]) {
-                lpEscrowName = DEPLOY_MARKER_REGISTRY[candidate];
-                lpEscrowPct = 100;
-                isKnownFactory = true;
-                break;
-              }
-            }
-          }
+      for (const lp of lpHolders) {
+        const addr = (lp.address ?? "").toLowerCase();
+        const pctVal = parseFloat(lp.percent ?? "0") * 100;
+        if (WHITELIST[addr] && pctVal > lpEscrowPct) {
+          lpEscrowName = WHITELIST[addr];
+          lpEscrowPct = pctVal;
+          isKnownFactory = true;
         }
-      } catch { /* non-fatal */ }
-    }
-
-    if (!lpEscrowName && topPair) {
-      const dexId = (topPair.dexId || "").toLowerCase();
-      const labels: string[] = topPair.labels ?? [];
-      const hasV3 = labels.includes("v3");
-      const hasV4 = labels.includes("v4");
-      const liqCheck = topPair.liquidity?.usd ?? 0;
-      if ((hasV3 || hasV4) && liqCheck >= 1_000) {
-        const dexName = dexId.includes("uniswap") ? "Uniswap" : dexId.includes("aerodrome") ? "Aerodrome" : dexId.charAt(0).toUpperCase() + dexId.slice(1);
-        const version = hasV4 ? "V4" : "V3";
-        lpEscrowName = `${dexName} ${version} Pool`;
-        lpEscrowPct = 100;
       }
     }
 
