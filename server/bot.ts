@@ -172,17 +172,33 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const isHoneypotHP = hpData?.honeypotResult?.isHoneypot === true;
     const isHoneypot = isHoneypotGP || isHoneypotHP;
 
+    const adminAlerts: string[] = [];
+
     if (token) {
       if (isHoneypot)                               flags.push("⛔ HONEYPOT DETECTED");
       if (parseFloat(token.buy_tax  ?? "0") > 0.1) flags.push(`💸 High Buy Tax: ${pct(token.buy_tax)}`);
       if (parseFloat(token.sell_tax ?? "0") > 0.1) flags.push(`💸 High Sell Tax: ${pct(token.sell_tax)}`);
-      if (flag(token.can_take_back_ownership))     flags.push("⚠️ Recoverable Ownership");
-      if (flag(token.owner_change_balance))        flags.push("⚠️ Owner Can Change Balance");
-      if (flag(token.is_mintable))                 flags.push("🖨️ Mintable Supply");
-      if (flag(token.is_blacklist))                flags.push("🚫 Blacklist Function");
+      if (flag(token.can_take_back_ownership))     { flags.push("⚠️ Recoverable Ownership"); adminAlerts.push("🔑 RECOVERABLE OWNERSHIP — Renounce is fake, can be reclaimed"); }
+      if (flag(token.owner_change_balance))        { flags.push("⚠️ Owner Can Change Balance"); adminAlerts.push("🔑 BALANCE MANIPULATION — Owner can drain wallets"); }
+      if (flag(token.is_mintable))                 { flags.push("🖨️ Mintable Supply"); adminAlerts.push("🔑 UNLIMITED MINTING — Owner can dilute all holders instantly"); }
+      if (flag(token.hidden_owner))                { flags.push("👤 Hidden Owner"); adminAlerts.push("🔑 HIDDEN OWNER — True controller is concealed"); }
+      if (flag(token.selfdestruct))                { flags.push("💣 Self-Destruct Enabled"); adminAlerts.push("🔑 SELF-DESTRUCT — Admin can destroy contract, all tokens worthless"); }
+      if (flag(token.transfer_pausable))           { flags.push("⏸️ Transfers Pausable"); adminAlerts.push("🔑 TRANSFER FREEZE — Admin kill-switch for all transfers"); }
+      if (flag(token.slippage_modifiable))         { flags.push("📊 Slippage Modifiable"); adminAlerts.push("🔑 SLIPPAGE CONTROL — Sell tax can be raised to 100%"); }
+      if (flag(token.is_proxy))                    { flags.push("🔄 Proxy Contract"); adminAlerts.push("🔑 PROXY — Code can be swapped silently by admin"); }
+      if (flag(token.is_blacklist) || flag(token.is_blacklisted)) { flags.push("🚫 Blacklist Function"); adminAlerts.push("🔑 BLACKLIST — Admin can block wallets from selling"); }
+      if (flag(token.external_call))               flags.push("📡 External Call Risk");
       if (flag(token.trading_cooldown))            flags.push("⏱️ Trading Cooldown");
       if (flag(token.anti_whale_modifiable))       flags.push("🐋 Anti-Whale Modifiable");
       if (!flag(token.is_open_source))             flags.push("👁️ Contract Not Verified");
+
+      const ownerAddr = token.owner_address || "";
+      const ownerLower = ownerAddr.toLowerCase();
+      const ownerIsContract = flag(token.owner_type);
+      const ownerNotRenounced = ownerLower && ownerLower !== "0x0000000000000000000000000000000000000000" && ownerLower !== "0x000000000000000000000000000000000000dead";
+      if (ownerNotRenounced && !ownerIsContract && adminAlerts.length > 0) {
+        adminAlerts.unshift(`🚨 SINGLE-SIG ADMIN (${ownerAddr.slice(0,6)}…${ownerAddr.slice(-4)}) — One key = total control`);
+      }
     } else if (isHoneypotHP) {
       flags.push("⛔ HONEYPOT DETECTED");
     }
@@ -200,11 +216,12 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const hasHoneypot = flags.some(f => f.includes("HONEYPOT"));
     const hasUnlockedLP = flags.some(f => f.includes("LP Not Locked"));
     const hasCriticalFlag = flags.some(f =>
-      f.includes("HONEYPOT") || f.includes("Owner Can Change Balance") || f.includes("Recoverable Ownership")
+      f.includes("HONEYPOT") || f.includes("Owner Can Change Balance") || f.includes("Recoverable Ownership") || f.includes("Hidden Owner") || f.includes("Self-Destruct")
     );
     let riskEmoji: string;
     if (hasHoneypot)                              riskEmoji = "🚨 CRITICAL";
     else if (hasCriticalFlag)                     riskEmoji = "🔴 HIGH RISK";
+    else if (adminAlerts.length >= 2)             riskEmoji = "🔴 HIGH RISK";
     else if (hasUnlockedLP || flags.length >= 2)  riskEmoji = "🔴 HIGH RISK";
     else if (flags.length >= 1)                   riskEmoji = "🟡 MEDIUM RISK";
     else                                          riskEmoji = "🟢 LOW RISK";
@@ -228,11 +245,17 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
 
     msg += `\n*RISK LEVEL: ${riskEmoji}*\n`;
 
+    if (adminAlerts.length > 0) {
+      msg += `\n🔑 *ADMIN PERMISSIONS — LIVE THREAT:*\n`;
+      msg += `_Past audits do not clear active permissions._\n`;
+      adminAlerts.forEach(a => (msg += `  ${a}\n`));
+    }
+
     if (flags.length > 0) {
       msg += `\n🚩 *FLAGS DETECTED:*\n`;
       flags.slice(0, 8).forEach(f => (msg += `  ${f}\n`));
       if (flags.length > 8) msg += `  _(+${flags.length - 8} more)_\n`;
-    } else {
+    } else if (adminAlerts.length === 0) {
       msg += `\n✅ *No flags detected on Base chain.*\n`;
     }
 

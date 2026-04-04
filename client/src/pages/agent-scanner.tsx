@@ -44,6 +44,8 @@ const detectiveChains = [
   { value: "other", label: "Other" },
 ];
 
+type AdminThreat = { severity: "critical" | "high" | "medium"; label: string; detail: string };
+
 type DetectiveResult = {
   address?: string;
   chain?: string;
@@ -56,6 +58,10 @@ type DetectiveResult = {
   totalFlags?: number;
   greenBadge?: boolean;
   redFlags?: string[];
+  adminThreats?: AdminThreat[];
+  ownerAddress?: string | null;
+  creatorAddress?: string | null;
+  isSingleSigAdmin?: boolean;
   tokenName?: string;
   tokenSymbol?: string;
   buyTax?: number;
@@ -64,6 +70,9 @@ type DetectiveResult = {
   isMintable?: boolean;
   isOpenSource?: boolean;
   isInDex?: boolean;
+  isProxy?: boolean;
+  hasBlacklist?: boolean;
+  canPause?: boolean;
 };
 
 type TestResult = { scored: boolean; score: number; maxScore: number; label: string; detail: string; timingPattern?: string[]; isContract?: boolean };
@@ -910,11 +919,55 @@ export default function AgentScanner() {
                       </div>
                     )}
 
+                    {checkResult.adminThreats && checkResult.adminThreats.length > 0 && (
+                      <div data-testid="div-admin-threats" style={{ border: "2px solid #f87171", background: "rgba(255,68,68,0.04)", padding: "0" }}>
+                        <div style={{ padding: "14px 16px", borderBottom: "1px solid rgba(255,68,68,0.2)", display: "flex", alignItems: "center", gap: "10px" }}>
+                          <ShieldAlert size={18} color="#f87171" />
+                          <div>
+                            <div style={{ fontSize: "13px", fontWeight: 900, color: "#f87171", letterSpacing: "0.16em", textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace" }}>
+                              ADMIN PERMISSIONS — LIVE THREAT
+                            </div>
+                            <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.5)", marginTop: "2px", fontFamily: "'JetBrains Mono', monospace" }}>
+                              {checkResult.isSingleSigAdmin ? "Single-sig owner detected. No multisig protection." : "Active admin controls on this contract."}
+                              {" "}Past audits do not clear current permissions.
+                            </div>
+                          </div>
+                        </div>
+                        {checkResult.adminThreats.map((threat, i) => {
+                          const sevColor = threat.severity === "critical" ? "#f87171" : threat.severity === "high" ? "#fb923c" : "#facc15";
+                          const sevBg = threat.severity === "critical" ? "rgba(255,68,68,0.08)" : threat.severity === "high" ? "rgba(251,146,60,0.06)" : "rgba(250,204,21,0.04)";
+                          return (
+                            <div key={i} data-testid={`div-admin-threat-${i}`} style={{ padding: "10px 16px", borderBottom: "1px solid rgba(255,68,68,0.1)", background: sevBg, display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                              <span style={{ fontSize: "9px", fontWeight: 900, padding: "2px 6px", border: `1px solid ${sevColor}`, color: sevColor, letterSpacing: "0.1em", fontFamily: "'JetBrains Mono', monospace", flexShrink: 0, marginTop: "2px" }}>
+                                {threat.severity.toUpperCase()}
+                              </span>
+                              <div>
+                                <div style={{ fontSize: "11px", fontWeight: 900, color: sevColor, letterSpacing: "0.1em", fontFamily: "'JetBrains Mono', monospace" }}>
+                                  {threat.label}
+                                </div>
+                                <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.55)", marginTop: "2px", lineHeight: 1.5, fontFamily: "'JetBrains Mono', monospace" }}>
+                                  {threat.detail}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {checkResult.ownerAddress && (
+                          <div style={{ padding: "8px 16px", background: "rgba(255,68,68,0.03)", fontSize: "10px", color: "rgba(255,255,255,0.4)", fontFamily: "'JetBrains Mono', monospace" }}>
+                            Owner: <span style={{ color: "rgba(255,255,255,0.6)" }}>{checkResult.ownerAddress}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "6px" }}>
                       {[
                         { label: "Honeypot", value: checkResult.isHoneypot, bad: true },
                         { label: "Mintable", value: checkResult.isMintable, bad: true },
                         { label: "Open Source", value: checkResult.isOpenSource, bad: false },
+                        { label: "Proxy", value: checkResult.isProxy, bad: true },
+                        { label: "Blacklist", value: checkResult.hasBlacklist, bad: true },
+                        { label: "Pausable", value: checkResult.canPause, bad: true },
                         { label: `Buy Tax ${checkResult.buyTax != null ? checkResult.buyTax.toFixed(1) + "%" : ""}`, value: (checkResult.buyTax ?? 0) > 10, bad: true },
                         { label: `Sell Tax ${checkResult.sellTax != null ? checkResult.sellTax.toFixed(1) + "%" : ""}`, value: (checkResult.sellTax ?? 0) > 10, bad: true },
                         { label: "On DEX", value: checkResult.isInDex, bad: false },

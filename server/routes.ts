@@ -383,6 +383,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const ownerChangeBalance = tokenData.owner_change_balance === "1" || tokenData.owner_change_balance === 1;
         const holderCount = parseInt(tokenData.holder_count ?? "0");
 
+        const flag1 = (v: any) => v === "1" || v === 1 || v === true;
+        const isProxy = flag1(tokenData.is_proxy);
+        const hasHiddenOwner = flag1(tokenData.hidden_owner);
+        const hasSelfDestruct = flag1(tokenData.selfdestruct);
+        const hasExternalCall = flag1(tokenData.external_call);
+        const isAntiWhale = flag1(tokenData.is_anti_whale);
+        const canPause = flag1(tokenData.transfer_pausable);
+        const hasBlacklist = flag1(tokenData.is_blacklisted) || flag1(tokenData.is_blacklist);
+        const hasWhitelist = flag1(tokenData.is_whitelisted) || flag1(tokenData.is_whitelist);
+        const ownerAddress = tokenData.owner_address || null;
+        const creatorAddress = tokenData.creator_address || null;
+        const ownerIsContract = flag1(tokenData.owner_type);
+
+        const adminThreats: { severity: "critical" | "high" | "medium"; label: string; detail: string }[] = [];
+
+        if (ownerChangeBalance) adminThreats.push({ severity: "critical", label: "BALANCE MANIPULATION", detail: "Owner can directly modify token balances. Funds can be drained at any time." });
+        if (canTakeBackOwnership) adminThreats.push({ severity: "critical", label: "RECOVERABLE OWNERSHIP", detail: "Ownership can be reclaimed after renouncement. Renounce is fake." });
+        if (isMintable) adminThreats.push({ severity: "critical", label: "UNLIMITED MINTING", detail: "Owner can mint unlimited tokens, instantly diluting all holders." });
+        if (hasHiddenOwner) adminThreats.push({ severity: "critical", label: "HIDDEN OWNER", detail: "Contract has a hidden owner function. True controller is concealed." });
+        if (hasSelfDestruct) adminThreats.push({ severity: "critical", label: "SELF-DESTRUCT", detail: "Contract can be destroyed by admin. All tokens become worthless." });
+        if (canPause) adminThreats.push({ severity: "high", label: "TRANSFER PAUSABLE", detail: "Admin can freeze all transfers. Effectively a kill-switch." });
+        if (slippageModifiable) adminThreats.push({ severity: "high", label: "SLIPPAGE CONTROL", detail: "Owner can modify trading slippage. Sell tax can be raised to 100% at any time." });
+        if (isProxy) adminThreats.push({ severity: "high", label: "PROXY CONTRACT", detail: "Contract logic can be changed by admin. Current code can be swapped silently." });
+        if (hasBlacklist) adminThreats.push({ severity: "high", label: "BLACKLIST FUNCTION", detail: "Admin can blacklist wallets from selling. Targeted rug mechanism." });
+        if (hasExternalCall) adminThreats.push({ severity: "medium", label: "EXTERNAL CALL", detail: "Contract makes external calls. Behavior may change based on external state." });
+        if (hasWhitelist) adminThreats.push({ severity: "medium", label: "WHITELIST FUNCTION", detail: "Admin-controlled whitelist. May restrict trading to insiders." });
+        if (isAntiWhale && (isMintable || ownerChangeBalance)) adminThreats.push({ severity: "medium", label: "ANTI-WHALE + ADMIN POWER", detail: "Anti-whale limits combined with admin mint/balance powers. Holders capped while admin has unlimited control." });
+
+        const ownerLower = (ownerAddress || "").toLowerCase();
+        const ownerNotRenounced = ownerLower && ownerLower !== "0x0000000000000000000000000000000000000000" && ownerLower !== "0x000000000000000000000000000000000000dead";
+        const isSingleSigAdmin = ownerNotRenounced && !ownerIsContract;
+        if (isSingleSigAdmin && adminThreats.length > 0) {
+          adminThreats.unshift({ severity: "critical", label: "SINGLE-SIG ADMIN", detail: `Contract controlled by a single wallet (${ownerAddress!.slice(0,6)}…${ownerAddress!.slice(-4)}). No multisig. One key = total control.` });
+        }
+
         const lpHolders: any[] = tokenData.lp_holders ?? [];
         const lpBurnedPct = lpHolders
           .filter((h: any) => (h.tag ?? "").toLowerCase().includes("burn") || (h.address ?? "").toLowerCase() === "0x000000000000000000000000000000000000dead")
@@ -401,14 +436,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (slippageModifiable) redFlags.push("Owner can modify slippage");
         if (canTakeBackOwnership) redFlags.push("Recoverable ownership");
         if (ownerChangeBalance) redFlags.push("Owner can change balances");
+        if (hasHiddenOwner) redFlags.push("Hidden owner detected");
+        if (hasSelfDestruct) redFlags.push("Self-destruct enabled");
+        if (canPause) redFlags.push("Transfers pausable by admin");
+        if (isProxy) redFlags.push("Proxy contract — upgradeable");
+        if (hasBlacklist) redFlags.push("Blacklist function");
         if (!lpSecure) redFlags.push("LP not locked");
         if (holderCount > 0 && holderCount < 200) redFlags.push("Low holder count");
 
         const hasHoneypot = isHoneypot;
-        const hasCriticalFlag = isHoneypot || ownerChangeBalance || canTakeBackOwnership;
+        const hasCriticalFlag = isHoneypot || ownerChangeBalance || canTakeBackOwnership || hasHiddenOwner || hasSelfDestruct;
         const hasUnlockedLP = !lpSecure;
 
-        const greenBadge = redFlags.length === 0 && isOpenSource && !isHoneypot && lpSecure;
+        const greenBadge = redFlags.length === 0 && isOpenSource && !isHoneypot && lpSecure && adminThreats.length === 0;
         const riskLevel = hasHoneypot ? "High Risk"
           : hasCriticalFlag ? "High Risk"
           : hasUnlockedLP || redFlags.length >= 2 ? "High Risk"
@@ -439,6 +479,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isNewOffender: false,
           greenBadge,
           redFlags,
+          adminThreats,
+          ownerAddress: ownerAddress || null,
+          creatorAddress: creatorAddress || null,
+          isSingleSigAdmin: !!isSingleSigAdmin,
           lookupCount,
           tokenName: tokenData.token_name,
           tokenSymbol: tokenData.token_symbol,
@@ -448,6 +492,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isMintable,
           isOpenSource,
           isInDex,
+          isProxy,
+          hasBlacklist,
+          canPause,
         });
       }
 
@@ -1306,10 +1353,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (clampedLocked < 50 && lpHolders.length > 0) flags.push("Liquidity is not adequately locked");
     if (flag1(tokenData?.is_mintable)) flags.push("Owner can mint unlimited tokens");
     if (flag1(tokenData?.slippage_modifiable)) flags.push("Owner can modify sell slippage");
+    if (flag1(tokenData?.can_take_back_ownership)) flags.push("Recoverable ownership — renounce is fake");
+    if (flag1(tokenData?.owner_change_balance)) flags.push("Owner can change balances directly");
+    if (flag1(tokenData?.hidden_owner)) flags.push("Hidden owner function detected");
+    if (flag1(tokenData?.selfdestruct)) flags.push("Self-destruct enabled");
+    if (flag1(tokenData?.transfer_pausable)) flags.push("Admin can freeze all transfers");
+    if (flag1(tokenData?.is_proxy)) flags.push("Proxy contract — upgradeable by admin");
+    if (flag1(tokenData?.is_blacklisted)) flags.push("Blacklist function — admin can block wallets");
+    if (flag1(tokenData?.external_call)) flags.push("External call risk");
     if (top5pct > 50) flags.push(`Top 5 wallets hold ${top5pct.toFixed(1)}% — high concentration`);
 
-    const riskLevel = isHoneypot || buyTax > 25 || sellTax > 25
+    const auditOwnerAddr = tokenData?.owner_address || null;
+    const auditOwnerIsContract = flag1(tokenData?.owner_type);
+    const auditOwnerNotRenounced = auditOwnerAddr && auditOwnerAddr !== "0x0000000000000000000000000000000000000000" && auditOwnerAddr !== "0x000000000000000000000000000000000000dead";
+    const auditIsSingleSig = auditOwnerNotRenounced && !auditOwnerIsContract;
+
+    const adminFlags = flags.filter(f => f.includes("Owner") || f.includes("Recoverable") || f.includes("Hidden") || f.includes("Self-destruct") || f.includes("freeze") || f.includes("Proxy") || f.includes("Blacklist") || f.includes("mint"));
+
+    const riskLevel = isHoneypot || buyTax > 25 || sellTax > 25 || flag1(tokenData?.owner_change_balance) || flag1(tokenData?.hidden_owner)
       ? "High Risk"
+      : adminFlags.length >= 2 ? "High Risk"
       : flags.length >= 2 ? "Caution"
       : flags.length === 1 ? "Watch"
       : "Looks Clean";
@@ -1331,6 +1394,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       topHolders,
       top5pct,
       flags,
+      adminFlags,
+      ownerAddress: auditOwnerAddr,
+      isSingleSigAdmin: !!auditIsSingleSig,
       riskLevel,
       dataSource: tokenData ? "GoPlus" : "No data",
     });
