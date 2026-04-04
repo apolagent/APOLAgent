@@ -60,22 +60,27 @@ shared/
 - `GET /api/verified-projects` - List verified projects
 - `POST /api/agent/analyze` - Agent LARP detection scan
 
-## LP Detection — Protocol Security Override (PLATFORM_LOCKERS)
-1. **Creator Address Match**: Checks `creator_address` against PLATFORM_LOCKERS
-2. **LP Holder Match**: Falls back to checking GoPlus `lp_holders` against PLATFORM_LOCKERS
-- **PLATFORM_LOCKERS addresses (2026 Base)**:
-  - `0x0bf8...f58a` — APE_STORE → "ApeStore Managed"
-  - `0xe85a...83a9` — CLANKER_V4_FACTORY → "Clanker v4"
-  - `0xf362...5d68` — CLANKER_LOCKER → "Clanker v4"
-  - `0x0b3e...7e1b` — VIRTUALS_FACTORY → "Virtuals"
-- **Override behavior**: When LP NFT owner matches any PLATFORM_LOCKERS address:
-  - `isSecure = true`, status overridden from "Unlocked" to "Protocol Managed"
-  - Risk level forced to LOW/Clean (unless honeypot or killer tax)
-  - "LP Not Locked" warning suppressed
-- **Response fields**: `protocolSecured: true`, `isKnownFactory: true`, `lpEscrow: { name, address, percent }`
+## LP Detection — Protocol Security Override (Blockscout Deployer Tracing)
+- **3-layer forensics** (in `resolveProtocolLocker` function, `server/routes.ts`):
+  1. **Direct match**: Check GoPlus `creator_address` and `lp_holders` against `PLATFORM_LOCKERS`
+  2. **Deployer tracing**: For each LP holder contract, query Blockscout API (`/api/v2/addresses/{addr}`) to get `creator_address_hash`, then check against `PLATFORM_DEPLOYERS`
+  3. **Creator tracing**: If no LP match, check the token creator's deployer against `PLATFORM_DEPLOYERS`
+- **PLATFORM_LOCKERS** (factory/locker contract addresses):
+  - `0x0bf8...f58a` — ApeStore → "ApeStore Managed"
+  - `0xe85a...83a9` — Clanker V4 Factory → "Clanker v4"
+  - `0xf362...5d68` — Clanker Locker → "Clanker v4"
+  - `0x0b3e...7e1b` — Virtuals Protocol → "Virtuals"
+- **PLATFORM_DEPLOYERS** (EOAs that deploy per-token locker contracts):
+  - `0xade2...1f6f` → "ApeStore Managed" (deploys ApeStore factory + per-token lockers)
+  - `0xd466...1bd3` → "Clanker v4" (deploys Clanker locker + SingletonLpLocker/MultipleLpLockerUniV3)
+  - `0x97cf...0a3` → "Virtuals" (deploys Virtuals Protocol)
+- **Why deployer tracing**: GoPlus never exposes factory addresses directly for V3/V4 tokens. LP holders are per-token locker contracts (e.g., SingletonLpLocker) created by platform deployer EOAs.
+- **Override behavior**: When protocol match found:
+  - `isSecure = true`, LP shown as "Protocol Managed"
+  - Risk level forced to Clean (unless honeypot or killer tax)
+- **Response fields**: `protocolSecured: true`, `isKnownFactory: true`, `lpEscrow: { name, address, percent }`, `contractScan.protocolLocker`
 - **Risk hierarchy**: Honeypot or sell_tax > 20% → forced High Risk even if protocol-secured
-- **Frontend**: Factory-matched tokens show "Protocol Managed. LP secured by [NAME]." with "PROTOCOL MANAGED" badge
-- **Bot**: Same label format: "Protocol Managed. LP secured by [NAME]."
+- **Used in**: `/api/detective/analyze`, `/api/agent/analyze` (contractScan), `/api/admin/audit`, `/api/verify/:address`, `bot.ts`
 
 ## Secrets
 - `APOL_BOT_TOKEN` - Telegram bot token

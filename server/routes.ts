@@ -62,6 +62,83 @@ const GOPLUS_CHAIN: Record<string, string> = {
   optimism: "10", base: "8453", avalanche: "43114", tron: "tron", solana: "solana", other: "1",
 };
 
+const PLATFORM_LOCKERS: Record<string, string> = {
+  "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore Managed",
+  "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
+  "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker v4",
+  "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
+};
+
+const PLATFORM_DEPLOYERS: Record<string, string> = {
+  "0xade256e1c2763b8766efe1eeb7c578d93f621f6f": "ApeStore Managed",
+  "0xd46618f35099074c5a456b21d2967a6ff6841bd3": "Clanker v4",
+  "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
+};
+
+const BURN_SET = new Set([
+  "0x0000000000000000000000000000000000000000",
+  "0x000000000000000000000000000000000000dead",
+]);
+
+async function resolveProtocolLocker(
+  creatorAddress: string,
+  lpHolders: { address: string; percent: string }[],
+  chain?: string,
+): Promise<{ name: string; address: string; percent: number } | null> {
+  if (chain && chain !== "base" && chain !== "8453") return null;
+
+  const creatorLower = (creatorAddress || "").toLowerCase();
+  if (PLATFORM_LOCKERS[creatorLower]) {
+    return { name: PLATFORM_LOCKERS[creatorLower], address: creatorLower, percent: 100 };
+  }
+
+  for (const lp of lpHolders) {
+    const addr = (lp.address ?? "").toLowerCase();
+    const pct = parseFloat(lp.percent ?? "0") * 100;
+    if (PLATFORM_LOCKERS[addr]) {
+      return { name: PLATFORM_LOCKERS[addr], address: addr, percent: pct };
+    }
+  }
+
+  for (const lp of lpHolders.slice(0, 3)) {
+    const addr = (lp.address ?? "").toLowerCase();
+    const pct = parseFloat(lp.percent ?? "0") * 100;
+    if (!addr || BURN_SET.has(addr)) continue;
+    try {
+      const r = await fetch(
+        `https://base.blockscout.com/api/v2/addresses/${addr}`,
+        { signal: AbortSignal.timeout(5000) },
+      );
+      if (!r.ok) { console.log(`[forensics] Blockscout ${r.status} for LP ${addr.slice(0,10)}`); continue; }
+      const data = await r.json() as any;
+      const deployerAddr = (data.creator_address_hash || "").toLowerCase();
+      if (deployerAddr && PLATFORM_DEPLOYERS[deployerAddr]) {
+        console.log(`[forensics] LP ${addr.slice(0,10)} → deployer ${deployerAddr.slice(0,10)} → ${PLATFORM_DEPLOYERS[deployerAddr]}`);
+        return { name: PLATFORM_DEPLOYERS[deployerAddr], address: addr, percent: pct };
+      }
+    } catch (e: any) { console.log(`[forensics] Blockscout timeout/error for LP ${addr.slice(0,10)}: ${e.message ?? e}`); }
+  }
+
+  if (creatorLower && !BURN_SET.has(creatorLower)) {
+    try {
+      const r = await fetch(
+        `https://base.blockscout.com/api/v2/addresses/${creatorLower}`,
+        { signal: AbortSignal.timeout(5000) },
+      );
+      if (r.ok) {
+        const data = await r.json() as any;
+        const deployerAddr = (data.creator_address_hash || "").toLowerCase();
+        if (deployerAddr && PLATFORM_DEPLOYERS[deployerAddr]) {
+          console.log(`[forensics] Creator ${creatorLower.slice(0,10)} → deployer ${deployerAddr.slice(0,10)} → ${PLATFORM_DEPLOYERS[deployerAddr]}`);
+          return { name: PLATFORM_DEPLOYERS[deployerAddr], address: creatorLower, percent: 100 };
+        }
+      }
+    } catch (e: any) { console.log(`[forensics] Blockscout timeout/error for creator ${creatorLower.slice(0,10)}: ${e.message ?? e}`); }
+  }
+
+  return null;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
 
   // ── One-time startup purge: clear stale flagged wallets & scan lookups ──────
@@ -448,42 +525,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        const PLATFORM_LOCKERS: Record<string, string> = {
-          "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore Managed",
-          "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
-          "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker v4",
-          "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
-        };
-
         const lpHolders: any[] = tokenData.lp_holders ?? [];
 
-        let lpEscrowName: string | null = null;
-        let lpEscrowPct = 0;
-        let lpEscrowAddress: string | null = null;
-        let isKnownFactory = false;
-
-        const creatorLower = (creatorAddress || "").toLowerCase();
-        if (PLATFORM_LOCKERS[creatorLower]) {
-          lpEscrowName = PLATFORM_LOCKERS[creatorLower];
-          lpEscrowAddress = creatorLower;
-          lpEscrowPct = 100;
-          isKnownFactory = true;
-        }
-
-        if (!isKnownFactory) {
-          for (const lp of lpHolders) {
-            const addr = (lp.address ?? "").toLowerCase();
-            const pct = parseFloat(lp.percent ?? "0") * 100;
-            if (PLATFORM_LOCKERS[addr] && pct > lpEscrowPct) {
-              lpEscrowName = PLATFORM_LOCKERS[addr];
-              lpEscrowPct = pct;
-              lpEscrowAddress = addr;
-              isKnownFactory = true;
-            }
-          }
-        }
-
-        const isProtocolEscrow = !!lpEscrowName;
+        const protocolMatch = await resolveProtocolLocker(
+          creatorAddress || "",
+          lpHolders,
+          chain,
+        );
+        const lpEscrowName = protocolMatch?.name ?? null;
+        const lpEscrowAddress = protocolMatch?.address ?? null;
+        const lpEscrowPct = protocolMatch?.percent ?? 0;
+        const isKnownFactory = !!protocolMatch;
+        const isProtocolEscrow = isKnownFactory;
 
         const lpBurnedPct = lpHolders
           .filter((h: any) => (h.tag ?? "").toLowerCase().includes("burn") || (h.address ?? "").toLowerCase() === "0x000000000000000000000000000000000000dead")
@@ -1102,6 +1155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       lpLockedPercent: number; lockLocations: string[];
       topHolders: { address: string; percent: number; tag: string; isBurn: boolean }[];
       holderCount: number;
+      protocolLocker?: string | null;
     };
     let contractScan: ContractScanResult | null = null;
     if (isContract && contractTokenData) {
@@ -1114,9 +1168,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "0x407993575c91ce7643a4d4ccdaa9b98f5b96e40":"PinkLock V2",
         "0xe2fe530c047f2d85298b07d9333c05737f1435fb":"Team Finance",
       };
-      const lpHolders: any[] = contractTokenData.lp_holders || [];
+      const csLpHolders: any[] = contractTokenData.lp_holders || [];
       let lpLockedPct = 0; const lockLocs: string[] = [];
-      for (const lp of lpHolders) {
+
+      const csProtocolMatch = await resolveProtocolLocker(
+        contractTokenData.creator_address || "",
+        csLpHolders,
+        chain,
+      );
+
+      for (const lp of csLpHolders) {
         const addr = (lp.address || "").toLowerCase();
         const pct = parseFloat(lp.percent || "0") * 100;
         const isBurn = BURNS.has(addr);
@@ -1127,6 +1188,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!lockLocs.includes(loc)) lockLocs.push(loc);
         }
       }
+
+      if (csProtocolMatch) {
+        lpLockedPct = 100;
+        if (!lockLocs.includes(csProtocolMatch.name)) lockLocs.push(csProtocolMatch.name);
+      }
+
       const rawH: any[] = contractTokenData.holders || [];
       contractScan = {
         honeypot: flag1c(contractTokenData.is_honeypot),
@@ -1141,6 +1208,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isBurn: BURNS.has((h.address || "").toLowerCase()),
         })),
         holderCount: parseInt(contractTokenData.holder_count || "0"),
+        protocolLocker: csProtocolMatch?.name ?? null,
       };
     }
 
@@ -1409,44 +1477,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const sellTax = hpData?.SellTax != null ? hpData.SellTax : taxPct(tokenData?.sell_tax ?? "0");
 
     // LP Lock
-    const AUDIT_PLATFORM_LOCKERS: Record<string, string> = {
-      "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore Managed",
-      "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
-      "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker v4",
-      "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
-    };
-
     const lpHolders: any[] = tokenData?.lp_holders || [];
     let lockedLpPercent = 0;
     const lockLocations: string[] = [];
-    let auditProtocolLocker: string | null = null;
+
+    const auditProtocolMatch = await resolveProtocolLocker(
+      tokenData?.creator_address || "",
+      lpHolders,
+      chain,
+    );
+    const auditProtocolLocker = auditProtocolMatch?.name ?? null;
+    const auditIsProtocolSecure = !!auditProtocolMatch;
 
     for (const lp of lpHolders) {
       const addr = (lp.address || "").toLowerCase();
       const pct = parseFloat(lp.percent || "0") * 100;
       const isBurn = BURN_ADDRESSES.has(addr);
       const lockerLabel = LOCKER_LABELS[addr];
-      const platformLabel = AUDIT_PLATFORM_LOCKERS[addr];
-      if (platformLabel && !auditProtocolLocker) {
-        auditProtocolLocker = platformLabel;
-      }
-      const isLocked = flag1(lp.is_locked) || isBurn || !!lockerLabel || !!(lp.tag) || !!platformLabel;
+      const isLocked = flag1(lp.is_locked) || isBurn || !!lockerLabel || !!(lp.tag);
       if (isLocked) {
         lockedLpPercent += pct;
-        const loc = platformLabel || lp.tag || lockerLabel || (isBurn ? "Burn Address" : "Locked");
+        const loc = lp.tag || lockerLabel || (isBurn ? "Burn Address" : "Locked");
         if (!lockLocations.includes(loc)) lockLocations.push(loc);
       }
     }
 
-    const auditCreatorAddr = (tokenData?.creator_address || "").toLowerCase();
-    if (!auditProtocolLocker && AUDIT_PLATFORM_LOCKERS[auditCreatorAddr]) {
-      auditProtocolLocker = AUDIT_PLATFORM_LOCKERS[auditCreatorAddr];
+    if (auditIsProtocolSecure) {
       lockedLpPercent = 100;
-      if (!lockLocations.includes(auditProtocolLocker)) lockLocations.push(auditProtocolLocker);
+      if (!lockLocations.includes(auditProtocolLocker!)) lockLocations.push(auditProtocolLocker!);
     }
 
     const clampedLocked = Math.min(100, lockedLpPercent);
-    const auditIsProtocolSecure = !!auditProtocolLocker;
 
     // Top holders
     const rawHolders: any[] = tokenData?.holders || [];
@@ -1574,20 +1635,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const buyTax = hpData?.BuyTax != null ? hpData.BuyTax : taxPct(tokenData?.buy_tax ?? "0");
     const sellTax = hpData?.SellTax != null ? hpData.SellTax : taxPct(tokenData?.sell_tax ?? "0");
 
-    const CERT_PLATFORM_LOCKERS: Record<string, string> = {
-      "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore Managed",
-      "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
-      "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker v4",
-      "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
-    };
-
     const lpHolders: { address: string; balance: string; percent: string; is_contract: string; locked: string; tag: string }[]
       = tokenData?.lp_holders ?? [];
+
+    const certProtocolMatch = await resolveProtocolLocker(
+      tokenData?.creator_address || "",
+      lpHolders,
+      "base",
+    );
+    const certProtocolLocker = certProtocolMatch?.name ?? null;
+    const certIsProtocolSecure = !!certProtocolMatch;
 
     let lockedBalance = 0;
     let totalBalance = 0;
     const lockLocations: string[] = [];
-    let certProtocolLocker: string | null = null;
 
     for (const lp of lpHolders) {
       const pct = parseFloat(lp.percent || "0");
@@ -1595,26 +1656,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const addr = (lp.address || "").toLowerCase();
       const isBurn = BURN_ADDRESSES.has(addr);
       const lockerLabel = LOCKER_LABELS[addr];
-      const platformLabel = CERT_PLATFORM_LOCKERS[addr];
-      if (platformLabel && !certProtocolLocker) {
-        certProtocolLocker = platformLabel;
-      }
-      if (lp.locked === "1" || lp.locked === true as any || isBurn || lockerLabel || !!platformLabel) {
+      if (lp.locked === "1" || lp.locked === true as any || isBurn || !!lockerLabel) {
         lockedBalance += pct;
-        const label = platformLabel || lockerLabel || (isBurn ? "Burn Address" : lp.tag || "Locked");
+        const label = lockerLabel || (isBurn ? "Burn Address" : lp.tag || "Locked");
         if (label && !lockLocations.includes(label)) lockLocations.push(label);
       }
     }
 
-    const certCreatorAddr = (tokenData?.creator_address || "").toLowerCase();
-    if (!certProtocolLocker && CERT_PLATFORM_LOCKERS[certCreatorAddr]) {
-      certProtocolLocker = CERT_PLATFORM_LOCKERS[certCreatorAddr];
+    if (certIsProtocolSecure) {
       lockedBalance = totalBalance > 0 ? totalBalance : 1;
-      if (!lockLocations.includes(certProtocolLocker)) lockLocations.push(certProtocolLocker);
+      if (!lockLocations.includes(certProtocolLocker!)) lockLocations.push(certProtocolLocker!);
     }
 
     const clampedLocked = certProtocolLocker ? 100 : (totalBalance > 0 ? Math.min((lockedBalance / totalBalance) * 100, 100) : 0);
-    const certIsProtocolSecure = !!certProtocolLocker;
 
     const holders: { address: string; balance: string; percent: string; is_contract: string; tag: string }[]
       = tokenData?.holders ?? [];

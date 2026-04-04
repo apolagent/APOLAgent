@@ -139,12 +139,18 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const liqUsd: number | null = topPair?.liquidity?.usd ?? null;
     const liqFormatted = liqUsd !== null ? fmtUsd(liqUsd) : "Data Pending";
 
-    // ── LP lock status from GoPlus on-chain data ───────────────────────────────
-    const PLATFORM_LOCKERS: Record<string, string> = {
+    // ── LP lock status — on-chain forensics via Blockscout deployer tracing ────
+    const BOT_PLATFORM_LOCKERS: Record<string, string> = {
       "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore Managed",
       "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
       "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker v4",
       "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
+    };
+
+    const BOT_PLATFORM_DEPLOYERS: Record<string, string> = {
+      "0xade256e1c2763b8766efe1eeb7c578d93f621f6f": "ApeStore Managed",
+      "0xd46618f35099074c5a456b21d2967a6ff6841bd3": "Clanker v4",
+      "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
     };
 
     const lpHolders: any[] = token?.lp_holders ?? [];
@@ -154,8 +160,8 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     let isKnownFactory = false;
 
     const botCreatorLower = (token?.creator_address || "").toLowerCase();
-    if (PLATFORM_LOCKERS[botCreatorLower]) {
-      lpEscrowName = PLATFORM_LOCKERS[botCreatorLower];
+    if (BOT_PLATFORM_LOCKERS[botCreatorLower]) {
+      lpEscrowName = BOT_PLATFORM_LOCKERS[botCreatorLower];
       lpEscrowPct = 100;
       isKnownFactory = true;
     }
@@ -164,12 +170,53 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       for (const lp of lpHolders) {
         const addr = (lp.address ?? "").toLowerCase();
         const pctVal = parseFloat(lp.percent ?? "0") * 100;
-        if (PLATFORM_LOCKERS[addr] && pctVal > lpEscrowPct) {
-          lpEscrowName = PLATFORM_LOCKERS[addr];
+        if (BOT_PLATFORM_LOCKERS[addr] && pctVal > lpEscrowPct) {
+          lpEscrowName = BOT_PLATFORM_LOCKERS[addr];
           lpEscrowPct = pctVal;
           isKnownFactory = true;
         }
       }
+    }
+
+    if (!isKnownFactory) {
+      for (const lp of lpHolders.slice(0, 3)) {
+        const addr = (lp.address ?? "").toLowerCase();
+        const pctVal = parseFloat(lp.percent ?? "0") * 100;
+        if (!addr || addr === "0x0000000000000000000000000000000000000000") continue;
+        try {
+          const bsRes = await fetch(
+            `https://base.blockscout.com/api/v2/addresses/${addr}`,
+            { signal: AbortSignal.timeout(5000) },
+          );
+          if (!bsRes.ok) continue;
+          const bsData = await bsRes.json() as any;
+          const deployerAddr = (bsData.creator_address_hash || "").toLowerCase();
+          if (deployerAddr && BOT_PLATFORM_DEPLOYERS[deployerAddr]) {
+            lpEscrowName = BOT_PLATFORM_DEPLOYERS[deployerAddr];
+            lpEscrowPct = pctVal;
+            isKnownFactory = true;
+            break;
+          }
+        } catch { /* non-fatal */ }
+      }
+    }
+
+    if (!isKnownFactory && botCreatorLower) {
+      try {
+        const bsRes = await fetch(
+          `https://base.blockscout.com/api/v2/addresses/${botCreatorLower}`,
+          { signal: AbortSignal.timeout(5000) },
+        );
+        if (bsRes.ok) {
+          const bsData = await bsRes.json() as any;
+          const deployerAddr = (bsData.creator_address_hash || "").toLowerCase();
+          if (deployerAddr && BOT_PLATFORM_DEPLOYERS[deployerAddr]) {
+            lpEscrowName = BOT_PLATFORM_DEPLOYERS[deployerAddr];
+            lpEscrowPct = 100;
+            isKnownFactory = true;
+          }
+        }
+      } catch { /* non-fatal */ }
     }
 
     const isProtocolEscrow = !!lpEscrowName;

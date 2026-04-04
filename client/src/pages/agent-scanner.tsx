@@ -91,6 +91,7 @@ type ContractScan = {
   lockLocations: string[];
   topHolders: { address: string; percent: number; tag: string; isBurn: boolean }[];
   holderCount: number;
+  protocolLocker?: string | null;
 };
 
 type AgentResult = {
@@ -218,14 +219,16 @@ function AdvancedResults({ result }: { result: AgentResult }) {
   const caseNum = `APOL-${Date.now().toString(36).toUpperCase().slice(-6)}`;
   const reportDate = new Date().toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" }).toUpperCase();
 
+  const isProtocolManaged = (result.isKnownFactory && result.lpEscrow) || cs?.protocolLocker;
+  const protocolLabel = result.lpEscrow?.name ?? cs?.protocolLocker ?? "";
   const lpStatus = !cs ? "N/A"
-    : result.isKnownFactory && result.lpEscrow ? `PROTOCOL MANAGED — ${result.lpEscrow.name.toUpperCase()}`
+    : isProtocolManaged ? `PROTOCOL MANAGED — ${protocolLabel.toUpperCase()}`
     : cs.lpLockedPercent >= 90 ? `LOCKED (${cs.lpLockedPercent.toFixed(0)}%${cs.lockLocations[0] ? ` · ${cs.lockLocations[0]}` : ""})`
     : cs.lockLocations.some(l => l.toLowerCase().includes("burn")) ? `BURNED (${cs.lpLockedPercent.toFixed(0)}%)`
     : cs.lpLockedPercent > 0 ? `PARTIALLY LOCKED (${cs.lpLockedPercent.toFixed(0)}%)`
     : "MANUAL / UNLOCKED";
   const lpColor = !cs ? "#6b7280"
-    : (result.isKnownFactory && result.lpEscrow) ? G
+    : isProtocolManaged ? G
     : cs.lpLockedPercent >= 90 ? G
     : cs.lpLockedPercent >= 50 ? "#facc15"
     : "#f87171";
