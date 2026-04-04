@@ -955,9 +955,6 @@ export default function AgentScanner() {
                             PROTOCOL MANAGED
                           </div>
                         </div>
-                        <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(0,255,0,0.15)", fontSize: "10px", color: "rgba(255,255,255,0.55)", lineHeight: 1.8, fontFamily: "'JetBrains Mono', monospace" }}>
-                          <div>• Protocol Managed. LP secured by {checkResult.lpEscrow.name}.</div>
-                        </div>
                         <div style={{ padding: "6px 16px 10px", fontSize: "9px", color: "rgba(0,255,0,0.4)", fontFamily: "'JetBrains Mono', monospace" }}>
                           Locker: {checkResult.lpEscrow.address}
                         </div>

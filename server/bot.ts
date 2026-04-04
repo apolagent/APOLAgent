@@ -76,18 +76,10 @@ const BOT_PLATFORM_DEPLOYERS: Record<string, string> = {
   "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
 };
 
-const VIRTUALS_FACTORY = "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b";
-const VIRTUALS_DEPLOYER = "0x97cf38bb06da57b6418083998b09976ec40a90a3";
-const VIRTUALS_ADDRESSES = new Set([VIRTUALS_FACTORY, VIRTUALS_DEPLOYER]);
-
-function isVirtualsOrigin(creatorAddress: string, lpHolders: { address: string }[]): boolean {
-  const creatorLower = (creatorAddress || "").toLowerCase();
-  if (VIRTUALS_ADDRESSES.has(creatorLower)) return true;
-  for (const lp of lpHolders) {
-    if (VIRTUALS_ADDRESSES.has((lp.address ?? "").toLowerCase())) return true;
-  }
-  return false;
-}
+const ALL_BOT_FACTORY_ADDRESSES = new Set([
+  ...Object.keys(BOT_PLATFORM_LOCKERS).map(a => a.toLowerCase()),
+  ...Object.keys(BOT_PLATFORM_DEPLOYERS).map(a => a.toLowerCase()),
+]);
 
 // ─── Master timeout helper ───────────────────────────────────────────────────
 
@@ -107,7 +99,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const [apiResult, dexResult] = await Promise.allSettled([
       fetch(
         `http://localhost:5000/api/detective/analyze?address=${encodeURIComponent(address)}&chain=base`,
-        { signal: AbortSignal.timeout(12_000) }
+        { signal: AbortSignal.timeout(45_000) }
       ).then(r => r.ok ? r.json() : null),
       fetch(
         `https://api.dexscreener.com/latest/dex/tokens/${address}`,
@@ -163,7 +155,6 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const lpEscrowName   = api?.lpEscrow?.name ?? null;
     const isProtocolEscrow = !!api?.protocolSecured;
     const isOwnershipRenounced = !!api?.isOwnershipRenounced;
-    const isHoneypot = !!api?.isHoneypot;
     const redFlags: string[] = api?.redFlags ?? [];
     const adminThreats: any[] = api?.adminThreats ?? [];
 
@@ -176,11 +167,10 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const flags: string[] = [];
     const adminAlerts: string[] = [];
     if (api) {
-      if (isHoneypot) flags.push("⛔ HONEYPOT DETECTED");
       for (const rf of redFlags) {
-        if (rf.toLowerCase().includes("honeypot")) continue;
-        if (rf.includes("buy tax"))   flags.push(`💸 ${rf}`);
-        else if (rf.includes("sell tax"))  flags.push(`💸 ${rf}`);
+        if (rf.includes("buy tax"))       flags.push(`💸 ${rf}`);
+        else if (rf.includes("sell tax")) flags.push(`💸 ${rf}`);
+        else if (rf.toLowerCase().includes("honeypot")) flags.push(`⛔ ${rf}`);
         else if (rf.includes("mint"))      flags.push(`🖨️ ${rf}`);
         else if (rf.includes("blacklist")) flags.push(`🚫 ${rf}`);
         else if (rf.includes("proxy"))     flags.push(`🔄 ${rf}`);
@@ -199,10 +189,10 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
 
     let riskEmoji: string;
     const rl = (api?.riskLevel ?? "").toLowerCase();
-    if (rl === "high risk" || isHoneypot) riskEmoji = isHoneypot ? "🚨 CRITICAL" : "🔴 HIGH RISK";
-    else if (rl === "caution")            riskEmoji = "🟡 MEDIUM RISK";
-    else if (rl === "clean" || rl === "safe") riskEmoji = "🟢 LOW RISK";
-    else                                  riskEmoji = flags.length > 0 ? "🟡 MEDIUM RISK" : "🟢 LOW RISK";
+    if (rl === "high risk")                          riskEmoji = "🔴 HIGH RISK";
+    else if (rl === "caution")                       riskEmoji = "🟡 MEDIUM RISK";
+    else if (rl === "clean" || rl === "safe")         riskEmoji = "🟢 LOW RISK";
+    else                                              riskEmoji = flags.length > 0 ? "🟡 MEDIUM RISK" : "🟢 LOW RISK";
 
     let msg = "";
     msg += `🚔 *APOL AGENT — CONTRACT SNAPSHOT*\n\n`;
@@ -220,15 +210,10 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
 
     msg += `\n*RISK LEVEL: ${riskEmoji}*\n`;
 
-    const isHighRisk = api?.isHighRisk || isHoneypot;
-    if (isOwnershipRenounced && adminAlerts.length === 0 && !isHoneypot && !isHighRisk) {
+    const isHighRisk = rl === "high risk";
+    if (isOwnershipRenounced && adminAlerts.length === 0 && !isHighRisk) {
       msg += `\n✅ *CONTRACT RENOUNCED*\n`;
       msg += `• Ownership burned. No admin keys.\n`;
-    }
-
-    if (isKnownFactory && lpEscrowName) {
-      msg += `\n🏛️ *LP SECURITY*\n`;
-      msg += `• Secured by ${lpEscrowName} protocol.\n`;
     }
 
     if (adminAlerts.length > 0) {
@@ -871,11 +856,20 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     let agentIsKnownFactory = false;
 
     const agentCreatorLower = (token?.creator_address || "").toLowerCase();
-    const agentIsVirtuals = isVirtualsOrigin(agentCreatorLower, lpHolders);
+    const agentIsKnownOrigin = ALL_BOT_FACTORY_ADDRESSES.has(agentCreatorLower) || lpHolders.some(lp => ALL_BOT_FACTORY_ADDRESSES.has((lp.address ?? "").toLowerCase()));
 
-    if (agentIsVirtuals) {
-      agentLpEscrowName = "Virtuals";
+    if (agentIsKnownOrigin && BOT_PLATFORM_LOCKERS[agentCreatorLower]) {
+      agentLpEscrowName = BOT_PLATFORM_LOCKERS[agentCreatorLower];
       agentIsKnownFactory = true;
+    } else if (agentIsKnownOrigin && BOT_PLATFORM_DEPLOYERS[agentCreatorLower]) {
+      agentLpEscrowName = BOT_PLATFORM_DEPLOYERS[agentCreatorLower];
+      agentIsKnownFactory = true;
+    } else if (agentIsKnownOrigin) {
+      for (const lp of lpHolders) {
+        const a = (lp.address ?? "").toLowerCase();
+        if (BOT_PLATFORM_LOCKERS[a]) { agentLpEscrowName = BOT_PLATFORM_LOCKERS[a]; agentIsKnownFactory = true; break; }
+      }
+      if (!agentIsKnownFactory) { agentLpEscrowName = "Protocol"; agentIsKnownFactory = true; }
     } else if (BOT_PLATFORM_LOCKERS[agentCreatorLower]) {
       agentLpEscrowName = BOT_PLATFORM_LOCKERS[agentCreatorLower];
       agentIsKnownFactory = true;
@@ -953,10 +947,10 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
       exfilRisk = "LOW"; exfilDetail = "No fund drain mechanisms detected";
     }
 
-    // ── Virtuals override — reduce risk for Virtuals tokens (unless honeypot) ──
-    if (agentIsVirtuals && !isHoneypot) {
-      if (promptRisk !== "CRITICAL") { promptRisk = "LOW"; promptDetail = "Virtuals Protocol — trusted factory"; }
-      if (exfilRisk !== "CRITICAL") { exfilRisk = "LOW"; exfilDetail = "LP managed by Virtuals Protocol"; }
+    if (agentIsKnownFactory && !isHoneypot) {
+      const factoryLabel = agentLpEscrowName || "Protocol";
+      if (promptRisk !== "CRITICAL") { promptRisk = "LOW"; promptDetail = `${factoryLabel} — trusted factory origin`; }
+      if (exfilRisk !== "CRITICAL") { exfilRisk = "LOW"; exfilDetail = `LP managed by ${factoryLabel}`; }
     }
 
     // ── Final verdict ─────────────────────────────────────────────────────────
@@ -978,9 +972,9 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
       verdictLine = tinyLiquidity && noContract
         ? "No contract data and negligible liquidity. Likely a LARP operation."
         : "High-severity attack vectors detected. This agent fails the APOL Agent audit.";
-    } else if (agentIsVirtuals) {
+    } else if (agentIsKnownFactory) {
       verdict = "✅ CERTIFIED UNIT";
-      verdictLine = "Virtuals Protocol origin verified. LP managed by trusted factory.";
+      verdictLine = `${agentLpEscrowName || "Protocol"} origin verified. LP managed by trusted factory.`;
     } else if (promptRisk === "MEDIUM" || exfilRisk === "MEDIUM" || !isVerified) {
       verdict = "⚠️ CAUTION ADVISED";
       verdictLine = "Moderate risks present. Not certified — due diligence required before interaction.";

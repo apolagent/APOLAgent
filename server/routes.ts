@@ -80,9 +80,10 @@ const BURN_SET = new Set([
   "0x000000000000000000000000000000000000dead",
 ]);
 
-const VIRTUALS_FACTORY = "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b";
-const VIRTUALS_DEPLOYER = "0x97cf38bb06da57b6418083998b09976ec40a90a3";
-const VIRTUALS_ADDRESSES = new Set([VIRTUALS_FACTORY, VIRTUALS_DEPLOYER]);
+const ALL_KNOWN_FACTORY_ADDRESSES = new Set([
+  ...Object.keys(PLATFORM_LOCKERS).map(a => a.toLowerCase()),
+  ...Object.keys(PLATFORM_DEPLOYERS).map(a => a.toLowerCase()),
+]);
 
 async function fetchHolderCountFallback(address: string): Promise<number | null> {
   try {
@@ -99,11 +100,11 @@ async function fetchHolderCountFallback(address: string): Promise<number | null>
   }
 }
 
-function isVirtualsOrigin(creatorAddress: string, lpHolders: { address: string }[]): boolean {
+function isKnownFactoryOrigin(creatorAddress: string, lpHolders: { address: string }[]): boolean {
   const creatorLower = (creatorAddress || "").toLowerCase();
-  if (VIRTUALS_ADDRESSES.has(creatorLower)) return true;
+  if (ALL_KNOWN_FACTORY_ADDRESSES.has(creatorLower)) return true;
   for (const lp of lpHolders) {
-    if (VIRTUALS_ADDRESSES.has((lp.address ?? "").toLowerCase())) return true;
+    if (ALL_KNOWN_FACTORY_ADDRESSES.has((lp.address ?? "").toLowerCase())) return true;
   }
   return false;
 }
@@ -560,12 +561,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const lpHolders: any[] = tokenData.lp_holders ?? [];
 
         const scannedAddrLower = (address as string).toLowerCase();
-        const isVirtualsContract = VIRTUALS_ADDRESSES.has(scannedAddrLower);
-        const virtualsEarlyMatch = isVirtualsContract || isVirtualsOrigin(creatorAddress || "", lpHolders);
+        const isFactoryContract = ALL_KNOWN_FACTORY_ADDRESSES.has(scannedAddrLower);
+        const factoryEarlyMatch = isFactoryContract || isKnownFactoryOrigin(creatorAddress || "", lpHolders);
 
-        const protocolMatch = virtualsEarlyMatch
-          ? { name: "Virtuals", address: VIRTUALS_FACTORY, percent: 100 }
-          : await resolveProtocolLocker(creatorAddress || "", lpHolders, chain);
+        let protocolMatch: { name: string; address: string; percent: number } | null = null;
+        if (factoryEarlyMatch) {
+          const creatorLower = (creatorAddress || "").toLowerCase();
+          const matchName = PLATFORM_LOCKERS[creatorLower] || PLATFORM_DEPLOYERS[creatorLower]
+            || PLATFORM_LOCKERS[scannedAddrLower] || PLATFORM_DEPLOYERS[scannedAddrLower]
+            || (() => { for (const lp of lpHolders) { const a = (lp.address ?? "").toLowerCase(); if (PLATFORM_LOCKERS[a]) return PLATFORM_LOCKERS[a]; } return "Protocol"; })();
+          protocolMatch = { name: matchName, address: creatorLower || scannedAddrLower, percent: 100 };
+        } else {
+          protocolMatch = await resolveProtocolLocker(creatorAddress || "", lpHolders, chain);
+        }
         const lpEscrowName = protocolMatch?.name ?? null;
         const lpEscrowAddress = protocolMatch?.address ?? null;
         const lpEscrowPct = protocolMatch?.percent ?? 0;
@@ -611,14 +619,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const protocolSecured = isProtocolEscrow;
 
-        if (virtualsEarlyMatch && (isVirtualsContract || (!hasHoneypot && !hasKillerTax))) {
+        if (factoryEarlyMatch && (isFactoryContract || (!hasHoneypot && !hasKillerTax))) {
           const filteredFlags = redFlags.filter(f => {
             const fl = f.toLowerCase();
             if (fl.includes("lp not locked")) return false;
             if (fl.includes("low holder")) return false;
             if (fl.includes("not verified")) return false;
             if (fl.includes("hidden owner")) return false;
-            if (isVirtualsContract && (fl.includes("honeypot") || fl.includes("mint"))) return false;
+            if (isFactoryContract && (fl.includes("honeypot") || fl.includes("mint"))) return false;
             return true;
           });
           redFlags.length = 0;
@@ -631,9 +639,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         let riskLevel: string;
-        if ((hasHoneypot || hasKillerTax) && !isVirtualsContract) {
+        if ((hasHoneypot || hasKillerTax) && !isFactoryContract) {
           riskLevel = "High Risk";
-        } else if (virtualsEarlyMatch) {
+        } else if (factoryEarlyMatch) {
           riskLevel = redFlags.length > 0 ? "Caution" : "Clean";
         } else if (hasCriticalFlag) {
           riskLevel = "High Risk";
