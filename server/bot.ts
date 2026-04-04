@@ -61,6 +61,21 @@ function fmtMcap(price: number, supply: number | null): string {
   return `$${mcap.toFixed(2)}`;
 }
 
+// ─── Platform Locker / Deployer Maps (Base V3/V4 launchpads) ────────────────
+
+const BOT_PLATFORM_LOCKERS: Record<string, string> = {
+  "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore Managed",
+  "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
+  "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker v4",
+  "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
+};
+
+const BOT_PLATFORM_DEPLOYERS: Record<string, string> = {
+  "0xade256e1c2763b8766efe1eeb7c578d93f621f6f": "ApeStore Managed",
+  "0xd46618f35099074c5a456b21d2967a6ff6841bd3": "Clanker v4",
+  "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
+};
+
 // ─── Police Snapshot Scanner ─────────────────────────────────────────────────
 
 async function buildSnapshot(address: string, siteUrl: string): Promise<string> {
@@ -140,19 +155,6 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const liqFormatted = liqUsd !== null ? fmtUsd(liqUsd) : "Data Pending";
 
     // ── LP lock status — on-chain forensics via Blockscout deployer tracing ────
-    const BOT_PLATFORM_LOCKERS: Record<string, string> = {
-      "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore Managed",
-      "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
-      "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker v4",
-      "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
-    };
-
-    const BOT_PLATFORM_DEPLOYERS: Record<string, string> = {
-      "0xade256e1c2763b8766efe1eeb7c578d93f621f6f": "ApeStore Managed",
-      "0xd46618f35099074c5a456b21d2967a6ff6841bd3": "Clanker v4",
-      "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
-    };
-
     const lpHolders: any[] = token?.lp_holders ?? [];
 
     let lpEscrowName: string | null = null;
@@ -977,7 +979,7 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     const sellTax         = parseFloat(token?.sell_tax ?? "0");
     const highTax         = buyTax > 0.05 || sellTax > 0.05;
 
-    // ── LP lock ───────────────────────────────────────────────────────────────
+    // ── LP lock — on-chain forensics via Blockscout deployer tracing ─────────
     const lpHolders: any[] = token?.lp_holders ?? [];
     const lpBurnedPct = lpHolders
       .filter(h => (h.tag ?? "").toLowerCase().includes("burn") ||
@@ -986,7 +988,66 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     const lpLockedPct = lpHolders
       .filter(h => flag(h.is_locked))
       .reduce((acc, h) => acc + parseFloat(h.percent ?? "0") * 100, 0);
-    const lpSecure = lpBurnedPct >= 50 || lpLockedPct >= 50;
+
+    let agentLpEscrowName: string | null = null;
+    let agentIsKnownFactory = false;
+
+    const agentCreatorLower = (token?.creator_address || "").toLowerCase();
+    if (BOT_PLATFORM_LOCKERS[agentCreatorLower]) {
+      agentLpEscrowName = BOT_PLATFORM_LOCKERS[agentCreatorLower];
+      agentIsKnownFactory = true;
+    }
+
+    if (!agentIsKnownFactory) {
+      for (const lp of lpHolders) {
+        const addr = (lp.address ?? "").toLowerCase();
+        if (BOT_PLATFORM_LOCKERS[addr]) {
+          agentLpEscrowName = BOT_PLATFORM_LOCKERS[addr];
+          agentIsKnownFactory = true;
+          break;
+        }
+      }
+    }
+
+    if (!agentIsKnownFactory) {
+      for (const lp of lpHolders.slice(0, 3)) {
+        const addr = (lp.address ?? "").toLowerCase();
+        if (!addr || addr === "0x0000000000000000000000000000000000000000" || addr === "0x000000000000000000000000000000000000dead") continue;
+        try {
+          const bsRes = await fetch(
+            `https://base.blockscout.com/api/v2/addresses/${addr}`,
+            { signal: AbortSignal.timeout(5000) },
+          );
+          if (!bsRes.ok) continue;
+          const bsData = await bsRes.json() as any;
+          const deployerAddr = (bsData.creator_address_hash || "").toLowerCase();
+          if (deployerAddr && BOT_PLATFORM_DEPLOYERS[deployerAddr]) {
+            agentLpEscrowName = BOT_PLATFORM_DEPLOYERS[deployerAddr];
+            agentIsKnownFactory = true;
+            break;
+          }
+        } catch { /* non-fatal */ }
+      }
+    }
+
+    if (!agentIsKnownFactory && agentCreatorLower && agentCreatorLower !== "0x0000000000000000000000000000000000000000") {
+      try {
+        const bsRes = await fetch(
+          `https://base.blockscout.com/api/v2/addresses/${agentCreatorLower}`,
+          { signal: AbortSignal.timeout(5000) },
+        );
+        if (bsRes.ok) {
+          const bsData = await bsRes.json() as any;
+          const deployerAddr = (bsData.creator_address_hash || "").toLowerCase();
+          if (deployerAddr && BOT_PLATFORM_DEPLOYERS[deployerAddr]) {
+            agentLpEscrowName = BOT_PLATFORM_DEPLOYERS[deployerAddr];
+            agentIsKnownFactory = true;
+          }
+        }
+      } catch { /* non-fatal */ }
+    }
+
+    const lpSecure = lpBurnedPct >= 50 || lpLockedPct >= 50 || agentIsKnownFactory;
 
     // ── AI Threat Assessment ──────────────────────────────────────────────────
     // Prompt Injection Risk: can the agent's logic be covertly altered?
