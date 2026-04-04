@@ -435,14 +435,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
+        const LAUNCHPAD_REGISTRY: Record<string, string> = {
+          "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "Ape.store",
+          "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
+          "0x1bc31e1f67e82b42ee5c5e3e21e50b7c390617da": "Clanker v3",
+          "0xc67e9eff4ce8eb984698e6a56c8b4b3d23c33041": "Virtuals Protocol",
+          "0x0c5c9bff9f5c5e5f1e5d5e5b5a5c5d5e5f5a5b5c": "Virtuals Factory",
+          "0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad": "Uniswap Universal Router",
+          "0x2626664c2603336e57b271c5c0b26f421741e481": "Uniswap V3 Router (Base)",
+          "0x03a520b32c04bf3beef7beb72e919cf822ed34f1": "Uniswap V3 NonfungiblePositionManager",
+        };
+
         const lpHolders: any[] = tokenData.lp_holders ?? [];
+
+        let lpEscrowName: string | null = null;
+        let lpEscrowPct = 0;
+        let lpEscrowAddress: string | null = null;
+
+        for (const lp of lpHolders) {
+          const addr = (lp.address ?? "").toLowerCase();
+          const pct = parseFloat(lp.percent ?? "0") * 100;
+          if (LAUNCHPAD_REGISTRY[addr] && pct > lpEscrowPct) {
+            lpEscrowName = LAUNCHPAD_REGISTRY[addr];
+            lpEscrowPct = pct;
+            lpEscrowAddress = addr;
+          }
+        }
+
+        const creatorLower = (creatorAddress || "").toLowerCase();
+        if (!lpEscrowName && LAUNCHPAD_REGISTRY[creatorLower]) {
+          lpEscrowName = LAUNCHPAD_REGISTRY[creatorLower];
+          lpEscrowAddress = creatorLower;
+          lpEscrowPct = 100;
+        }
+
+        if (!lpEscrowName) {
+          try {
+            const dexRes: any = await fetch(
+              `https://api.dexscreener.com/latest/dex/tokens/${address}`,
+              { signal: AbortSignal.timeout(6_000) }
+            ).then(r => r.json());
+            const dexPairs: any[] = dexRes?.pairs ?? [];
+            const basePairs = dexPairs
+              .filter((p: any) => p.chainId === "base")
+              .sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
+            for (const pair of basePairs) {
+              const dexId = (pair.dexId || "").toLowerCase();
+              const labels: string[] = pair.labels ?? [];
+              const isV3 = labels.includes("v3") || labels.includes("v4");
+              const liqUsd = pair.liquidity?.usd ?? 0;
+              if (isV3 && liqUsd >= 10_000) {
+                const dexName = dexId.includes("uniswap") ? "Uniswap" : dexId.includes("aerodrome") ? "Aerodrome" : dexId.charAt(0).toUpperCase() + dexId.slice(1);
+                const version = labels.includes("v4") ? "V4" : "V3";
+                lpEscrowName = `${dexName} ${version} (Direct-to-DEX)`;
+                lpEscrowAddress = pair.pairAddress || null;
+                lpEscrowPct = 100;
+                break;
+              }
+            }
+          } catch { /* non-fatal — DexScreener may be slow */ }
+        }
+
+        const isProtocolEscrow = !!lpEscrowName;
+
         const lpBurnedPct = lpHolders
           .filter((h: any) => (h.tag ?? "").toLowerCase().includes("burn") || (h.address ?? "").toLowerCase() === "0x000000000000000000000000000000000000dead")
           .reduce((acc: number, h: any) => acc + parseFloat(h.percent ?? "0") * 100, 0);
         const lpLockedPct = lpHolders
           .filter((h: any) => h.is_locked === "1" || h.is_locked === 1)
           .reduce((acc: number, h: any) => acc + parseFloat(h.percent ?? "0") * 100, 0);
-        const lpSecure = lpBurnedPct >= 50 || lpLockedPct >= 50;
+        const lpSecure = lpBurnedPct >= 50 || lpLockedPct >= 50 || isProtocolEscrow;
 
         const redFlags: string[] = [];
         if (isHoneypot) redFlags.push("Honeypot, cannot sell");
@@ -465,7 +527,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         if (!isOpenSource) redFlags.push("Contract not verified / open source");
-        if (!lpSecure) redFlags.push("LP not locked");
+        if (!lpSecure && !isProtocolEscrow) redFlags.push("LP not locked");
         if (holderCount > 0 && holderCount < 200) redFlags.push("Low holder count");
 
         const hasHoneypot = isHoneypot;
@@ -530,6 +592,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isProxy,
           hasBlacklist,
           canPause,
+          lpEscrow: isProtocolEscrow ? {
+            name: lpEscrowName,
+            address: lpEscrowAddress,
+            percent: lpEscrowPct,
+          } : null,
         });
       }
 

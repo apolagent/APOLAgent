@@ -74,6 +74,7 @@ type DetectiveResult = {
   isProxy?: boolean;
   hasBlacklist?: boolean;
   canPause?: boolean;
+  lpEscrow?: { name: string; address: string; percent: number } | null;
 };
 
 type TestResult = { scored: boolean; score: number; maxScore: number; label: string; detail: string; timingPattern?: string[]; isContract?: boolean };
@@ -930,6 +931,25 @@ export default function AgentScanner() {
                           <div style={{ fontSize: "10px", color: "rgba(0,255,0,0.6)", marginTop: "4px", fontFamily: "'JetBrains Mono', monospace" }}>
                             Ownership sent to burn address. No admin can execute privileged functions. Gold standard security.
                           </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {checkResult.lpEscrow && (
+                      <div data-testid="div-lp-escrow" style={{ border: "2px solid #60a5fa", background: "rgba(96,165,250,0.06)", padding: "0" }}>
+                        <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
+                          <Lock size={18} color="#60a5fa" style={{ flexShrink: 0 }} />
+                          <div>
+                            <div style={{ fontSize: "13px", fontWeight: 900, color: "#60a5fa", letterSpacing: "0.16em", textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace" }}>
+                              PROTOCOL-MANAGED LIQUIDITY ({checkResult.lpEscrow.name.toUpperCase()})
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(96,165,250,0.15)", fontSize: "10px", color: "rgba(255,255,255,0.45)", lineHeight: 1.6, fontFamily: "'JetBrains Mono', monospace" }}>
+                          Liquidity is deployed via {checkResult.lpEscrow.name}. {checkResult.lpEscrow.name.includes("Direct-to-DEX") ? "The LP position is a concentrated liquidity deployment managed by the DEX protocol itself — no traditional LP token locking applies." : "The LP position is held by the launchpad's immutable vault. This is a direct-to-DEX deployment with protocol-level security, not a manual developer lock."}
+                        </div>
+                        <div style={{ padding: "6px 16px 10px", fontSize: "9px", color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace" }}>
+                          Escrow: {checkResult.lpEscrow.address} ({checkResult.lpEscrow.percent.toFixed(1)}% of LP)
                         </div>
                       </div>
                     )}

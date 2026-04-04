@@ -60,6 +60,13 @@ shared/
 - `GET /api/verified-projects` - List verified projects
 - `POST /api/agent/analyze` - Agent LARP detection scan
 
+## Launchpad Escrow Detection (3-tier)
+1. **LP Holder Match**: Checks GoPlus `lp_holders` against LAUNCHPAD_REGISTRY (Ape.store, Clanker v3/v4, Virtuals, Uniswap routers)
+2. **Creator Address Match**: Falls back to checking `creator_address` against LAUNCHPAD_REGISTRY
+3. **DexScreener V3/V4 Fallback**: If no match above, fetches DexScreener pairs — if highest-liquidity Base pair is V3/V4 with ≥$10K liquidity, treats as protocol-managed (e.g. "Uniswap V3 (Direct-to-DEX)")
+- When escrow detected: suppresses "LP not locked" flag, shows blue badge, risk treated as neutral
+- Frontend badge dynamically displays the escrow name from backend
+
 ## Secrets
 - `APOL_BOT_TOKEN` - Telegram bot token
 - `MORALIS_API_KEY` - Moralis Web3 API (wallet forensics)

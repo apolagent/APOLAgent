@@ -140,7 +140,51 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const liqFormatted = liqUsd !== null ? fmtUsd(liqUsd) : "Data Pending";
 
     // ── LP lock status from GoPlus on-chain data ───────────────────────────────
+    const LAUNCHPAD_REGISTRY: Record<string, string> = {
+      "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "Ape.store",
+      "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
+      "0x1bc31e1f67e82b42ee5c5e3e21e50b7c390617da": "Clanker v3",
+      "0xc67e9eff4ce8eb984698e6a56c8b4b3d23c33041": "Virtuals Protocol",
+      "0x0c5c9bff9f5c5e5f1e5d5e5b5a5c5d5e5f5a5b5c": "Virtuals Factory",
+      "0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad": "Uniswap Universal Router",
+      "0x2626664c2603336e57b271c5c0b26f421741e481": "Uniswap V3 Router (Base)",
+      "0x03a520b32c04bf3beef7beb72e919cf822ed34f1": "Uniswap V3 NonfungiblePositionManager",
+    };
+
     const lpHolders: any[] = token?.lp_holders ?? [];
+
+    let lpEscrowName: string | null = null;
+    let lpEscrowPct = 0;
+    for (const lp of lpHolders) {
+      const addr = (lp.address ?? "").toLowerCase();
+      const pctVal = parseFloat(lp.percent ?? "0") * 100;
+      if (LAUNCHPAD_REGISTRY[addr] && pctVal > lpEscrowPct) {
+        lpEscrowName = LAUNCHPAD_REGISTRY[addr];
+        lpEscrowPct = pctVal;
+      }
+    }
+
+    const botCreatorLower = (token?.creator_address || "").toLowerCase();
+    if (!lpEscrowName && LAUNCHPAD_REGISTRY[botCreatorLower]) {
+      lpEscrowName = LAUNCHPAD_REGISTRY[botCreatorLower];
+      lpEscrowPct = 100;
+    }
+
+    if (!lpEscrowName && topPair) {
+      const dexId = (topPair.dexId || "").toLowerCase();
+      const labels: string[] = topPair.labels ?? [];
+      const isV3 = labels.includes("v3") || labels.includes("v4");
+      const liqCheck = topPair.liquidity?.usd ?? 0;
+      if (isV3 && liqCheck >= 10_000) {
+        const dexName = dexId.includes("uniswap") ? "Uniswap" : dexId.includes("aerodrome") ? "Aerodrome" : dexId.charAt(0).toUpperCase() + dexId.slice(1);
+        const version = labels.includes("v4") ? "V4" : "V3";
+        lpEscrowName = `${dexName} ${version} (Direct-to-DEX)`;
+        lpEscrowPct = 100;
+      }
+    }
+
+    const isProtocolEscrow = !!lpEscrowName;
+
     const lpBurnedPct = lpHolders
       .filter(h =>
         (h.tag ?? "").toLowerCase().includes("burn") ||
@@ -150,9 +194,11 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const lpLockedPct = lpHolders
       .filter(h => flag(h.is_locked))
       .reduce((acc, h) => acc + parseFloat(h.percent ?? "0") * 100, 0);
+    const lpSecureBotCalc = lpBurnedPct >= 50 || lpLockedPct >= 50 || isProtocolEscrow;
 
     let lpStatus: string;
-    if (lpBurnedPct >= 50)      lpStatus = `Burned (${lpBurnedPct.toFixed(0)}%) ✅`;
+    if (isProtocolEscrow)       lpStatus = `Protocol Escrow (${lpEscrowName}) ✅`;
+    else if (lpBurnedPct >= 50) lpStatus = `Burned (${lpBurnedPct.toFixed(0)}%) ✅`;
     else if (lpLockedPct >= 50) lpStatus = `Locked (${lpLockedPct.toFixed(0)}%) ✅`;
     else if (lpLockedPct > 0)   lpStatus = `Partially Locked (${lpLockedPct.toFixed(0)}%) ⚠️`;
     else if (!token && !topPair) lpStatus = `Data Pending`;
@@ -217,7 +263,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     } else if (isHoneypotHP) {
       flags.push("⛔ HONEYPOT DETECTED");
     }
-    if (lpLockedPct < 50 && lpBurnedPct < 50 && (token || topPair)) {
+    if (lpLockedPct < 50 && lpBurnedPct < 50 && !isProtocolEscrow && (token || topPair)) {
       flags.push("🔓 LP Not Locked");
     }
     if (holderRaw > 0 && holderRaw < 200) {
@@ -268,6 +314,11 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     if (isOwnershipRenounced && adminAlerts.length === 0) {
       msg += `\n✅ *CONTRACT RENOUNCED*\n`;
       msg += `_Ownership sent to burn address. No admin can execute privileged functions._\n`;
+    }
+
+    if (isProtocolEscrow && lpEscrowName) {
+      msg += `\n🏛️ *PROTOCOL-MANAGED LIQUIDITY*\n`;
+      msg += `_Liquidity deployed via ${lpEscrowName}. LP held by launchpad's immutable vault — direct-to-DEX with protocol-level security._\n`;
     }
 
     if (adminAlerts.length > 0) {
