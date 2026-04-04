@@ -188,7 +188,6 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
 
     let lpStatus: string;
     if (isKnownFactory)         lpStatus = `${lpEscrowName} ✅`;
-    else if (isProtocolEscrow)  lpStatus = `${lpEscrowName} ✅`;
     else if (lpBurnedPct >= 50) lpStatus = `Burned (${lpBurnedPct.toFixed(0)}%) ✅`;
     else if (lpLockedPct >= 50) lpStatus = `Locked (${lpLockedPct.toFixed(0)}%) ✅`;
     else if (lpLockedPct > 0)   lpStatus = `Partially Locked (${lpLockedPct.toFixed(0)}%) ⚠️`;
@@ -312,15 +311,9 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       msg += `• Ownership burned. No admin keys.\n`;
     }
 
-    if (isProtocolEscrow && lpEscrowName) {
-      if (isKnownFactory) {
-        msg += `\n🏛️ *LP — ${lpEscrowName}*\n`;
-        msg += `• LP bound to [${lpEscrowName}] factory. Verified deployment.\n`;
-      } else {
-        msg += `\n🏛️ *LP — ${lpEscrowName.toUpperCase()}*\n`;
-        msg += `• Concentrated liquidity on ${lpEscrowName}.\n`;
-        msg += `• LP managed by DEX protocol, not developer.\n`;
-      }
+    if (isKnownFactory && lpEscrowName) {
+      msg += `\n🏛️ *LP — ${lpEscrowName}*\n`;
+      msg += `• LP bound to [${lpEscrowName}] factory. Verified deployment.\n`;
     }
 
     if (adminAlerts.length > 0) {

@@ -937,7 +937,7 @@ export default function AgentScanner() {
                       </div>
                     )}
 
-                    {checkResult.lpEscrow && (
+                    {checkResult.isKnownFactory && checkResult.lpEscrow && (
                       <div data-testid="div-lp-escrow" style={{ border: "2px solid #00FF00", background: "rgba(0,255,0,0.04)", padding: "0" }}>
                         <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
                           <Lock size={18} color="#00FF00" style={{ flexShrink: 0 }} />
@@ -947,23 +947,14 @@ export default function AgentScanner() {
                             </div>
                           </div>
                           <div style={{ marginLeft: "auto", background: "#00FF00", color: "#000", fontSize: "9px", fontWeight: 900, padding: "3px 8px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.1em" }}>
-                            {checkResult.isKnownFactory ? "FACTORY BOUND" : "PROTOCOL LP"}
+                            FACTORY BOUND
                           </div>
                         </div>
                         <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(0,255,0,0.15)", fontSize: "10px", color: "rgba(255,255,255,0.55)", lineHeight: 1.8, fontFamily: "'JetBrains Mono', monospace" }}>
-                          {checkResult.isKnownFactory ? (
-                            <>
-                              <div>• LP bound to [{checkResult.lpEscrow.name}] factory. Verified deployment.</div>
-                            </>
-                          ) : (
-                            <>
-                              <div>• Concentrated liquidity on {checkResult.lpEscrow.name}.</div>
-                              <div>• LP managed by DEX protocol, not developer.</div>
-                            </>
-                          )}
+                          <div>• LP bound to [{checkResult.lpEscrow.name}] factory. Verified deployment.</div>
                         </div>
                         <div style={{ padding: "6px 16px 10px", fontSize: "9px", color: "rgba(0,255,0,0.4)", fontFamily: "'JetBrains Mono', monospace" }}>
-                          {checkResult.isKnownFactory ? "Factory" : "Pool"}: {checkResult.lpEscrow.address}
+                          Factory: {checkResult.lpEscrow.address}
                         </div>
                       </div>
                     )}
