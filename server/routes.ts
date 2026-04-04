@@ -448,12 +448,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        const WHITELIST: Record<string, string> = {
-          "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "APESTORE",
-          "0x5d9a9143dca78a344d51ea722904b9a4669": "APESTORE",
-          "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "CLANKER",
-          "0xb923b8275f4ae65a280836211732dc961c414196": "CLANKER",
-          "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "VIRTUALS",
+        const PLATFORM_LOCKERS: Record<string, string> = {
+          "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore Managed",
+          "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
+          "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker v4",
+          "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
         };
 
         const lpHolders: any[] = tokenData.lp_holders ?? [];
@@ -464,8 +463,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let isKnownFactory = false;
 
         const creatorLower = (creatorAddress || "").toLowerCase();
-        if (WHITELIST[creatorLower]) {
-          lpEscrowName = WHITELIST[creatorLower];
+        if (PLATFORM_LOCKERS[creatorLower]) {
+          lpEscrowName = PLATFORM_LOCKERS[creatorLower];
           lpEscrowAddress = creatorLower;
           lpEscrowPct = 100;
           isKnownFactory = true;
@@ -475,8 +474,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           for (const lp of lpHolders) {
             const addr = (lp.address ?? "").toLowerCase();
             const pct = parseFloat(lp.percent ?? "0") * 100;
-            if (WHITELIST[addr] && pct > lpEscrowPct) {
-              lpEscrowName = WHITELIST[addr];
+            if (PLATFORM_LOCKERS[addr] && pct > lpEscrowPct) {
+              lpEscrowName = PLATFORM_LOCKERS[addr];
               lpEscrowPct = pct;
               lpEscrowAddress = addr;
               isKnownFactory = true;
@@ -515,13 +514,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         if (!isOpenSource) redFlags.push("Contract not verified / open source");
-        if (!lpSecure) redFlags.push("LP not locked");
+        if (!lpSecure && !isProtocolEscrow) redFlags.push("LP not locked");
         if (holderCount > 0 && holderCount < 200) redFlags.push("Low holder count");
 
         const hasHoneypot = isHoneypot;
         const hasKillerTax = (sellTax !== null && sellTax > 20) || (buyTax !== null && buyTax > 20);
         const hasCriticalFlag = !isOwnershipRenounced && (ownerChangeBalance || canTakeBackOwnership || hasHiddenOwner || hasSelfDestruct);
-        const hasUnlockedLP = !lpSecure;
+        const hasUnlockedLP = !lpSecure && !isProtocolEscrow;
 
         const protocolSecured = isProtocolEscrow;
 
@@ -530,6 +529,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           riskLevel = "High Risk";
         } else if (hasCriticalFlag) {
           riskLevel = "High Risk";
+        } else if (isProtocolEscrow) {
+          riskLevel = "Clean";
         } else if (isOwnershipRenounced) {
           if (redFlags.length >= 3) riskLevel = "High Risk";
           else if (redFlags.length >= 1) riskLevel = "Caution";
@@ -540,7 +541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           else riskLevel = "Clean";
         }
 
-        const greenBadge = riskLevel !== "High Risk" && redFlags.length === 0 && isOpenSource && !isHoneypot && !hasKillerTax && lpSecure && adminThreats.length === 0;
+        const greenBadge = riskLevel !== "High Risk" && redFlags.length === 0 && isOpenSource && !isHoneypot && !hasKillerTax && (lpSecure || isProtocolEscrow) && adminThreats.length === 0;
 
         const apolVerdict = buildContractVerdict(tokenData.token_name, tokenData.token_symbol, riskLevel, greenBadge, redFlags);
 
@@ -1408,23 +1409,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const sellTax = hpData?.SellTax != null ? hpData.SellTax : taxPct(tokenData?.sell_tax ?? "0");
 
     // LP Lock
+    const AUDIT_PLATFORM_LOCKERS: Record<string, string> = {
+      "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore Managed",
+      "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
+      "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker v4",
+      "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
+    };
+
     const lpHolders: any[] = tokenData?.lp_holders || [];
     let lockedLpPercent = 0;
     const lockLocations: string[] = [];
+    let auditProtocolLocker: string | null = null;
 
     for (const lp of lpHolders) {
       const addr = (lp.address || "").toLowerCase();
       const pct = parseFloat(lp.percent || "0") * 100;
       const isBurn = BURN_ADDRESSES.has(addr);
       const lockerLabel = LOCKER_LABELS[addr];
-      const isLocked = flag1(lp.is_locked) || isBurn || !!lockerLabel || !!(lp.tag);
+      const platformLabel = AUDIT_PLATFORM_LOCKERS[addr];
+      if (platformLabel && !auditProtocolLocker) {
+        auditProtocolLocker = platformLabel;
+      }
+      const isLocked = flag1(lp.is_locked) || isBurn || !!lockerLabel || !!(lp.tag) || !!platformLabel;
       if (isLocked) {
         lockedLpPercent += pct;
-        const loc = lp.tag || lockerLabel || (isBurn ? "Burn Address" : "Locked");
+        const loc = platformLabel || lp.tag || lockerLabel || (isBurn ? "Burn Address" : "Locked");
         if (!lockLocations.includes(loc)) lockLocations.push(loc);
       }
     }
+
+    const auditCreatorAddr = (tokenData?.creator_address || "").toLowerCase();
+    if (!auditProtocolLocker && AUDIT_PLATFORM_LOCKERS[auditCreatorAddr]) {
+      auditProtocolLocker = AUDIT_PLATFORM_LOCKERS[auditCreatorAddr];
+      lockedLpPercent = 100;
+      if (!lockLocations.includes(auditProtocolLocker)) lockLocations.push(auditProtocolLocker);
+    }
+
     const clampedLocked = Math.min(100, lockedLpPercent);
+    const auditIsProtocolSecure = !!auditProtocolLocker;
 
     // Top holders
     const rawHolders: any[] = tokenData?.holders || [];
@@ -1447,7 +1469,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     else if (buyTax > 10) flags.push(`High buy tax: ${buyTax.toFixed(1)}%`);
     if (sellTax > 25) flags.push(`Extreme sell tax: ${sellTax.toFixed(1)}%`);
     else if (sellTax > 10) flags.push(`High sell tax: ${sellTax.toFixed(1)}%`);
-    if (clampedLocked < 50 && lpHolders.length > 0) flags.push("Liquidity is not adequately locked");
+    if (clampedLocked < 50 && lpHolders.length > 0 && !auditIsProtocolSecure) flags.push("Liquidity is not adequately locked");
     if (flag1(tokenData?.is_mintable)) flags.push("Owner can mint unlimited tokens");
     if (flag1(tokenData?.slippage_modifiable)) flags.push("Owner can modify sell slippage");
     if (flag1(tokenData?.can_take_back_ownership)) flags.push("Recoverable ownership — renounce is fake");
@@ -1469,10 +1491,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const riskLevel = isHoneypot || buyTax > 25 || sellTax > 25 || flag1(tokenData?.owner_change_balance) || flag1(tokenData?.hidden_owner)
       ? "High Risk"
+      : auditIsProtocolSecure ? "Looks Clean"
       : adminFlags.length >= 2 ? "High Risk"
       : flags.length >= 2 ? "Caution"
       : flags.length === 1 ? "Watch"
       : "Looks Clean";
+
+    const lpStatus = auditIsProtocolSecure
+      ? "Protocol Managed"
+      : clampedLocked >= 90 ? "Fully Locked" : clampedLocked >= 50 ? "Partially Locked" : lpHolders.length > 0 ? "Unlocked" : "No LP data";
 
     res.json({
       contractAddress, chain,
@@ -1483,10 +1510,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       isInDex: flag1(tokenData?.is_in_dex),
       honeypot: { isHoneypot, simulationSuccess, buyTax, sellTax, source: hpData ? "honeypot.is" : "GoPlus" },
       liquidityLock: {
-        lockedPercent: clampedLocked,
+        lockedPercent: auditIsProtocolSecure ? 100 : clampedLocked,
         lockLocations,
-        status: clampedLocked >= 90 ? "Fully Locked" : clampedLocked >= 50 ? "Partially Locked" : lpHolders.length > 0 ? "Unlocked" : "No LP data",
+        status: lpStatus,
         lpHoldersChecked: lpHolders.length,
+        protocolLocker: auditProtocolLocker,
       },
       topHolders,
       top5pct,
@@ -1546,12 +1574,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const buyTax = hpData?.BuyTax != null ? hpData.BuyTax : taxPct(tokenData?.buy_tax ?? "0");
     const sellTax = hpData?.SellTax != null ? hpData.SellTax : taxPct(tokenData?.sell_tax ?? "0");
 
+    const CERT_PLATFORM_LOCKERS: Record<string, string> = {
+      "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore Managed",
+      "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
+      "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker v4",
+      "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
+    };
+
     const lpHolders: { address: string; balance: string; percent: string; is_contract: string; locked: string; tag: string }[]
       = tokenData?.lp_holders ?? [];
 
     let lockedBalance = 0;
     let totalBalance = 0;
     const lockLocations: string[] = [];
+    let certProtocolLocker: string | null = null;
 
     for (const lp of lpHolders) {
       const pct = parseFloat(lp.percent || "0");
@@ -1559,14 +1595,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const addr = (lp.address || "").toLowerCase();
       const isBurn = BURN_ADDRESSES.has(addr);
       const lockerLabel = LOCKER_LABELS[addr];
-      if (lp.locked === "1" || lp.locked === true as any || isBurn || lockerLabel) {
+      const platformLabel = CERT_PLATFORM_LOCKERS[addr];
+      if (platformLabel && !certProtocolLocker) {
+        certProtocolLocker = platformLabel;
+      }
+      if (lp.locked === "1" || lp.locked === true as any || isBurn || lockerLabel || !!platformLabel) {
         lockedBalance += pct;
-        const label = lockerLabel || (isBurn ? "Burn Address" : lp.tag || "Locked");
+        const label = platformLabel || lockerLabel || (isBurn ? "Burn Address" : lp.tag || "Locked");
         if (label && !lockLocations.includes(label)) lockLocations.push(label);
       }
     }
 
-    const clampedLocked = totalBalance > 0 ? Math.min((lockedBalance / totalBalance) * 100, 100) : 0;
+    const certCreatorAddr = (tokenData?.creator_address || "").toLowerCase();
+    if (!certProtocolLocker && CERT_PLATFORM_LOCKERS[certCreatorAddr]) {
+      certProtocolLocker = CERT_PLATFORM_LOCKERS[certCreatorAddr];
+      lockedBalance = totalBalance > 0 ? totalBalance : 1;
+      if (!lockLocations.includes(certProtocolLocker)) lockLocations.push(certProtocolLocker);
+    }
+
+    const clampedLocked = certProtocolLocker ? 100 : (totalBalance > 0 ? Math.min((lockedBalance / totalBalance) * 100, 100) : 0);
+    const certIsProtocolSecure = !!certProtocolLocker;
 
     const holders: { address: string; balance: string; percent: string; is_contract: string; tag: string }[]
       = tokenData?.holders ?? [];
@@ -1586,15 +1634,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (isHoneypot) flags.push("HONEYPOT");
     if (buyTax > 10) flags.push(`BUY TAX ${buyTax.toFixed(1)}%`);
     if (sellTax > 10) flags.push(`SELL TAX ${sellTax.toFixed(1)}%`);
-    if (lpHolders.length > 0 && clampedLocked < 50) flags.push("UNLOCKED LIQUIDITY");
+    if (lpHolders.length > 0 && clampedLocked < 50 && !certIsProtocolSecure) flags.push("UNLOCKED LIQUIDITY");
     if (flag1(tokenData?.is_mintable)) flags.push("MINTABLE");
     if (flag1(tokenData?.slippage_modifiable)) flags.push("SLIPPAGE MODIFIABLE");
     if (top5pct > 50) flags.push("HIGH HOLDER CONCENTRATION");
 
     const riskLevel = isHoneypot ? "Honeypot"
+      : certIsProtocolSecure ? "Low Risk"
       : flags.length >= 3 ? "High Risk"
       : flags.length >= 1 ? "Caution"
       : "Low Risk";
+
+    const certLpStatus = certIsProtocolSecure
+      ? "Protocol Managed"
+      : clampedLocked >= 90 ? "Fully Locked" : clampedLocked >= 50 ? "Partially Locked" : lpHolders.length > 0 ? "Unlocked" : "No LP data";
 
     const auditResult = {
       tokenName: tokenData?.token_name || "",
@@ -1606,8 +1659,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       liquidityLock: {
         lockedPercent: clampedLocked,
         lockLocations,
-        status: clampedLocked >= 90 ? "Fully Locked" : clampedLocked >= 50 ? "Partially Locked" : lpHolders.length > 0 ? "Unlocked" : "No LP data",
+        status: certLpStatus,
         lpHoldersChecked: lpHolders.length,
+        protocolLocker: certProtocolLocker,
       },
       topHolders,
       top5pct,

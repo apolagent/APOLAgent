@@ -140,12 +140,11 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const liqFormatted = liqUsd !== null ? fmtUsd(liqUsd) : "Data Pending";
 
     // ── LP lock status from GoPlus on-chain data ───────────────────────────────
-    const WHITELIST: Record<string, string> = {
-      "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "APESTORE",
-      "0x5d9a9143dca78a344d51ea722904b9a4669": "APESTORE",
-      "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "CLANKER",
-      "0xb923b8275f4ae65a280836211732dc961c414196": "CLANKER",
-      "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "VIRTUALS",
+    const PLATFORM_LOCKERS: Record<string, string> = {
+      "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore Managed",
+      "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
+      "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker v4",
+      "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
     };
 
     const lpHolders: any[] = token?.lp_holders ?? [];
@@ -155,8 +154,8 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     let isKnownFactory = false;
 
     const botCreatorLower = (token?.creator_address || "").toLowerCase();
-    if (WHITELIST[botCreatorLower]) {
-      lpEscrowName = WHITELIST[botCreatorLower];
+    if (PLATFORM_LOCKERS[botCreatorLower]) {
+      lpEscrowName = PLATFORM_LOCKERS[botCreatorLower];
       lpEscrowPct = 100;
       isKnownFactory = true;
     }
@@ -165,8 +164,8 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       for (const lp of lpHolders) {
         const addr = (lp.address ?? "").toLowerCase();
         const pctVal = parseFloat(lp.percent ?? "0") * 100;
-        if (WHITELIST[addr] && pctVal > lpEscrowPct) {
-          lpEscrowName = WHITELIST[addr];
+        if (PLATFORM_LOCKERS[addr] && pctVal > lpEscrowPct) {
+          lpEscrowName = PLATFORM_LOCKERS[addr];
           lpEscrowPct = pctVal;
           isKnownFactory = true;
         }
@@ -187,7 +186,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const lpSecureBotCalc = lpBurnedPct >= 50 || lpLockedPct >= 50 || isProtocolEscrow;
 
     let lpStatus: string;
-    if (isKnownFactory)         lpStatus = `${lpEscrowName} ✅`;
+    if (isKnownFactory)         lpStatus = `Protocol Managed — ${lpEscrowName} ✅`;
     else if (lpBurnedPct >= 50) lpStatus = `Burned (${lpBurnedPct.toFixed(0)}%) ✅`;
     else if (lpLockedPct >= 50) lpStatus = `Locked (${lpLockedPct.toFixed(0)}%) ✅`;
     else if (lpLockedPct > 0)   lpStatus = `Partially Locked (${lpLockedPct.toFixed(0)}%) ⚠️`;
@@ -253,7 +252,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     } else if (isHoneypotHP) {
       flags.push("⛔ HONEYPOT DETECTED");
     }
-    if (lpLockedPct < 50 && lpBurnedPct < 50 && !isProtocolEscrow && (token || topPair)) {
+    if (lpLockedPct < 50 && lpBurnedPct < 50 && !isProtocolEscrow && !isKnownFactory && (token || topPair)) {
       flags.push("🔓 LP Not Locked");
     }
     if (holderRaw > 0 && holderRaw < 200) {
@@ -274,6 +273,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     if (hasHoneypot)                              riskEmoji = "🚨 CRITICAL";
     else if (hasKillerTax)                        riskEmoji = "🔴 HIGH RISK";
     else if (hasCriticalFlag)                     riskEmoji = "🔴 HIGH RISK";
+    else if (isProtocolEscrow)                    riskEmoji = "🟢 LOW RISK";
     else if (adminAlerts.length >= 2)             riskEmoji = "🔴 HIGH RISK";
     else if (isOwnershipRenounced) {
       if (flags.length >= 3)                      riskEmoji = "🔴 HIGH RISK";
@@ -313,7 +313,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
 
     if (isKnownFactory && lpEscrowName) {
       msg += `\n🏛️ *LP — ${lpEscrowName}*\n`;
-      msg += `• LP bound to [${lpEscrowName}] factory. Verified deployment.\n`;
+      msg += `• Protocol Managed. LP secured by ${lpEscrowName}.\n`;
     }
 
     if (adminAlerts.length > 0) {

@@ -60,14 +60,22 @@ shared/
 - `GET /api/verified-projects` - List verified projects
 - `POST /api/agent/analyze` - Agent LARP detection scan
 
-## LP Detection — Factory Whitelist (2-tier)
-1. **Creator Address Match**: Checks `creator_address` against WHITELIST (APESTORE ×2, CLANKER ×2, VIRTUALS ×1)
-2. **LP Holder Match**: Falls back to checking GoPlus `lp_holders` against WHITELIST
-- **Whitelist addresses**: `0x0bf8...f58a` (APESTORE), `0x5d9a...4669` (APESTORE), `0xe85a...83a9` (CLANKER), `0xb923...4196` (CLANKER), `0xdad6...2e32` (VIRTUALS)
+## LP Detection — Protocol Security Override (PLATFORM_LOCKERS)
+1. **Creator Address Match**: Checks `creator_address` against PLATFORM_LOCKERS
+2. **LP Holder Match**: Falls back to checking GoPlus `lp_holders` against PLATFORM_LOCKERS
+- **PLATFORM_LOCKERS addresses (2026 Base)**:
+  - `0x0bf8...f58a` — APE_STORE → "ApeStore Managed"
+  - `0xe85a...83a9` — CLANKER_V4_FACTORY → "Clanker v4"
+  - `0xf362...5d68` — CLANKER_LOCKER → "Clanker v4"
+  - `0x0b3e...7e1b` — VIRTUALS_FACTORY → "Virtuals"
+- **Override behavior**: When LP NFT owner matches any PLATFORM_LOCKERS address:
+  - `isSecure = true`, status overridden from "Unlocked" to "Protocol Managed"
+  - Risk level forced to LOW/Clean (unless honeypot or killer tax)
+  - "LP Not Locked" warning suppressed
 - **Response fields**: `protocolSecured: true`, `isKnownFactory: true`, `lpEscrow: { name, address, percent }`
-- **Risk hierarchy**: Honeypot or sell_tax > 20% → forced High Risk, greenBadge=false, CONTRACT RENOUNCED badge hidden
-- **Frontend**: Factory-matched tokens show "LP bound to [NAME] factory. Verified deployment."
-- **Bot**: Same label format: "LP bound to [NAME] factory. Verified deployment."
+- **Risk hierarchy**: Honeypot or sell_tax > 20% → forced High Risk even if protocol-secured
+- **Frontend**: Factory-matched tokens show "Protocol Managed. LP secured by [NAME]." with "PROTOCOL MANAGED" badge
+- **Bot**: Same label format: "Protocol Managed. LP secured by [NAME]."
 
 ## Secrets
 - `APOL_BOT_TOKEN` - Telegram bot token

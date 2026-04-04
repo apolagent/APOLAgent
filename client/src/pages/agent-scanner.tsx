@@ -219,11 +219,13 @@ function AdvancedResults({ result }: { result: AgentResult }) {
   const reportDate = new Date().toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" }).toUpperCase();
 
   const lpStatus = !cs ? "N/A"
+    : result.isKnownFactory && result.lpEscrow ? `PROTOCOL MANAGED — ${result.lpEscrow.name.toUpperCase()}`
     : cs.lpLockedPercent >= 90 ? `LOCKED (${cs.lpLockedPercent.toFixed(0)}%${cs.lockLocations[0] ? ` · ${cs.lockLocations[0]}` : ""})`
     : cs.lockLocations.some(l => l.toLowerCase().includes("burn")) ? `BURNED (${cs.lpLockedPercent.toFixed(0)}%)`
     : cs.lpLockedPercent > 0 ? `PARTIALLY LOCKED (${cs.lpLockedPercent.toFixed(0)}%)`
     : "MANUAL / UNLOCKED";
   const lpColor = !cs ? "#6b7280"
+    : (result.isKnownFactory && result.lpEscrow) ? G
     : cs.lpLockedPercent >= 90 ? G
     : cs.lpLockedPercent >= 50 ? "#facc15"
     : "#f87171";
@@ -947,14 +949,14 @@ export default function AgentScanner() {
                             </div>
                           </div>
                           <div style={{ marginLeft: "auto", background: "#00FF00", color: "#000", fontSize: "9px", fontWeight: 900, padding: "3px 8px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.1em" }}>
-                            FACTORY BOUND
+                            PROTOCOL MANAGED
                           </div>
                         </div>
                         <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(0,255,0,0.15)", fontSize: "10px", color: "rgba(255,255,255,0.55)", lineHeight: 1.8, fontFamily: "'JetBrains Mono', monospace" }}>
-                          <div>• LP bound to [{checkResult.lpEscrow.name}] factory. Verified deployment.</div>
+                          <div>• Protocol Managed. LP secured by {checkResult.lpEscrow.name}.</div>
                         </div>
                         <div style={{ padding: "6px 16px 10px", fontSize: "9px", color: "rgba(0,255,0,0.4)", fontFamily: "'JetBrains Mono', monospace" }}>
-                          Factory: {checkResult.lpEscrow.address}
+                          Locker: {checkResult.lpEscrow.address}
                         </div>
                       </div>
                     )}
