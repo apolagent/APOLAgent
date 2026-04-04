@@ -70,7 +70,7 @@ try:
     with open(LOCK_FILE, "w") as f:
         json.dump({"timestamp": now, "tweet_id": tweet_id}, f)
     print(f"Tweet posted successfully! Tweet ID: {tweet_id}")
-    print(f"URL: https://x.com/Apol_Agent/status/{tweet_id}")
+    print(f"URL: https://x.com/apolagent_/status/{tweet_id}")
     print(f"\nPosted:\n{tweet_text}")
 except Exception as e:
     print(f"Failed to post tweet: {e}")

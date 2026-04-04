@@ -919,7 +919,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         traceabilityTest: { scored: true, score: 30, maxScore: 30, label: "Full Trace", detail: "Complete on-chain forensic footprint verified. Smart contract deployed and operational on Base.", isContract: true },
         contextTest: { scored: true, score: 30, maxScore: 30, label: "Verified Authority", detail: "All claimed capabilities are live and operational. Contract scanning, wallet forensics, LARP detection, and social forensics all confirmed active." },
         logsTest: { scored: true, status: "verified", detail: "Autonomous reasoning logs verified. APOL Agent processes and responds to all scan requests in real-time." },
-        socialTest: { scored: true, status: "clean", detail: "Official presence confirmed. @Apol_Agent on X/Twitter, @ApolAgentBot on Telegram. All channels verified." },
+        socialTest: { scored: true, status: "clean", detail: "Official presence confirmed. @ApolAgent_ on X/Twitter, @ApolAgentBot on Telegram. All channels verified." },
         contractScan: null,
       });
     }
