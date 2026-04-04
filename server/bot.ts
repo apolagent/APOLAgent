@@ -76,33 +76,38 @@ const BOT_PLATFORM_DEPLOYERS: Record<string, string> = {
   "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
 };
 
+// ─── Master timeout helper ───────────────────────────────────────────────────
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 // ─── Police Snapshot Scanner ─────────────────────────────────────────────────
 
 async function buildSnapshot(address: string, siteUrl: string): Promise<string> {
   try {
     // ── Fetch all sources in parallel ─────────────────────────────────────────
-    const [goplusRes, dexRes] = await Promise.all([
+    const [goplusResult, dexResult, hpResult] = await Promise.allSettled([
       fetch(
         `${GOPLUS_BASE}/token_security/${BASE_CHAIN_ID}?contract_addresses=${encodeURIComponent(address)}`,
-        { signal: AbortSignal.timeout(12_000) }
-      ),
+        { signal: AbortSignal.timeout(8_000) }
+      ).then(r => r.json()),
       fetch(
         `https://api.dexscreener.com/latest/dex/tokens/${address}`,
-        { signal: AbortSignal.timeout(12_000) }
-      ),
+        { signal: AbortSignal.timeout(8_000) }
+      ).then(r => r.json()),
+      fetch(
+        `https://api.honeypot.is/v2/IsHoneypot?address=${encodeURIComponent(address)}&chainID=8453`,
+        { signal: AbortSignal.timeout(5_000) }
+      ).then(r => r.ok ? r.json() : null),
     ]);
 
-    const goplusData = (await goplusRes.json()) as any;
-    const dexData    = (await dexRes.json())    as any;
-
-    let hpData: any = null;
-    try {
-      const hpRes = await fetch(
-        `https://api.honeypot.is/v2/IsHoneypot?address=${encodeURIComponent(address)}&chainID=8453`,
-        { signal: AbortSignal.timeout(12_000) }
-      );
-      if (hpRes.ok) hpData = await hpRes.json() as any;
-    } catch { /* non-fatal */ }
+    const goplusData = goplusResult.status === "fulfilled" ? goplusResult.value : null;
+    const dexData    = dexResult.status === "fulfilled" ? dexResult.value : null;
+    const hpData     = hpResult.status === "fulfilled" ? hpResult.value : null;
 
     // ── Parse GoPlus ──────────────────────────────────────────────────────────
     const tKey  = Object.keys(goplusData?.result ?? {})[0];
@@ -181,44 +186,30 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     }
 
     if (!isKnownFactory) {
-      for (const lp of lpHolders.slice(0, 3)) {
-        const addr = (lp.address ?? "").toLowerCase();
-        const pctVal = parseFloat(lp.percent ?? "0") * 100;
-        if (!addr || addr === "0x0000000000000000000000000000000000000000") continue;
-        try {
-          const bsRes = await fetch(
-            `https://base.blockscout.com/api/v2/addresses/${addr}`,
-            { signal: AbortSignal.timeout(5000) },
-          );
-          if (!bsRes.ok) continue;
-          const bsData = await bsRes.json() as any;
-          const deployerAddr = (bsData.creator_address_hash || "").toLowerCase();
-          if (deployerAddr && BOT_PLATFORM_DEPLOYERS[deployerAddr]) {
-            lpEscrowName = BOT_PLATFORM_DEPLOYERS[deployerAddr];
-            lpEscrowPct = pctVal;
-            isKnownFactory = true;
-            break;
-          }
-        } catch { /* non-fatal */ }
+      const bsTargets = lpHolders.slice(0, 3)
+        .map(lp => ({ addr: (lp.address ?? "").toLowerCase(), pct: parseFloat(lp.percent ?? "0") * 100 }))
+        .filter(t => t.addr && t.addr !== "0x0000000000000000000000000000000000000000");
+      if (botCreatorLower && botCreatorLower !== "0x0000000000000000000000000000000000000000") {
+        bsTargets.push({ addr: botCreatorLower, pct: 100 });
       }
-    }
 
-    if (!isKnownFactory && botCreatorLower) {
-      try {
-        const bsRes = await fetch(
-          `https://base.blockscout.com/api/v2/addresses/${botCreatorLower}`,
-          { signal: AbortSignal.timeout(5000) },
-        );
-        if (bsRes.ok) {
-          const bsData = await bsRes.json() as any;
-          const deployerAddr = (bsData.creator_address_hash || "").toLowerCase();
-          if (deployerAddr && BOT_PLATFORM_DEPLOYERS[deployerAddr]) {
-            lpEscrowName = BOT_PLATFORM_DEPLOYERS[deployerAddr];
-            lpEscrowPct = 100;
-            isKnownFactory = true;
-          }
+      const bsResults = await Promise.allSettled(
+        bsTargets.map(t =>
+          fetch(`https://base.blockscout.com/api/v2/addresses/${t.addr}`, { signal: AbortSignal.timeout(3_000) })
+            .then(r => r.ok ? r.json() : null)
+            .then(data => ({ ...t, deployer: (data?.creator_address_hash || "").toLowerCase() }))
+        )
+      );
+
+      for (const r of bsResults) {
+        if (r.status !== "fulfilled" || !r.value.deployer) continue;
+        if (BOT_PLATFORM_DEPLOYERS[r.value.deployer]) {
+          lpEscrowName = BOT_PLATFORM_DEPLOYERS[r.value.deployer];
+          lpEscrowPct = r.value.pct;
+          isKnownFactory = true;
+          break;
         }
-      } catch { /* non-fatal */ }
+      }
     }
 
     const isProtocolEscrow = !!lpEscrowName;
@@ -474,7 +465,7 @@ function fmtAge(isoTs: string): { days: number; label: string } | null {
 
 async function fetchOldestTx(address: string): Promise<{ timestamp: string; from: string } | null> {
   const BLOCKSCOUT = "https://base.blockscout.com/api/v2";
-  const sig = AbortSignal.timeout(14_000);
+  const sig = AbortSignal.timeout(8_000);
 
   // Paginate through transactions (50 per page) up to 5 pages to find oldest
   let nextParams: Record<string, string> | null = null;
@@ -601,24 +592,24 @@ async function buildWalletCheck(address: string): Promise<string> {
     //    D) Blockscout — Base balance + contract type
     //    E) Moralis Base transactions (ASC) — inflow/outflow
     const encodedAddr = encodeURIComponent(address);
-    const [baseChainsRes, allChainsRes, threatRes, bsAddrRes, baseTxRes] = await Promise.all([
+    const [baseChainsR, allChainsR, threatR, bsAddrR, baseTxR] = await Promise.allSettled([
       fetch(`${MORALIS}/wallets/${encodedAddr}/chains?chains[]=base`,
-        { headers: mHdrs, signal: AbortSignal.timeout(15_000) }),
+        { headers: mHdrs, signal: AbortSignal.timeout(8_000) }).then(r => r.json()),
       fetch(`${MORALIS}/wallets/${encodedAddr}/chains`,
-        { headers: mHdrs, signal: AbortSignal.timeout(15_000) }),
+        { headers: mHdrs, signal: AbortSignal.timeout(8_000) }).then(r => r.json()),
       fetch(`${GOPLUS_BASE}/address_security/${encodedAddr}?chain_id=${BASE_CHAIN_ID}`,
-        { signal: AbortSignal.timeout(12_000) }),
+        { signal: AbortSignal.timeout(8_000) }).then(r => r.json()),
       fetch(`https://base.blockscout.com/api/v2/addresses/${encodedAddr}`,
-        { signal: AbortSignal.timeout(12_000) }),
+        { signal: AbortSignal.timeout(8_000) }).then(r => r.json()),
       fetch(`${MORALIS}/${encodedAddr}?chain=0x2105&order=ASC&limit=100`,
-        { headers: mHdrs, signal: AbortSignal.timeout(15_000) }),
+        { headers: mHdrs, signal: AbortSignal.timeout(8_000) }).then(r => r.json()),
     ]);
 
-    const baseChainsData = (await baseChainsRes.json()) as any;
-    const allChainsData  = (await allChainsRes.json())  as any;
-    const threatData     = (await threatRes.json())      as any;
-    const bsAddr         = (await bsAddrRes.json())      as any;
-    const baseTxData     = (await baseTxRes.json())      as any;
+    const baseChainsData = baseChainsR.status === "fulfilled" ? baseChainsR.value : {};
+    const allChainsData  = allChainsR.status === "fulfilled" ? allChainsR.value : {};
+    const threatData     = threatR.status === "fulfilled" ? threatR.value : {};
+    const bsAddr         = bsAddrR.status === "fulfilled" ? bsAddrR.value : {};
+    const baseTxData     = baseTxR.status === "fulfilled" ? baseTxR.value : {};
     const gpResult       = threatData?.result ?? null;
 
     // ── Step 2: Find BASE-SPECIFIC genesis (first tx on Base chain) ──────────
@@ -656,7 +647,7 @@ async function buildWalletCheck(address: string): Promise<string> {
       try {
         const txRes = await fetch(
           `${MORALIS}/transaction/${encodeURIComponent(genesisTxHash)}?chain=0x2105`,
-          { headers: mHdrs, signal: AbortSignal.timeout(12_000) }
+          { headers: mHdrs, signal: AbortSignal.timeout(6_000) }
         );
         if (txRes.ok) {
           const txData = await txRes.json() as any;
@@ -680,7 +671,7 @@ async function buildWalletCheck(address: string): Promise<string> {
         try {
           const txRes = await fetch(
             `${MORALIS}/transaction/${encodeURIComponent(funderTxHash)}?chain=0x2105`,
-            { headers: mHdrs, signal: AbortSignal.timeout(10_000) }
+            { headers: mHdrs, signal: AbortSignal.timeout(6_000) }
           );
           if (txRes.ok) {
             const txData = await txRes.json() as any;
@@ -870,7 +861,7 @@ async function resolveAgentAddress(input: string): Promise<{ address: string; na
   try {
     const res = await fetch(
       `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(input)}`,
-      { signal: AbortSignal.timeout(10_000) }
+      { signal: AbortSignal.timeout(6_000) }
     );
     const data = (await res.json()) as any;
     const pairs: any[] = data?.pairs ?? [];
@@ -914,20 +905,19 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     }
     const { address } = resolved;
 
-    // ── Fetch GoPlus token security + DexScreener in parallel ─────────────────
-    const [goplusRes, dexRes] = await Promise.all([
+    const [agGoplusResult, agDexResult] = await Promise.allSettled([
       fetch(
         `${GOPLUS_BASE}/token_security/${BASE_CHAIN_ID}?contract_addresses=${encodeURIComponent(address)}`,
-        { signal: AbortSignal.timeout(12_000) }
-      ),
+        { signal: AbortSignal.timeout(8_000) }
+      ).then(r => r.json()),
       fetch(
         `https://api.dexscreener.com/latest/dex/tokens/${address}`,
-        { signal: AbortSignal.timeout(12_000) }
-      ),
+        { signal: AbortSignal.timeout(8_000) }
+      ).then(r => r.json()),
     ]);
 
-    const goplusData = (await goplusRes.json()) as any;
-    const dexData    = (await dexRes.json()) as any;
+    const goplusData = agGoplusResult.status === "fulfilled" ? agGoplusResult.value : null;
+    const dexData    = agDexResult.status === "fulfilled" ? agDexResult.value : null;
 
     const tKey  = Object.keys(goplusData?.result ?? {})[0];
     const token = tKey ? (goplusData.result[tKey] as any) : null;
@@ -946,7 +936,6 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
       );
     }
 
-    // ── Identity ──────────────────────────────────────────────────────────────
     const agentName   = resolved.name   || token?.token_name   || topPair?.baseToken?.name   || "Unknown Agent";
     const agentSymbol = resolved.symbol || token?.token_symbol || topPair?.baseToken?.symbol || "?";
 
@@ -1010,41 +999,29 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     }
 
     if (!agentIsKnownFactory) {
-      for (const lp of lpHolders.slice(0, 3)) {
-        const addr = (lp.address ?? "").toLowerCase();
-        if (!addr || addr === "0x0000000000000000000000000000000000000000" || addr === "0x000000000000000000000000000000000000dead") continue;
-        try {
-          const bsRes = await fetch(
-            `https://base.blockscout.com/api/v2/addresses/${addr}`,
-            { signal: AbortSignal.timeout(5000) },
-          );
-          if (!bsRes.ok) continue;
-          const bsData = await bsRes.json() as any;
-          const deployerAddr = (bsData.creator_address_hash || "").toLowerCase();
-          if (deployerAddr && BOT_PLATFORM_DEPLOYERS[deployerAddr]) {
-            agentLpEscrowName = BOT_PLATFORM_DEPLOYERS[deployerAddr];
-            agentIsKnownFactory = true;
-            break;
-          }
-        } catch { /* non-fatal */ }
+      const agBsTargets = lpHolders.slice(0, 3)
+        .map(lp => ({ addr: (lp.address ?? "").toLowerCase(), pct: parseFloat(lp.percent ?? "0") * 100 }))
+        .filter(t => t.addr && t.addr !== "0x0000000000000000000000000000000000000000" && t.addr !== "0x000000000000000000000000000000000000dead");
+      if (agentCreatorLower && agentCreatorLower !== "0x0000000000000000000000000000000000000000") {
+        agBsTargets.push({ addr: agentCreatorLower, pct: 100 });
       }
-    }
 
-    if (!agentIsKnownFactory && agentCreatorLower && agentCreatorLower !== "0x0000000000000000000000000000000000000000") {
-      try {
-        const bsRes = await fetch(
-          `https://base.blockscout.com/api/v2/addresses/${agentCreatorLower}`,
-          { signal: AbortSignal.timeout(5000) },
-        );
-        if (bsRes.ok) {
-          const bsData = await bsRes.json() as any;
-          const deployerAddr = (bsData.creator_address_hash || "").toLowerCase();
-          if (deployerAddr && BOT_PLATFORM_DEPLOYERS[deployerAddr]) {
-            agentLpEscrowName = BOT_PLATFORM_DEPLOYERS[deployerAddr];
-            agentIsKnownFactory = true;
-          }
+      const agBsResults = await Promise.allSettled(
+        agBsTargets.map(t =>
+          fetch(`https://base.blockscout.com/api/v2/addresses/${t.addr}`, { signal: AbortSignal.timeout(3_000) })
+            .then(r => r.ok ? r.json() : null)
+            .then(data => ({ ...t, deployer: (data?.creator_address_hash || "").toLowerCase() }))
+        )
+      );
+
+      for (const r of agBsResults) {
+        if (r.status !== "fulfilled" || !r.value.deployer) continue;
+        if (BOT_PLATFORM_DEPLOYERS[r.value.deployer]) {
+          agentLpEscrowName = BOT_PLATFORM_DEPLOYERS[r.value.deployer];
+          agentIsKnownFactory = true;
+          break;
         }
-      } catch { /* non-fatal */ }
+      }
     }
 
     const lpSecure = lpBurnedPct >= 50 || lpLockedPct >= 50 || agentIsKnownFactory;
@@ -1216,7 +1193,7 @@ async function buildSocialScan(input: string, siteUrl: string): Promise<string> 
     // ── Step 1: Fetch user profile by username ────────────────────────────────
     const userRes = await fetch(
       `https://${RAPIDAPI_HOST}/user?username=${encodeURIComponent(username)}`,
-      { headers, signal: AbortSignal.timeout(12_000) }
+      { headers, signal: AbortSignal.timeout(8_000) }
     );
     const userRaw: any = await userRes.json();
 
@@ -1240,7 +1217,7 @@ async function buildSocialScan(input: string, siteUrl: string): Promise<string> 
       try {
         const tweetsRes = await fetch(
           `https://${RAPIDAPI_HOST}/user-tweets?user_id=${encodeURIComponent(userId)}&count=5`,
-          { headers, signal: AbortSignal.timeout(12_000) }
+          { headers, signal: AbortSignal.timeout(8_000) }
         );
         const tweetsData: any = await tweetsRes.json();
         // twitter241 GraphQL timeline format
@@ -1391,7 +1368,7 @@ async function buildSocialScan(input: string, siteUrl: string): Promise<string> 
             wallet: linkedWallet,
             chain: "base",
           }),
-          signal: AbortSignal.timeout(15_000),
+          signal: AbortSignal.timeout(8_000),
         });
         const agentData: any = await agentRes.json();
         cognitionScore = agentData.cognitionScore;
@@ -1541,7 +1518,11 @@ export function createBot(): Telegraf | null {
       loadingMsgId = loading.message_id;
     } catch { /* non-fatal */ }
 
-    const snapshot = await buildSnapshot(address, site);
+    const SCAN_TIMEOUT_MSG =
+      `⚠️ *Scan Timeout*\n\n` +
+      `The scan is taking longer than expected. External APIs may be slow.\n\n` +
+      `Try the full scanner at [${site}](${site}/agent-scanner) for faster results.`;
+    const snapshot = await withTimeout(buildSnapshot(address, site), 20_000, SCAN_TIMEOUT_MSG);
 
     if (loadingMsgId !== null) {
       try { await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsgId); } catch { /* non-fatal */ }
@@ -1575,7 +1556,10 @@ export function createBot(): Telegraf | null {
       loadingMsgId = loading.message_id;
     } catch { /* non-fatal */ }
 
-    const report = await buildWalletCheck(address);
+    const WALLET_TIMEOUT_MSG =
+      `⚠️ *Wallet Check Timeout*\n\n` +
+      `The investigation is taking longer than expected. Try again in a moment.`;
+    const report = await withTimeout(buildWalletCheck(address), 20_000, WALLET_TIMEOUT_MSG);
 
     if (loadingMsgId !== null) {
       try { await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsgId); } catch { /* non-fatal */ }
@@ -1607,7 +1591,11 @@ export function createBot(): Telegraf | null {
       loadingMsgId = loading.message_id;
     } catch { /* non-fatal */ }
 
-    const report = await buildAgentScan(input, site);
+    const AGENT_TIMEOUT_MSG =
+      `⚠️ *Agent Scan Timeout*\n\n` +
+      `The scan is taking longer than expected. External APIs may be slow.\n\n` +
+      `Try the full scanner at [${site}](${site}/agent-scanner) for faster results.`;
+    const report = await withTimeout(buildAgentScan(input, site), 20_000, AGENT_TIMEOUT_MSG);
 
     if (loadingMsgId !== null) {
       try { await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsgId); } catch { /* non-fatal */ }
@@ -1640,7 +1628,10 @@ export function createBot(): Telegraf | null {
       loadingMsgId = loading.message_id;
     } catch { /* non-fatal */ }
 
-    const report = await buildSocialScan(input, site);
+    const SOCIAL_TIMEOUT_MSG =
+      `⚠️ *Social Scan Timeout*\n\n` +
+      `The X forensics module is taking longer than expected. Try again in a moment.`;
+    const report = await withTimeout(buildSocialScan(input, site), 20_000, SOCIAL_TIMEOUT_MSG);
 
     if (loadingMsgId !== null) {
       try { await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsgId); } catch { /* non-fatal */ }
