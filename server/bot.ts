@@ -89,39 +89,30 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 
 async function buildSnapshot(address: string, siteUrl: string): Promise<string> {
   try {
-    // ── Fetch all sources in parallel ─────────────────────────────────────────
-    const [goplusResult, dexResult, hpResult] = await Promise.allSettled([
+    const t0 = Date.now();
+
+    const [apiResult, dexResult] = await Promise.allSettled([
       fetch(
-        `${GOPLUS_BASE}/token_security/${BASE_CHAIN_ID}?contract_addresses=${encodeURIComponent(address)}`,
-        { signal: AbortSignal.timeout(8_000) }
-      ).then(r => r.json()),
+        `http://localhost:5000/api/detective/analyze?address=${encodeURIComponent(address)}&chain=base`,
+        { signal: AbortSignal.timeout(12_000) }
+      ).then(r => r.ok ? r.json() : null),
       fetch(
         `https://api.dexscreener.com/latest/dex/tokens/${address}`,
         { signal: AbortSignal.timeout(8_000) }
       ).then(r => r.json()),
-      fetch(
-        `https://api.honeypot.is/v2/IsHoneypot?address=${encodeURIComponent(address)}&chainID=8453`,
-        { signal: AbortSignal.timeout(5_000) }
-      ).then(r => r.ok ? r.json() : null),
     ]);
+    console.log(`[bot-perf] internal API + DexScreener: ${Date.now() - t0}ms`);
 
-    const goplusData = goplusResult.status === "fulfilled" ? goplusResult.value : null;
-    const dexData    = dexResult.status === "fulfilled" ? dexResult.value : null;
-    const hpData     = hpResult.status === "fulfilled" ? hpResult.value : null;
+    const api: any = apiResult.status === "fulfilled" ? apiResult.value : null;
+    const dexData: any = dexResult.status === "fulfilled" ? dexResult.value : null;
 
-    // ── Parse GoPlus ──────────────────────────────────────────────────────────
-    const tKey  = Object.keys(goplusData?.result ?? {})[0];
-    const token = tKey ? (goplusData.result[tKey] as any) : null;
-
-    // ── Parse DexScreener — filter for Base chain pairs only ─────────────────
     const allPairs: any[] = dexData?.pairs ?? [];
     const basePairs = allPairs
       .filter((p: any) => p.chainId === "base")
       .sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
     const topPair = basePairs[0] ?? null;
 
-    // ── Not found on either source ────────────────────────────────────────────
-    if (!token && !topPair) {
+    if (!api && !topPair) {
       return (
         `⚠️ *INVESTIGATION STALLED*\n\n` +
         `Contract not found on Base Mainnet. Ensure the CA is correct.\n\n` +
@@ -129,14 +120,11 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       );
     }
 
-    // ── Token identity (GoPlus primary, DexScreener fallback) ─────────────────
-    const rawName   = token?.token_name   ?? topPair?.baseToken?.name   ?? "Unknown";
-    const rawSymbol = token?.token_symbol ?? topPair?.baseToken?.symbol ?? "?";
-    const tokenName   = rawName;
-    const tokenSymbol = `$${rawSymbol}`;
+    const tokenName   = api?.tokenName   ?? topPair?.baseToken?.name   ?? "Unknown";
+    const tokenSymbol = `$${api?.tokenSymbol ?? topPair?.baseToken?.symbol ?? "?"}`;
 
     const apolSelfNames = ["apol", "apol agent", "active onchain intelligence", "$apol"];
-    if (apolSelfNames.includes(rawName.toLowerCase().trim()) || apolSelfNames.includes(rawSymbol.toLowerCase().trim())) {
+    if (apolSelfNames.includes(tokenName.toLowerCase().trim()) || apolSelfNames.includes((api?.tokenSymbol ?? "").toLowerCase().trim())) {
       return (
         `🦍 *APOL AGENT — SELF RECOGNITION*\n\n` +
         `*The Sentinel is Active. Intelligence verified.*\n\n` +
@@ -147,192 +135,68 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       );
     }
 
-    // ── Holder count (GoPlus — show Data Pending if missing or zero) ──────────
-    const holderRaw = parseInt(token?.holder_count ?? "0");
-    const holderCount = holderRaw > 0 ? holderRaw.toLocaleString() : "Data Pending";
+    const holderCount = (api?.holderCount && api.holderCount > 0) ? api.holderCount.toLocaleString() : "Data Pending";
+    const buyTaxFmt  = api ? `${(api.buyTax ?? 0).toFixed(1)}%` : "Data Pending";
+    const sellTaxFmt = api ? `${(api.sellTax ?? 0).toFixed(1)}%` : "Data Pending";
 
-    // ── Taxes from GoPlus simulation (most accurate source) ───────────────────
-    const buyTaxFmt  = token ? pct(token.buy_tax)  : "Data Pending";
-    const sellTaxFmt = token ? pct(token.sell_tax) : "Data Pending";
-
-    // ── Liquidity from DexScreener (real-time USD) ────────────────────────────
     const liqUsd: number | null = topPair?.liquidity?.usd ?? null;
     const liqFormatted = liqUsd !== null ? fmtUsd(liqUsd) : "Data Pending";
-
-    // ── LP lock status — on-chain forensics via Blockscout deployer tracing ────
-    const lpHolders: any[] = token?.lp_holders ?? [];
-
-    let lpEscrowName: string | null = null;
-    let lpEscrowPct = 0;
-    let isKnownFactory = false;
-
-    const botCreatorLower = (token?.creator_address || "").toLowerCase();
-    if (BOT_PLATFORM_LOCKERS[botCreatorLower]) {
-      lpEscrowName = BOT_PLATFORM_LOCKERS[botCreatorLower];
-      lpEscrowPct = 100;
-      isKnownFactory = true;
-    }
-
-    if (!isKnownFactory) {
-      for (const lp of lpHolders) {
-        const addr = (lp.address ?? "").toLowerCase();
-        const pctVal = parseFloat(lp.percent ?? "0") * 100;
-        if (BOT_PLATFORM_LOCKERS[addr] && pctVal > lpEscrowPct) {
-          lpEscrowName = BOT_PLATFORM_LOCKERS[addr];
-          lpEscrowPct = pctVal;
-          isKnownFactory = true;
-        }
-      }
-    }
-
-    if (!isKnownFactory) {
-      const bsTargets = lpHolders.slice(0, 3)
-        .map(lp => ({ addr: (lp.address ?? "").toLowerCase(), pct: parseFloat(lp.percent ?? "0") * 100 }))
-        .filter(t => t.addr && t.addr !== "0x0000000000000000000000000000000000000000");
-      if (botCreatorLower && botCreatorLower !== "0x0000000000000000000000000000000000000000") {
-        bsTargets.push({ addr: botCreatorLower, pct: 100 });
-      }
-
-      const bsResults = await Promise.allSettled(
-        bsTargets.map(t =>
-          fetch(`https://base.blockscout.com/api/v2/addresses/${t.addr}`, { signal: AbortSignal.timeout(3_000) })
-            .then(r => r.ok ? r.json() : null)
-            .then(data => ({ ...t, deployer: (data?.creator_address_hash || "").toLowerCase() }))
-        )
-      );
-
-      for (const r of bsResults) {
-        if (r.status !== "fulfilled" || !r.value.deployer) continue;
-        if (BOT_PLATFORM_DEPLOYERS[r.value.deployer]) {
-          lpEscrowName = BOT_PLATFORM_DEPLOYERS[r.value.deployer];
-          lpEscrowPct = r.value.pct;
-          isKnownFactory = true;
-          break;
-        }
-      }
-    }
-
-    const isProtocolEscrow = !!lpEscrowName;
-
-    const lpBurnedPct = lpHolders
-      .filter(h =>
-        (h.tag ?? "").toLowerCase().includes("burn") ||
-        (h.address ?? "").toLowerCase() === "0x000000000000000000000000000000000000dead"
-      )
-      .reduce((acc, h) => acc + parseFloat(h.percent ?? "0") * 100, 0);
-    const lpLockedPct = lpHolders
-      .filter(h => flag(h.is_locked))
-      .reduce((acc, h) => acc + parseFloat(h.percent ?? "0") * 100, 0);
-    const lpSecureBotCalc = lpBurnedPct >= 50 || lpLockedPct >= 50 || isProtocolEscrow;
-
-    let lpStatus: string;
-    if (isKnownFactory)         lpStatus = `${lpEscrowName} Managed ✅`;
-    else if (lpBurnedPct >= 50) lpStatus = `Burned (${lpBurnedPct.toFixed(0)}%) ✅`;
-    else if (lpLockedPct >= 50) lpStatus = `Locked (${lpLockedPct.toFixed(0)}%) ✅`;
-    else if (lpLockedPct > 0)   lpStatus = `Partially Locked (${lpLockedPct.toFixed(0)}%) ⚠️`;
-    else if (!token && !topPair) lpStatus = `Data Pending`;
-    else                        lpStatus = `Unlocked ⚠️`;
-
-    // ── Price + Market Cap from DexScreener ─────────────────────────────────
     const priceRaw  = parseFloat(topPair?.priceUsd ?? "0");
     const priceStr  = fmtPrice(priceRaw);
-    const totalSupply = token?.total_supply ? parseFloat(token.total_supply) / (10 ** parseInt(token.decimals ?? "18")) : null;
     const fdvRaw    = topPair?.fdv ?? null;
-    const mcapStr   = fdvRaw ? fmtUsd(fdvRaw) : fmtMcap(priceRaw, totalSupply);
+    const mcapStr   = fdvRaw ? fmtUsd(fdvRaw) : "Data Pending";
 
-    // ── Risk flags (GoPlus simulation data) ───────────────────────────────────
+    const isKnownFactory = !!api?.isKnownFactory;
+    const lpEscrowName   = api?.lpEscrow?.name ?? null;
+    const isProtocolEscrow = !!api?.protocolSecured;
+    const isOwnershipRenounced = !!api?.isOwnershipRenounced;
+    const isHoneypot = !!api?.isHoneypot;
+    const redFlags: string[] = api?.redFlags ?? [];
+    const adminThreats: any[] = api?.adminThreats ?? [];
+
+    let lpStatus: string;
+    if (isKnownFactory && lpEscrowName) lpStatus = `${lpEscrowName} Managed ✅`;
+    else if (isProtocolEscrow)          lpStatus = `Protocol Managed ✅`;
+    else if (api?.riskLevel)            lpStatus = redFlags.some(f => f.toLowerCase().includes("lp not locked")) ? `Unlocked ⚠️` : `Secured ✅`;
+    else                                lpStatus = `Data Pending`;
+
     const flags: string[] = [];
-
-    const isHoneypotGP = token ? flag(token.is_honeypot) : false;
-    const isHoneypotHP = hpData?.honeypotResult?.isHoneypot === true;
-    const isHoneypot = isHoneypotGP || isHoneypotHP;
-
     const adminAlerts: string[] = [];
-    let isOwnershipRenounced = false;
-
-    if (token) {
-      const ownerAddr = token.owner_address || "";
-      const ownerLower = ownerAddr.toLowerCase();
-      const BURN_ADDRS = [
-        "0x0000000000000000000000000000000000000000",
-        "0x000000000000000000000000000000000000dead",
-        "0x0000000000000000000000000000000000000001",
-        "0x0000000000000000000000000000000000000dead",
-      ];
-      isOwnershipRenounced = !ownerLower || BURN_ADDRS.includes(ownerLower);
-
-      if (isHoneypot)                               flags.push("⛔ HONEYPOT DETECTED");
-      if (parseFloat(token.buy_tax  ?? "0") > 0.1) flags.push(`💸 High Buy Tax: ${pct(token.buy_tax)}`);
-      if (parseFloat(token.sell_tax ?? "0") > 0.1) flags.push(`💸 High Sell Tax: ${pct(token.sell_tax)}`);
-
-      if (isOwnershipRenounced) {
-        if (flag(token.can_take_back_ownership)) { flags.push("⚠️ Recoverable Ownership (fake renounce)"); adminAlerts.push("🔑 RECOVERABLE OWNERSHIP — Renounce is fake, can be reclaimed"); }
-        if (flag(token.hidden_owner)) { flags.push("👤 Hidden Owner (despite renounce)"); adminAlerts.push("🔑 HIDDEN OWNER — True controller may be concealed despite renounce"); }
-      } else {
-        if (flag(token.can_take_back_ownership))     { flags.push("⚠️ Recoverable Ownership"); adminAlerts.push("🔑 RECOVERABLE OWNERSHIP — Renounce is fake, can be reclaimed"); }
-        if (flag(token.owner_change_balance))        { flags.push("⚠️ Owner Can Change Balance"); adminAlerts.push("🔑 BALANCE MANIPULATION — Owner can drain wallets"); }
-        if (flag(token.is_mintable))                 { flags.push("🖨️ Mintable Supply"); adminAlerts.push("🔑 UNLIMITED MINTING — Owner can dilute all holders instantly"); }
-        if (flag(token.hidden_owner))                { flags.push("👤 Hidden Owner"); adminAlerts.push("🔑 HIDDEN OWNER — True controller is concealed"); }
-        if (flag(token.selfdestruct))                { flags.push("💣 Self-Destruct Enabled"); adminAlerts.push("🔑 SELF-DESTRUCT — Admin can destroy contract, all tokens worthless"); }
-        if (flag(token.transfer_pausable))           { flags.push("⏸️ Transfers Pausable"); adminAlerts.push("🔑 TRANSFER FREEZE — Admin kill-switch for all transfers"); }
-        if (flag(token.slippage_modifiable))         { flags.push("📊 Slippage Modifiable"); adminAlerts.push("🔑 SLIPPAGE CONTROL — Sell tax can be raised to 100%"); }
-        if (flag(token.is_proxy))                    { flags.push("🔄 Proxy Contract"); adminAlerts.push("🔑 PROXY — Code can be swapped silently by admin"); }
-        if (flag(token.is_blacklist) || flag(token.is_blacklisted)) { flags.push("🚫 Blacklist Function"); adminAlerts.push("🔑 BLACKLIST — Admin can block wallets from selling"); }
-        if (flag(token.external_call))               flags.push("📡 External Call Risk");
-
-        const ownerIsContract = flag(token.owner_type);
-        if (!ownerIsContract && adminAlerts.length > 0) {
-          adminAlerts.unshift(`🚨 SINGLE-SIG ADMIN (${ownerAddr.slice(0,6)}…${ownerAddr.slice(-4)}) — One key = total control`);
-        }
+    if (api) {
+      if (isHoneypot) flags.push("⛔ HONEYPOT DETECTED");
+      for (const rf of redFlags) {
+        if (rf.toLowerCase().includes("honeypot")) continue;
+        if (rf.includes("buy tax"))   flags.push(`💸 ${rf}`);
+        else if (rf.includes("sell tax"))  flags.push(`💸 ${rf}`);
+        else if (rf.includes("mint"))      flags.push(`🖨️ ${rf}`);
+        else if (rf.includes("blacklist")) flags.push(`🚫 ${rf}`);
+        else if (rf.includes("proxy"))     flags.push(`🔄 ${rf}`);
+        else if (rf.includes("LP not"))    flags.push(`🔓 ${rf}`);
+        else if (rf.includes("holder"))    flags.push(`👥 ${rf}`);
+        else if (rf.includes("verified"))  flags.push(`👁️ ${rf}`);
+        else flags.push(`⚠️ ${rf}`);
       }
-
-      if (flag(token.trading_cooldown))            flags.push("⏱️ Trading Cooldown");
-      if (flag(token.anti_whale_modifiable))       flags.push("🐋 Anti-Whale Modifiable");
-      if (!flag(token.is_open_source))             flags.push("👁️ Contract Not Verified");
-    } else if (isHoneypotHP) {
-      flags.push("⛔ HONEYPOT DETECTED");
-    }
-    if (lpLockedPct < 50 && lpBurnedPct < 50 && !isProtocolEscrow && !isKnownFactory && (token || topPair)) {
-      flags.push("🔓 LP Not Locked");
-    }
-    if (holderRaw > 0 && holderRaw < 200) {
-      flags.push("👥 Low Holder Count");
-    }
-    if (liqUsd !== null && liqUsd < 5000) {
-      flags.push("💧 Very Low Liquidity");
+      for (const at of adminThreats) {
+        adminAlerts.push(`🔑 ${at.label} — ${at.detail.split(".")[0]}`);
+      }
+      if (liqUsd !== null && liqUsd < 5000 && !flags.some(f => f.includes("Liquidity"))) {
+        flags.push("💧 Very Low Liquidity");
+      }
     }
 
-    // ── Risk level (strict — protect users) ──────────────────────────────────
-    const hasHoneypot = flags.some(f => f.includes("HONEYPOT"));
-    const hasKillerTax = flags.some(f => f.includes("High Sell Tax") || f.includes("High Buy Tax"));
-    const hasUnlockedLP = flags.some(f => f.includes("LP Not Locked"));
-    const hasCriticalFlag = !isOwnershipRenounced && flags.some(f =>
-      f.includes("Owner Can Change Balance") || f.includes("Recoverable Ownership") || f.includes("Hidden Owner") || f.includes("Self-Destruct")
-    );
     let riskEmoji: string;
-    if (hasHoneypot)                              riskEmoji = "🚨 CRITICAL";
-    else if (hasKillerTax)                        riskEmoji = "🔴 HIGH RISK";
-    else if (hasCriticalFlag)                     riskEmoji = "🔴 HIGH RISK";
-    else if (isProtocolEscrow)                    riskEmoji = "🟢 LOW RISK";
-    else if (adminAlerts.length >= 2)             riskEmoji = "🔴 HIGH RISK";
-    else if (isOwnershipRenounced) {
-      if (flags.length >= 3)                      riskEmoji = "🔴 HIGH RISK";
-      else if (flags.length >= 1)                 riskEmoji = "🟡 MEDIUM RISK";
-      else                                        riskEmoji = "🟢 LOW RISK";
-    }
-    else if (hasUnlockedLP || flags.length >= 2)  riskEmoji = "🔴 HIGH RISK";
-    else if (flags.length >= 1)                   riskEmoji = "🟡 MEDIUM RISK";
-    else                                          riskEmoji = "🟢 LOW RISK";
+    const rl = (api?.riskLevel ?? "").toLowerCase();
+    if (rl === "high risk" || isHoneypot) riskEmoji = isHoneypot ? "🚨 CRITICAL" : "🔴 HIGH RISK";
+    else if (rl === "caution")            riskEmoji = "🟡 MEDIUM RISK";
+    else if (rl === "clean" || rl === "safe") riskEmoji = "🟢 LOW RISK";
+    else                                  riskEmoji = flags.length > 0 ? "🟡 MEDIUM RISK" : "🟢 LOW RISK";
 
-    // ── Build message ─────────────────────────────────────────────────────────
     let msg = "";
-
     msg += `🚔 *APOL AGENT — CONTRACT SNAPSHOT*\n\n`;
     msg += `📍 *Address:* \`${shortAddr(address)}\`\n`;
     msg += `⛓️ *Chain:* Base Mainnet\n\n`;
 
-    let lookupCount = 0;
-    try { lookupCount = await storage.incrementLookup(address, rawName, rawSymbol); } catch { /* non-fatal */ }
+    const lookupCount = api?.lookupCount ?? 0;
     msg += `*${tokenName}* (${tokenSymbol}) 👁️ ${lookupCount}\n`;
     msg += `💲 Price: *${priceStr}*\n`;
     msg += `📊 Market Cap: *${mcapStr}*\n`;
@@ -343,10 +207,8 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
 
     msg += `\n*RISK LEVEL: ${riskEmoji}*\n`;
 
-    const isHighRiskBot = hasHoneypot || hasKillerTax || hasCriticalFlag || adminAlerts.length >= 2 ||
-      (!isOwnershipRenounced && (hasUnlockedLP || flags.length >= 2)) ||
-      (isOwnershipRenounced && flags.length >= 3);
-    if (isOwnershipRenounced && adminAlerts.length === 0 && !isHoneypot && !isHighRiskBot) {
+    const isHighRisk = api?.isHighRisk || isHoneypot;
+    if (isOwnershipRenounced && adminAlerts.length === 0 && !isHoneypot && !isHighRisk) {
       msg += `\n✅ *CONTRACT RENOUNCED*\n`;
       msg += `• Ownership burned. No admin keys.\n`;
     }
@@ -374,6 +236,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     msg += `🗺️ [Wall of Shame](${siteUrl}/report-scam)\n`;
     msg += `🔗 [View on Basescan](https://basescan.org/address/${address})`;
 
+    console.log(`[bot-perf] buildSnapshot TOTAL: ${Date.now() - t0}ms for ${address.slice(0,10)}`);
     return msg;
 
   } catch (err: any) {
@@ -1522,7 +1385,7 @@ export function createBot(): Telegraf | null {
       `⚠️ *Scan Timeout*\n\n` +
       `The scan is taking longer than expected. External APIs may be slow.\n\n` +
       `Try the full scanner at [${site}](${site}/agent-scanner) for faster results.`;
-    const snapshot = await withTimeout(buildSnapshot(address, site), 20_000, SCAN_TIMEOUT_MSG);
+    const snapshot = await withTimeout(buildSnapshot(address, site), 30_000, SCAN_TIMEOUT_MSG);
 
     if (loadingMsgId !== null) {
       try { await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsgId); } catch { /* non-fatal */ }
@@ -1559,7 +1422,7 @@ export function createBot(): Telegraf | null {
     const WALLET_TIMEOUT_MSG =
       `⚠️ *Wallet Check Timeout*\n\n` +
       `The investigation is taking longer than expected. Try again in a moment.`;
-    const report = await withTimeout(buildWalletCheck(address), 20_000, WALLET_TIMEOUT_MSG);
+    const report = await withTimeout(buildWalletCheck(address), 30_000, WALLET_TIMEOUT_MSG);
 
     if (loadingMsgId !== null) {
       try { await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsgId); } catch { /* non-fatal */ }
@@ -1595,7 +1458,7 @@ export function createBot(): Telegraf | null {
       `⚠️ *Agent Scan Timeout*\n\n` +
       `The scan is taking longer than expected. External APIs may be slow.\n\n` +
       `Try the full scanner at [${site}](${site}/agent-scanner) for faster results.`;
-    const report = await withTimeout(buildAgentScan(input, site), 20_000, AGENT_TIMEOUT_MSG);
+    const report = await withTimeout(buildAgentScan(input, site), 30_000, AGENT_TIMEOUT_MSG);
 
     if (loadingMsgId !== null) {
       try { await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsgId); } catch { /* non-fatal */ }
@@ -1631,7 +1494,7 @@ export function createBot(): Telegraf | null {
     const SOCIAL_TIMEOUT_MSG =
       `⚠️ *Social Scan Timeout*\n\n` +
       `The X forensics module is taking longer than expected. Try again in a moment.`;
-    const report = await withTimeout(buildSocialScan(input, site), 20_000, SOCIAL_TIMEOUT_MSG);
+    const report = await withTimeout(buildSocialScan(input, site), 30_000, SOCIAL_TIMEOUT_MSG);
 
     if (loadingMsgId !== null) {
       try { await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsgId); } catch { /* non-fatal */ }
