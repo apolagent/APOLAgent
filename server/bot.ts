@@ -64,14 +64,14 @@ function fmtMcap(price: number, supply: number | null): string {
 // ─── Platform Locker / Deployer Maps (Base V3/V4 launchpads) ────────────────
 
 const BOT_PLATFORM_LOCKERS: Record<string, string> = {
-  "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore Managed",
+  "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore",
   "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
   "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker v4",
   "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
 };
 
 const BOT_PLATFORM_DEPLOYERS: Record<string, string> = {
-  "0xade256e1c2763b8766efe1eeb7c578d93f621f6f": "ApeStore Managed",
+  "0xade256e1c2763b8766efe1eeb7c578d93f621f6f": "ApeStore",
   "0xd46618f35099074c5a456b21d2967a6ff6841bd3": "Clanker v4",
   "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
 };
@@ -235,7 +235,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const lpSecureBotCalc = lpBurnedPct >= 50 || lpLockedPct >= 50 || isProtocolEscrow;
 
     let lpStatus: string;
-    if (isKnownFactory)         lpStatus = `Protocol Managed — ${lpEscrowName} ✅`;
+    if (isKnownFactory)         lpStatus = `${lpEscrowName} Managed ✅`;
     else if (lpBurnedPct >= 50) lpStatus = `Burned (${lpBurnedPct.toFixed(0)}%) ✅`;
     else if (lpLockedPct >= 50) lpStatus = `Locked (${lpLockedPct.toFixed(0)}%) ✅`;
     else if (lpLockedPct > 0)   lpStatus = `Partially Locked (${lpLockedPct.toFixed(0)}%) ⚠️`;
@@ -361,8 +361,8 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     }
 
     if (isKnownFactory && lpEscrowName) {
-      msg += `\n🏛️ *LP — ${lpEscrowName}*\n`;
-      msg += `• Protocol Managed. LP secured by ${lpEscrowName}.\n`;
+      msg += `\n🏛️ *LP SECURITY*\n`;
+      msg += `• Secured by ${lpEscrowName} protocol.\n`;
     }
 
     if (adminAlerts.length > 0) {
