@@ -145,12 +145,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       "0x5d9a9143dca78a344d51ea722904b9a4669": "APESTORE",
       "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "CLANKER",
       "0xb923b8275f4ae65a280836211732dc961c414196": "CLANKER",
-      "0x1bc31e1f67e82b42ee5c5e3e21e50b7c390617da": "CLANKER",
-      "0xb1900f41d78d330a2a35c6771b3a6088a1b51309": "CLANKER",
-      "0xbb7784a4d481184283ed89619a3e3ed143e1adc0": "CLANKER",
-      "0xd59ce43e53d69f190e15d9822fb4540dccc91178": "CLANKER",
-      "0xc67e9eff4ce8eb984698e6a56c8b4b3d23c33041": "VIRTUAL PROTOCOL",
-      "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "VIRTUAL PROTOCOL",
+      "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "VIRTUALS",
     };
 
     const lpHolders: any[] = token?.lp_holders ?? [];
@@ -309,7 +304,10 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
 
     msg += `\n*RISK LEVEL: ${riskEmoji}*\n`;
 
-    if (isOwnershipRenounced && adminAlerts.length === 0 && !isHoneypot) {
+    const isHighRiskBot = hasHoneypot || hasKillerTax || hasCriticalFlag || adminAlerts.length >= 2 ||
+      (!isOwnershipRenounced && (hasUnlockedLP || flags.length >= 2)) ||
+      (isOwnershipRenounced && flags.length >= 3);
+    if (isOwnershipRenounced && adminAlerts.length === 0 && !isHoneypot && !isHighRiskBot) {
       msg += `\n✅ *CONTRACT RENOUNCED*\n`;
       msg += `• Ownership burned. No admin keys.\n`;
     }
@@ -317,8 +315,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     if (isProtocolEscrow && lpEscrowName) {
       if (isKnownFactory) {
         msg += `\n🏛️ *LP — ${lpEscrowName}*\n`;
-        msg += `• LP bound to ${lpEscrowName} factory.\n`;
-        msg += `• No developer keys. Verified deployment.\n`;
+        msg += `• LP bound to [${lpEscrowName}] factory. Verified deployment.\n`;
       } else {
         msg += `\n🏛️ *LP — ${lpEscrowName.toUpperCase()}*\n`;
         msg += `• Concentrated liquidity on ${lpEscrowName}.\n`;

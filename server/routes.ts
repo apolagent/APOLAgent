@@ -453,12 +453,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           "0x5d9a9143dca78a344d51ea722904b9a4669": "APESTORE",
           "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "CLANKER",
           "0xb923b8275f4ae65a280836211732dc961c414196": "CLANKER",
-          "0x1bc31e1f67e82b42ee5c5e3e21e50b7c390617da": "CLANKER",
-          "0xb1900f41d78d330a2a35c6771b3a6088a1b51309": "CLANKER",
-          "0xbb7784a4d481184283ed89619a3e3ed143e1adc0": "CLANKER",
-          "0xd59ce43e53d69f190e15d9822fb4540dccc91178": "CLANKER",
-          "0xc67e9eff4ce8eb984698e6a56c8b4b3d23c33041": "VIRTUAL PROTOCOL",
-          "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "VIRTUAL PROTOCOL",
+          "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "VIRTUALS",
         };
 
         const lpHolders: any[] = tokenData.lp_holders ?? [];
@@ -528,7 +523,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const hasCriticalFlag = !isOwnershipRenounced && (ownerChangeBalance || canTakeBackOwnership || hasHiddenOwner || hasSelfDestruct);
         const hasUnlockedLP = !lpSecure;
 
-        const greenBadge = redFlags.length === 0 && isOpenSource && !isHoneypot && !hasKillerTax && lpSecure && adminThreats.length === 0;
         const protocolSecured = isProtocolEscrow;
 
         let riskLevel: string;
@@ -545,6 +539,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           else if (redFlags.length >= 1) riskLevel = "Caution";
           else riskLevel = "Clean";
         }
+
+        const greenBadge = riskLevel !== "High Risk" && redFlags.length === 0 && isOpenSource && !isHoneypot && !hasKillerTax && lpSecure && adminThreats.length === 0;
 
         const apolVerdict = buildContractVerdict(tokenData.token_name, tokenData.token_symbol, riskLevel, greenBadge, redFlags);
 

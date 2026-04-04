@@ -897,7 +897,7 @@ export default function AgentScanner() {
                       </div>
                     )}
 
-                    {checkResult.greenBadge && !checkResult.redFlags?.some(f => f.toLowerCase().includes("honeypot")) ? (
+                    {checkResult.greenBadge && !checkResult.isHighRisk && !checkResult.redFlags?.some(f => f.toLowerCase().includes("honeypot")) ? (
                       <div data-testid="div-green-badge" style={{ border: `2px solid ${G}`, background: "rgba(0,255,0,0.06)", padding: "20px", textAlign: "center" }}>
                         <div style={{ fontSize: "14px", fontWeight: 900, color: G, letterSpacing: "0.16em", textTransform: "uppercase" }}>APOL AGENT GREEN BADGE</div>
                         <div style={{ fontSize: "11px", color: "rgba(0,255,0,0.7)", marginTop: "4px" }}>Status: Cleared. All checks passed.</div>
@@ -923,7 +923,7 @@ export default function AgentScanner() {
                       </div>
                     )}
 
-                    {checkResult.isOwnershipRenounced && (!checkResult.adminThreats || checkResult.adminThreats.length === 0) && !checkResult.redFlags?.some(f => f.toLowerCase().includes("honeypot")) && (
+                    {checkResult.isOwnershipRenounced && (!checkResult.adminThreats || checkResult.adminThreats.length === 0) && !checkResult.isHighRisk && !checkResult.redFlags?.some(f => f.toLowerCase().includes("honeypot")) && (
                       <div data-testid="div-contract-renounced" style={{ border: `2px solid ${G}`, background: "rgba(0,255,0,0.06)", padding: "16px", display: "flex", alignItems: "center", gap: "12px" }}>
                         <ShieldCheck size={22} color={G} style={{ flexShrink: 0 }} />
                         <div>
@@ -953,8 +953,7 @@ export default function AgentScanner() {
                         <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(0,255,0,0.15)", fontSize: "10px", color: "rgba(255,255,255,0.55)", lineHeight: 1.8, fontFamily: "'JetBrains Mono', monospace" }}>
                           {checkResult.isKnownFactory ? (
                             <>
-                              <div>• LP bound to {checkResult.lpEscrow.name} factory.</div>
-                              <div>• No developer keys. Verified deployment.</div>
+                              <div>• LP bound to [{checkResult.lpEscrow.name}] factory. Verified deployment.</div>
                             </>
                           ) : (
                             <>

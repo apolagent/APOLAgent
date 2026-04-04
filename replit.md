@@ -60,14 +60,14 @@ shared/
 - `GET /api/verified-projects` - List verified projects
 - `POST /api/agent/analyze` - Agent LARP detection scan
 
-## LP Detection — Protocol Secured / Direct-to-DEX (3-tier)
-1. **LP Holder Match**: Checks GoPlus `lp_holders` against LAUNCHPAD_REGISTRY (Ape.store, Clanker v3/v4, Virtuals, Uniswap routers)
-2. **Creator Address Match**: Falls back to checking `creator_address` against LAUNCHPAD_REGISTRY
-3. **DexScreener V3/V4 Fallback**: Fetches DexScreener pairs — if highest-liquidity Base pair is V3/V4 with ≥$10K liquidity, marks as "Protocol Secured" Direct-to-DEX
-- **Risk weight**: Direct-to-DEX = Zero LP risk (technically superior to manual locks)
-- **Response fields**: `protocolSecured: true`, `isDirectToDex: true`, `lpEscrow: { name, address, percent }`
-- **Frontend**: Green (#00FF00) "PROTOCOL SECURED — DIRECT-TO-DEX" badge with "ZERO LP RISK" tag
-- **Bot**: "Protocol Secured — [name]" LP status, "PROTOCOL SECURED — DIRECT-TO-DEX" section
+## LP Detection — Factory Whitelist (2-tier)
+1. **Creator Address Match**: Checks `creator_address` against WHITELIST (APESTORE ×2, CLANKER ×2, VIRTUALS ×1)
+2. **LP Holder Match**: Falls back to checking GoPlus `lp_holders` against WHITELIST
+- **Whitelist addresses**: `0x0bf8...f58a` (APESTORE), `0x5d9a...4669` (APESTORE), `0xe85a...83a9` (CLANKER), `0xb923...4196` (CLANKER), `0xdad6...2e32` (VIRTUALS)
+- **Response fields**: `protocolSecured: true`, `isKnownFactory: true`, `lpEscrow: { name, address, percent }`
+- **Risk hierarchy**: Honeypot or sell_tax > 20% → forced High Risk, greenBadge=false, CONTRACT RENOUNCED badge hidden
+- **Frontend**: Factory-matched tokens show "LP bound to [NAME] factory. Verified deployment."
+- **Bot**: Same label format: "LP bound to [NAME] factory. Verified deployment."
 
 ## Secrets
 - `APOL_BOT_TOKEN` - Telegram bot token
