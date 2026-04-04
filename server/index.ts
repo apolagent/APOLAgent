@@ -140,10 +140,10 @@ app.use((req, res, next) => {
     log("Bot skipped in dev — only runs in production to avoid conflicts", "bot");
   }
 
-  // ── Scheduled Tweet Poster (every 12 hours, production only) ──────────────
+  // ── Scheduled Tweet Poster (production only) ────────────────────────────────
   if (isProduction) {
     const CHECK_INTERVAL = 10 * 60 * 1000;
-    const INITIAL_DELAY = 12 * 60 * 60 * 1000;
+    const INITIAL_DELAY = 2 * 60 * 1000;
 
     const postTweet = () => {
       execFile("python3", ["main.py"], (err, stdout, stderr) => {
@@ -158,6 +158,6 @@ app.use((req, res, next) => {
       setInterval(postTweet, CHECK_INTERVAL);
     }, INITIAL_DELAY);
 
-    log("Tweet scheduler active — first tweet in 12h, then every 10 min check with 11h lockfile guard", "scheduler");
+    log("Tweet scheduler active — first check in 2min, then every 10min with 11h lockfile guard", "scheduler");
   }
 })();
