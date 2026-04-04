@@ -105,9 +105,12 @@ app.use((req, res, next) => {
   const isProduction = process.env.NODE_ENV === "production" || !!process.env.REPL_DEPLOYMENT;
   const bot = createBot();
   if (bot && isProduction) {
-    const launchBot = (attempt = 1) => {
-      bot.telegram.deleteWebhook({ drop_pending_updates: true }).catch(() => {}).then(() =>
-      bot.launch({ dropPendingUpdates: true })).then(() => {
+    const launchBot = async (attempt = 1): Promise<void> => {
+      try {
+        await bot.telegram.deleteWebhook({ drop_pending_updates: true }).catch(() => {});
+        await bot.telegram.callApi("getUpdates", { offset: -1, timeout: 0 }).catch(() => {});
+        await new Promise(r => setTimeout(r, 2000));
+        await bot.launch({ dropPendingUpdates: true });
         log("Telegram bot polling started", "bot");
         const registerCommands = () =>
           bot.telegram.setMyCommands([
@@ -121,17 +124,19 @@ app.use((req, res, next) => {
             .then(() => log("Telegram command menu registered", "bot"))
             .catch(() => setTimeout(registerCommands, 10_000));
         registerCommands();
-      }).catch((err: any) => {
+      } catch (err: any) {
         const msg = err?.message ?? String(err);
         log(`Telegram bot failed to start (attempt ${attempt}): ${msg}`, "bot");
-        if (msg.includes("409") && attempt <= 10) {
+        if (msg.includes("409") && attempt <= 30) {
           const delay = Math.min(attempt * 5_000, 30_000);
           log(`Retrying bot launch in ${delay / 1000}s...`, "bot");
           setTimeout(() => launchBot(attempt + 1), delay);
+        } else {
+          log(`Telegram bot gave up after ${attempt} attempts`, "bot");
         }
-      });
+      }
     };
-    setTimeout(() => launchBot(), 10_000);
+    setTimeout(() => launchBot(), 5_000);
 
     const shutdown = () => { bot.stop("SIGTERM"); };
     process.once("SIGTERM", shutdown);
