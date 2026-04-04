@@ -943,25 +943,28 @@ export default function AgentScanner() {
                           <Lock size={18} color="#00FF00" style={{ flexShrink: 0 }} />
                           <div>
                             <div style={{ fontSize: "13px", fontWeight: 900, color: "#00FF00", letterSpacing: "0.16em", textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace" }}>
-                              {checkResult.isDirectToDex ? "PROTOCOL SECURED — DIRECT-TO-DEX" : `PROTOCOL SECURED — ${checkResult.lpEscrow.name.toUpperCase()}`}
+                              LP — {checkResult.lpEscrow.name.toUpperCase()}
                             </div>
-                            {checkResult.isDirectToDex && (
-                              <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.5)", marginTop: "4px", fontFamily: "'JetBrains Mono', monospace" }}>
-                                {checkResult.lpEscrow.name}
-                              </div>
-                            )}
                           </div>
                           <div style={{ marginLeft: "auto", background: "#00FF00", color: "#000", fontSize: "9px", fontWeight: 900, padding: "3px 8px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.1em" }}>
-                            ZERO LP RISK
+                            {checkResult.isDirectToDex ? "FACTORY BOUND" : "PROTOCOL LP"}
                           </div>
                         </div>
-                        <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(0,255,0,0.15)", fontSize: "10px", color: "rgba(255,255,255,0.45)", lineHeight: 1.6, fontFamily: "'JetBrains Mono', monospace" }}>
-                          {checkResult.isDirectToDex
-                            ? `Liquidity is already live and protocol-managed via ${checkResult.lpEscrow.name}. This is a Direct-to-DEX concentrated liquidity deployment — technically superior to a manual lock. The DEX protocol itself manages the LP position.`
-                            : `Liquidity is already live and protocol-managed via ${checkResult.lpEscrow.name}. LP is held by the launchpad's immutable vault — a Direct-to-DEX deployment with protocol-level security, technically superior to manual locks.`}
+                        <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(0,255,0,0.15)", fontSize: "10px", color: "rgba(255,255,255,0.55)", lineHeight: 1.8, fontFamily: "'JetBrains Mono', monospace" }}>
+                          {checkResult.isDirectToDex ? (
+                            <>
+                              <div>• LP bound to {checkResult.lpEscrow.name} factory.</div>
+                              <div>• No developer keys. Verified deployment.</div>
+                            </>
+                          ) : (
+                            <>
+                              <div>• Concentrated liquidity on {checkResult.lpEscrow.name}.</div>
+                              <div>• LP managed by DEX protocol, not developer.</div>
+                            </>
+                          )}
                         </div>
                         <div style={{ padding: "6px 16px 10px", fontSize: "9px", color: "rgba(0,255,0,0.4)", fontFamily: "'JetBrains Mono', monospace" }}>
-                          {checkResult.isDirectToDex ? "Pool" : "Escrow"}: {checkResult.lpEscrow.address}
+                          {checkResult.isDirectToDex ? "Factory" : "Pool"}: {checkResult.lpEscrow.address}
                         </div>
                       </div>
                     )}

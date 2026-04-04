@@ -498,15 +498,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             for (const pair of basePairs) {
               const dexId = (pair.dexId || "").toLowerCase();
               const labels: string[] = pair.labels ?? [];
-              const isV3 = labels.includes("v3") || labels.includes("v4");
+              const hasV3 = labels.includes("v3");
+              const hasV4 = labels.includes("v4");
               const liqUsd = pair.liquidity?.usd ?? 0;
-              if (isV3 && liqUsd >= 1_000) {
+              if ((hasV3 || hasV4) && liqUsd >= 1_000) {
                 const dexName = dexId.includes("uniswap") ? "Uniswap" : dexId.includes("aerodrome") ? "Aerodrome" : dexId.charAt(0).toUpperCase() + dexId.slice(1);
-                const version = labels.includes("v4") ? "V4" : "V3";
-                lpEscrowName = `${dexName} ${version} Direct-to-DEX`;
+                const version = hasV4 ? "V4" : "V3";
+                lpEscrowName = `${dexName} ${version} Pool`;
                 lpEscrowAddress = pair.pairAddress || null;
                 lpEscrowPct = 100;
-                isDirectToDex = true;
+                isDirectToDex = false;
                 break;
               }
             }
@@ -548,14 +549,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (holderCount > 0 && holderCount < 200) redFlags.push("Low holder count");
 
         const hasHoneypot = isHoneypot;
+        const hasKillerTax = (sellTax !== null && sellTax > 20) || (buyTax !== null && buyTax > 20);
         const hasCriticalFlag = !isOwnershipRenounced && (ownerChangeBalance || canTakeBackOwnership || hasHiddenOwner || hasSelfDestruct);
         const hasUnlockedLP = !lpSecure;
 
-        const greenBadge = redFlags.length === 0 && isOpenSource && !isHoneypot && lpSecure && adminThreats.length === 0;
+        const greenBadge = redFlags.length === 0 && isOpenSource && !isHoneypot && !hasKillerTax && lpSecure && adminThreats.length === 0;
         const protocolSecured = isProtocolEscrow;
 
         let riskLevel: string;
-        if (hasHoneypot) {
+        if (hasHoneypot || hasKillerTax) {
           riskLevel = "High Risk";
         } else if (hasCriticalFlag) {
           riskLevel = "High Risk";

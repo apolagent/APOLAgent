@@ -175,14 +175,15 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     if (!lpEscrowName && topPair) {
       const dexId = (topPair.dexId || "").toLowerCase();
       const labels: string[] = topPair.labels ?? [];
-      const isV3 = labels.includes("v3") || labels.includes("v4");
+      const hasV3 = labels.includes("v3");
+      const hasV4 = labels.includes("v4");
       const liqCheck = topPair.liquidity?.usd ?? 0;
-      if (isV3 && liqCheck >= 1_000) {
+      if ((hasV3 || hasV4) && liqCheck >= 1_000) {
         const dexName = dexId.includes("uniswap") ? "Uniswap" : dexId.includes("aerodrome") ? "Aerodrome" : dexId.charAt(0).toUpperCase() + dexId.slice(1);
-        const version = labels.includes("v4") ? "V4" : "V3";
-        lpEscrowName = `${dexName} ${version} Direct-to-DEX`;
+        const version = hasV4 ? "V4" : "V3";
+        lpEscrowName = `${dexName} ${version} Pool`;
         lpEscrowPct = 100;
-        isDirectToDex = true;
+        isDirectToDex = false;
       }
     }
 
@@ -278,12 +279,14 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
 
     // ── Risk level (strict — protect users) ──────────────────────────────────
     const hasHoneypot = flags.some(f => f.includes("HONEYPOT"));
+    const hasKillerTax = flags.some(f => f.includes("High Sell Tax") || f.includes("High Buy Tax"));
     const hasUnlockedLP = flags.some(f => f.includes("LP Not Locked"));
     const hasCriticalFlag = !isOwnershipRenounced && flags.some(f =>
       f.includes("Owner Can Change Balance") || f.includes("Recoverable Ownership") || f.includes("Hidden Owner") || f.includes("Self-Destruct")
     );
     let riskEmoji: string;
     if (hasHoneypot)                              riskEmoji = "🚨 CRITICAL";
+    else if (hasKillerTax)                        riskEmoji = "🔴 HIGH RISK";
     else if (hasCriticalFlag)                     riskEmoji = "🔴 HIGH RISK";
     else if (adminAlerts.length >= 2)             riskEmoji = "🔴 HIGH RISK";
     else if (isOwnershipRenounced) {
@@ -316,12 +319,19 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
 
     if (isOwnershipRenounced && adminAlerts.length === 0) {
       msg += `\n✅ *CONTRACT RENOUNCED*\n`;
-      msg += `_Ownership sent to burn address. No admin can execute privileged functions._\n`;
+      msg += `• Ownership burned. No admin keys.\n`;
     }
 
     if (isProtocolEscrow && lpEscrowName) {
-      msg += `\n🏛️ *PROTOCOL SECURED — DIRECT-TO-DEX*\n`;
-      msg += `_Liquidity is already live and protocol-managed via ${lpEscrowName}. This is a Direct-to-DEX deployment — technically superior to manual LP locks. Zero LP risk._\n`;
+      if (isDirectToDex) {
+        msg += `\n🏛️ *LP — ${lpEscrowName.toUpperCase()}*\n`;
+        msg += `• LP bound to ${lpEscrowName} factory.\n`;
+        msg += `• No developer keys. Verified deployment.\n`;
+      } else {
+        msg += `\n🏛️ *LP — ${lpEscrowName.toUpperCase()}*\n`;
+        msg += `• Concentrated liquidity on ${lpEscrowName}.\n`;
+        msg += `• LP managed by DEX protocol, not developer.\n`;
+      }
     }
 
     if (adminAlerts.length > 0) {
