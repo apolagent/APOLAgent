@@ -396,26 +396,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const creatorAddress = tokenData.creator_address || null;
         const ownerIsContract = flag1(tokenData.owner_type);
 
+        const BURN_ADDRESSES = [
+          "0x0000000000000000000000000000000000000000",
+          "0x000000000000000000000000000000000000dead",
+          "0x0000000000000000000000000000000000000001",
+          "0x0000000000000000000000000000000000000dead",
+        ];
+        const ownerLower = (ownerAddress || "").toLowerCase();
+        const isOwnershipRenounced = !ownerLower || BURN_ADDRESSES.includes(ownerLower);
+
         const adminThreats: { severity: "critical" | "high" | "medium"; label: string; detail: string }[] = [];
 
-        if (ownerChangeBalance) adminThreats.push({ severity: "critical", label: "BALANCE MANIPULATION", detail: "Owner can directly modify token balances. Funds can be drained at any time." });
-        if (canTakeBackOwnership) adminThreats.push({ severity: "critical", label: "RECOVERABLE OWNERSHIP", detail: "Ownership can be reclaimed after renouncement. Renounce is fake." });
-        if (isMintable) adminThreats.push({ severity: "critical", label: "UNLIMITED MINTING", detail: "Owner can mint unlimited tokens, instantly diluting all holders." });
-        if (hasHiddenOwner) adminThreats.push({ severity: "critical", label: "HIDDEN OWNER", detail: "Contract has a hidden owner function. True controller is concealed." });
-        if (hasSelfDestruct) adminThreats.push({ severity: "critical", label: "SELF-DESTRUCT", detail: "Contract can be destroyed by admin. All tokens become worthless." });
-        if (canPause) adminThreats.push({ severity: "high", label: "TRANSFER PAUSABLE", detail: "Admin can freeze all transfers. Effectively a kill-switch." });
-        if (slippageModifiable) adminThreats.push({ severity: "high", label: "SLIPPAGE CONTROL", detail: "Owner can modify trading slippage. Sell tax can be raised to 100% at any time." });
-        if (isProxy) adminThreats.push({ severity: "high", label: "PROXY CONTRACT", detail: "Contract logic can be changed by admin. Current code can be swapped silently." });
-        if (hasBlacklist) adminThreats.push({ severity: "high", label: "BLACKLIST FUNCTION", detail: "Admin can blacklist wallets from selling. Targeted rug mechanism." });
-        if (hasExternalCall) adminThreats.push({ severity: "medium", label: "EXTERNAL CALL", detail: "Contract makes external calls. Behavior may change based on external state." });
-        if (hasWhitelist) adminThreats.push({ severity: "medium", label: "WHITELIST FUNCTION", detail: "Admin-controlled whitelist. May restrict trading to insiders." });
-        if (isAntiWhale && (isMintable || ownerChangeBalance)) adminThreats.push({ severity: "medium", label: "ANTI-WHALE + ADMIN POWER", detail: "Anti-whale limits combined with admin mint/balance powers. Holders capped while admin has unlimited control." });
+        if (isOwnershipRenounced) {
+          if (canTakeBackOwnership) {
+            adminThreats.push({ severity: "critical", label: "RECOVERABLE OWNERSHIP", detail: "Ownership was renounced BUT can be reclaimed. Renounce is fake — treat as active admin." });
+          }
+          if (hasHiddenOwner) {
+            adminThreats.push({ severity: "critical", label: "HIDDEN OWNER", detail: "Contract has a hidden owner function. True controller may be concealed despite renounce." });
+          }
+        } else {
+          if (ownerChangeBalance) adminThreats.push({ severity: "critical", label: "BALANCE MANIPULATION", detail: "Owner can directly modify token balances. Funds can be drained at any time." });
+          if (canTakeBackOwnership) adminThreats.push({ severity: "critical", label: "RECOVERABLE OWNERSHIP", detail: "Ownership can be reclaimed after renouncement. Renounce is fake." });
+          if (isMintable) adminThreats.push({ severity: "critical", label: "UNLIMITED MINTING", detail: "Owner can mint unlimited tokens, instantly diluting all holders." });
+          if (hasHiddenOwner) adminThreats.push({ severity: "critical", label: "HIDDEN OWNER", detail: "Contract has a hidden owner function. True controller is concealed." });
+          if (hasSelfDestruct) adminThreats.push({ severity: "critical", label: "SELF-DESTRUCT", detail: "Contract can be destroyed by admin. All tokens become worthless." });
+          if (canPause) adminThreats.push({ severity: "high", label: "TRANSFER PAUSABLE", detail: "Admin can freeze all transfers. Effectively a kill-switch." });
+          if (slippageModifiable) adminThreats.push({ severity: "high", label: "SLIPPAGE CONTROL", detail: "Owner can modify trading slippage. Sell tax can be raised to 100% at any time." });
+          if (isProxy) adminThreats.push({ severity: "high", label: "PROXY CONTRACT", detail: "Contract logic can be changed by admin. Current code can be swapped silently." });
+          if (hasBlacklist) adminThreats.push({ severity: "high", label: "BLACKLIST FUNCTION", detail: "Admin can blacklist wallets from selling. Targeted rug mechanism." });
+          if (hasExternalCall) adminThreats.push({ severity: "medium", label: "EXTERNAL CALL", detail: "Contract makes external calls. Behavior may change based on external state." });
+          if (hasWhitelist) adminThreats.push({ severity: "medium", label: "WHITELIST FUNCTION", detail: "Admin-controlled whitelist. May restrict trading to insiders." });
+          if (isAntiWhale && (isMintable || ownerChangeBalance)) adminThreats.push({ severity: "medium", label: "ANTI-WHALE + ADMIN POWER", detail: "Anti-whale limits combined with admin mint/balance powers. Holders capped while admin has unlimited control." });
 
-        const ownerLower = (ownerAddress || "").toLowerCase();
-        const ownerNotRenounced = ownerLower && ownerLower !== "0x0000000000000000000000000000000000000000" && ownerLower !== "0x000000000000000000000000000000000000dead";
-        const isSingleSigAdmin = ownerNotRenounced && !ownerIsContract;
-        if (isSingleSigAdmin && adminThreats.length > 0) {
-          adminThreats.unshift({ severity: "critical", label: "SINGLE-SIG ADMIN", detail: `Contract controlled by a single wallet (${ownerAddress!.slice(0,6)}…${ownerAddress!.slice(-4)}). No multisig. One key = total control.` });
+          const ownerNotRenounced = true;
+          const isSingleSigAdmin = ownerNotRenounced && !ownerIsContract;
+          if (isSingleSigAdmin && adminThreats.length > 0) {
+            adminThreats.unshift({ severity: "critical", label: "SINGLE-SIG ADMIN", detail: `Contract controlled by a single wallet (${ownerAddress!.slice(0,6)}…${ownerAddress!.slice(-4)}). No multisig. One key = total control.` });
+          }
         }
 
         const lpHolders: any[] = tokenData.lp_holders ?? [];
@@ -431,29 +448,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (isHoneypot) redFlags.push("Honeypot, cannot sell");
         if (buyTax !== null && buyTax > 10) redFlags.push(`High buy tax: ${buyTax.toFixed(1)}%`);
         if (sellTax !== null && sellTax > 10) redFlags.push(`High sell tax: ${sellTax.toFixed(1)}%`);
-        if (isMintable) redFlags.push("Owner can mint unlimited tokens");
+
+        if (isOwnershipRenounced) {
+          if (canTakeBackOwnership) redFlags.push("Recoverable ownership (fake renounce)");
+          if (hasHiddenOwner) redFlags.push("Hidden owner detected despite renounce");
+        } else {
+          if (isMintable) redFlags.push("Owner can mint unlimited tokens");
+          if (slippageModifiable) redFlags.push("Owner can modify slippage");
+          if (canTakeBackOwnership) redFlags.push("Recoverable ownership");
+          if (ownerChangeBalance) redFlags.push("Owner can change balances");
+          if (hasHiddenOwner) redFlags.push("Hidden owner detected");
+          if (hasSelfDestruct) redFlags.push("Self-destruct enabled");
+          if (canPause) redFlags.push("Transfers pausable by admin");
+          if (isProxy) redFlags.push("Proxy contract — upgradeable");
+          if (hasBlacklist) redFlags.push("Blacklist function");
+        }
+
         if (!isOpenSource) redFlags.push("Contract not verified / open source");
-        if (slippageModifiable) redFlags.push("Owner can modify slippage");
-        if (canTakeBackOwnership) redFlags.push("Recoverable ownership");
-        if (ownerChangeBalance) redFlags.push("Owner can change balances");
-        if (hasHiddenOwner) redFlags.push("Hidden owner detected");
-        if (hasSelfDestruct) redFlags.push("Self-destruct enabled");
-        if (canPause) redFlags.push("Transfers pausable by admin");
-        if (isProxy) redFlags.push("Proxy contract — upgradeable");
-        if (hasBlacklist) redFlags.push("Blacklist function");
         if (!lpSecure) redFlags.push("LP not locked");
         if (holderCount > 0 && holderCount < 200) redFlags.push("Low holder count");
 
         const hasHoneypot = isHoneypot;
-        const hasCriticalFlag = isHoneypot || ownerChangeBalance || canTakeBackOwnership || hasHiddenOwner || hasSelfDestruct;
+        const hasCriticalFlag = !isOwnershipRenounced && (ownerChangeBalance || canTakeBackOwnership || hasHiddenOwner || hasSelfDestruct);
         const hasUnlockedLP = !lpSecure;
 
         const greenBadge = redFlags.length === 0 && isOpenSource && !isHoneypot && lpSecure && adminThreats.length === 0;
-        const riskLevel = hasHoneypot ? "High Risk"
-          : hasCriticalFlag ? "High Risk"
-          : hasUnlockedLP || redFlags.length >= 2 ? "High Risk"
-          : redFlags.length >= 1 ? "Caution"
-          : "Clean";
+
+        let riskLevel: string;
+        if (hasHoneypot) {
+          riskLevel = "High Risk";
+        } else if (hasCriticalFlag) {
+          riskLevel = "High Risk";
+        } else if (isOwnershipRenounced) {
+          if (redFlags.length >= 3) riskLevel = "High Risk";
+          else if (redFlags.length >= 1) riskLevel = "Caution";
+          else riskLevel = "Clean";
+        } else {
+          if (hasUnlockedLP || redFlags.length >= 2) riskLevel = "High Risk";
+          else if (redFlags.length >= 1) riskLevel = "Caution";
+          else riskLevel = "Clean";
+        }
 
         const apolVerdict = buildContractVerdict(tokenData.token_name, tokenData.token_symbol, riskLevel, greenBadge, redFlags);
 
@@ -482,7 +516,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           adminThreats,
           ownerAddress: ownerAddress || null,
           creatorAddress: creatorAddress || null,
-          isSingleSigAdmin: !!isSingleSigAdmin,
+          isOwnershipRenounced,
+          isSingleSigAdmin: !isOwnershipRenounced && adminThreats.length > 0 && !ownerIsContract,
           lookupCount,
           tokenName: tokenData.token_name,
           tokenSymbol: tokenData.token_symbol,
@@ -925,10 +960,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     let contractSecure = false;
     let contractSecurityScore = 0;
     if (isContract && contractTokenData) {
-      const flag1 = (v: any) => v === "1" || v === 1;
+      const flag1 = (v: any) => v === "1" || v === 1 || v === true;
       const notHoneypot = !flag1(contractTokenData.is_honeypot);
       const lowTax = parseFloat(contractTokenData.buy_tax || "0") <= 0.10 && parseFloat(contractTokenData.sell_tax || "0") <= 0.10;
-      const renounced = flag1(contractTokenData.owner_change_balance) || flag1(contractTokenData.can_take_back_ownership) === false;
+      const cogOwnerAddr = (contractTokenData.owner_address || "").toLowerCase();
+      const COG_BURNS = ["0x0000000000000000000000000000000000000000","0x000000000000000000000000000000000000dead","0x0000000000000000000000000000000000000001"];
+      const renounced = !cogOwnerAddr || COG_BURNS.includes(cogOwnerAddr);
       const lpHolders: any[] = contractTokenData.lp_holders || [];
       const BURNS = new Set(["0x0000000000000000000000000000000000000000","0x000000000000000000000000000000000000dead"]);
       let lpLockedPct = 0;

@@ -61,6 +61,7 @@ type DetectiveResult = {
   adminThreats?: AdminThreat[];
   ownerAddress?: string | null;
   creatorAddress?: string | null;
+  isOwnershipRenounced?: boolean;
   isSingleSigAdmin?: boolean;
   tokenName?: string;
   tokenSymbol?: string;
@@ -915,6 +916,20 @@ export default function AgentScanner() {
                           }}>
                             {checkResult.riskLevel}
                           </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {checkResult.isOwnershipRenounced && (!checkResult.adminThreats || checkResult.adminThreats.length === 0) && (
+                      <div data-testid="div-contract-renounced" style={{ border: `2px solid ${G}`, background: "rgba(0,255,0,0.06)", padding: "16px", display: "flex", alignItems: "center", gap: "12px" }}>
+                        <ShieldCheck size={22} color={G} style={{ flexShrink: 0 }} />
+                        <div>
+                          <div style={{ fontSize: "13px", fontWeight: 900, color: G, letterSpacing: "0.16em", textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace" }}>
+                            CONTRACT RENOUNCED
+                          </div>
+                          <div style={{ fontSize: "10px", color: "rgba(0,255,0,0.6)", marginTop: "4px", fontFamily: "'JetBrains Mono', monospace" }}>
+                            Ownership sent to burn address. No admin can execute privileged functions. Gold standard security.
+                          </div>
                         </div>
                       </div>
                     )}
