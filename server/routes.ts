@@ -469,6 +469,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           lpEscrowPct = 100;
         }
 
+        let isDirectToDex = false;
         if (!lpEscrowName) {
           try {
             const dexRes: any = await fetch(
@@ -487,9 +488,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if (isV3 && liqUsd >= 10_000) {
                 const dexName = dexId.includes("uniswap") ? "Uniswap" : dexId.includes("aerodrome") ? "Aerodrome" : dexId.charAt(0).toUpperCase() + dexId.slice(1);
                 const version = labels.includes("v4") ? "V4" : "V3";
-                lpEscrowName = `${dexName} ${version} (Direct-to-DEX)`;
+                lpEscrowName = `${dexName} ${version} Direct-to-DEX`;
                 lpEscrowAddress = pair.pairAddress || null;
                 lpEscrowPct = 100;
+                isDirectToDex = true;
                 break;
               }
             }
@@ -527,7 +529,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         if (!isOpenSource) redFlags.push("Contract not verified / open source");
-        if (!lpSecure && !isProtocolEscrow) redFlags.push("LP not locked");
+        if (!lpSecure) redFlags.push("LP not locked");
         if (holderCount > 0 && holderCount < 200) redFlags.push("Low holder count");
 
         const hasHoneypot = isHoneypot;
@@ -535,6 +537,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const hasUnlockedLP = !lpSecure;
 
         const greenBadge = redFlags.length === 0 && isOpenSource && !isHoneypot && lpSecure && adminThreats.length === 0;
+        const protocolSecured = isProtocolEscrow;
 
         let riskLevel: string;
         if (hasHoneypot) {
@@ -592,6 +595,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isProxy,
           hasBlacklist,
           canPause,
+          protocolSecured: isProtocolEscrow,
+          isDirectToDex: isDirectToDex,
           lpEscrow: isProtocolEscrow ? {
             name: lpEscrowName,
             address: lpEscrowAddress,

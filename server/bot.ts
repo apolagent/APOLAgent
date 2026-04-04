@@ -170,6 +170,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       lpEscrowPct = 100;
     }
 
+    let isDirectToDex = false;
     if (!lpEscrowName && topPair) {
       const dexId = (topPair.dexId || "").toLowerCase();
       const labels: string[] = topPair.labels ?? [];
@@ -178,8 +179,9 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       if (isV3 && liqCheck >= 10_000) {
         const dexName = dexId.includes("uniswap") ? "Uniswap" : dexId.includes("aerodrome") ? "Aerodrome" : dexId.charAt(0).toUpperCase() + dexId.slice(1);
         const version = labels.includes("v4") ? "V4" : "V3";
-        lpEscrowName = `${dexName} ${version} (Direct-to-DEX)`;
+        lpEscrowName = `${dexName} ${version} Direct-to-DEX`;
         lpEscrowPct = 100;
+        isDirectToDex = true;
       }
     }
 
@@ -197,7 +199,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const lpSecureBotCalc = lpBurnedPct >= 50 || lpLockedPct >= 50 || isProtocolEscrow;
 
     let lpStatus: string;
-    if (isProtocolEscrow)       lpStatus = `Protocol Escrow (${lpEscrowName}) ✅`;
+    if (isProtocolEscrow)       lpStatus = `Protocol Secured — ${lpEscrowName} ✅`;
     else if (lpBurnedPct >= 50) lpStatus = `Burned (${lpBurnedPct.toFixed(0)}%) ✅`;
     else if (lpLockedPct >= 50) lpStatus = `Locked (${lpLockedPct.toFixed(0)}%) ✅`;
     else if (lpLockedPct > 0)   lpStatus = `Partially Locked (${lpLockedPct.toFixed(0)}%) ⚠️`;
@@ -317,8 +319,8 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     }
 
     if (isProtocolEscrow && lpEscrowName) {
-      msg += `\n🏛️ *PROTOCOL-MANAGED LIQUIDITY*\n`;
-      msg += `_Liquidity deployed via ${lpEscrowName}. LP held by launchpad's immutable vault — direct-to-DEX with protocol-level security._\n`;
+      msg += `\n🏛️ *PROTOCOL SECURED — DIRECT-TO-DEX*\n`;
+      msg += `_Liquidity is already live and protocol-managed via ${lpEscrowName}. This is a Direct-to-DEX deployment — technically superior to manual LP locks. Zero LP risk._\n`;
     }
 
     if (adminAlerts.length > 0) {

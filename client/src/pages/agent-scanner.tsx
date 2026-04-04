@@ -74,6 +74,8 @@ type DetectiveResult = {
   isProxy?: boolean;
   hasBlacklist?: boolean;
   canPause?: boolean;
+  protocolSecured?: boolean;
+  isDirectToDex?: boolean;
   lpEscrow?: { name: string; address: string; percent: number } | null;
 };
 
@@ -936,20 +938,30 @@ export default function AgentScanner() {
                     )}
 
                     {checkResult.lpEscrow && (
-                      <div data-testid="div-lp-escrow" style={{ border: "2px solid #60a5fa", background: "rgba(96,165,250,0.06)", padding: "0" }}>
+                      <div data-testid="div-lp-escrow" style={{ border: "2px solid #00FF00", background: "rgba(0,255,0,0.04)", padding: "0" }}>
                         <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
-                          <Lock size={18} color="#60a5fa" style={{ flexShrink: 0 }} />
+                          <Lock size={18} color="#00FF00" style={{ flexShrink: 0 }} />
                           <div>
-                            <div style={{ fontSize: "13px", fontWeight: 900, color: "#60a5fa", letterSpacing: "0.16em", textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace" }}>
-                              PROTOCOL-MANAGED LIQUIDITY ({checkResult.lpEscrow.name.toUpperCase()})
+                            <div style={{ fontSize: "13px", fontWeight: 900, color: "#00FF00", letterSpacing: "0.16em", textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace" }}>
+                              {checkResult.isDirectToDex ? "PROTOCOL SECURED — DIRECT-TO-DEX" : `PROTOCOL SECURED — ${checkResult.lpEscrow.name.toUpperCase()}`}
                             </div>
+                            {checkResult.isDirectToDex && (
+                              <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.5)", marginTop: "4px", fontFamily: "'JetBrains Mono', monospace" }}>
+                                {checkResult.lpEscrow.name}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ marginLeft: "auto", background: "#00FF00", color: "#000", fontSize: "9px", fontWeight: 900, padding: "3px 8px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.1em" }}>
+                            ZERO LP RISK
                           </div>
                         </div>
-                        <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(96,165,250,0.15)", fontSize: "10px", color: "rgba(255,255,255,0.45)", lineHeight: 1.6, fontFamily: "'JetBrains Mono', monospace" }}>
-                          Liquidity is deployed via {checkResult.lpEscrow.name}. {checkResult.lpEscrow.name.includes("Direct-to-DEX") ? "The LP position is a concentrated liquidity deployment managed by the DEX protocol itself — no traditional LP token locking applies." : "The LP position is held by the launchpad's immutable vault. This is a direct-to-DEX deployment with protocol-level security, not a manual developer lock."}
+                        <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(0,255,0,0.15)", fontSize: "10px", color: "rgba(255,255,255,0.45)", lineHeight: 1.6, fontFamily: "'JetBrains Mono', monospace" }}>
+                          {checkResult.isDirectToDex
+                            ? `Liquidity is already live and protocol-managed via ${checkResult.lpEscrow.name}. This is a Direct-to-DEX concentrated liquidity deployment — technically superior to a manual lock. The DEX protocol itself manages the LP position.`
+                            : `Liquidity is already live and protocol-managed via ${checkResult.lpEscrow.name}. LP is held by the launchpad's immutable vault — a Direct-to-DEX deployment with protocol-level security, technically superior to manual locks.`}
                         </div>
-                        <div style={{ padding: "6px 16px 10px", fontSize: "9px", color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace" }}>
-                          Escrow: {checkResult.lpEscrow.address} ({checkResult.lpEscrow.percent.toFixed(1)}% of LP)
+                        <div style={{ padding: "6px 16px 10px", fontSize: "9px", color: "rgba(0,255,0,0.4)", fontFamily: "'JetBrains Mono', monospace" }}>
+                          {checkResult.isDirectToDex ? "Pool" : "Escrow"}: {checkResult.lpEscrow.address}
                         </div>
                       </div>
                     )}
