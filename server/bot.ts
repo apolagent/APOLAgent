@@ -92,6 +92,72 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 
 // ─── Police Snapshot Scanner ─────────────────────────────────────────────────
 
+async function directGoPlus(address: string): Promise<any> {
+  try {
+    const gpRes = await fetch(
+      `https://api.gopluslabs.com/api/v1/token_security/8453?contract_addresses=${encodeURIComponent(address)}`,
+      { signal: AbortSignal.timeout(15_000) }
+    );
+    if (!gpRes.ok) return null;
+    const gpData = await gpRes.json() as any;
+    const token = gpData?.result?.[address.toLowerCase()] ?? gpData?.result?.[Object.keys(gpData?.result || {})[0]] ?? null;
+    if (!token) return null;
+
+    const flag = (v: any) => v === "1" || v === 1 || v === true;
+    const creatorLower = (token.creator_address || "").toLowerCase();
+    const lpHolders: any[] = token.lp_holders ?? [];
+    const isFactoryOrigin = ALL_BOT_FACTORY_ADDRESSES.has(creatorLower) || lpHolders.some((lp: any) => ALL_BOT_FACTORY_ADDRESSES.has((lp.address ?? "").toLowerCase()));
+
+    let lpEscrowName: string | null = null;
+    if (isFactoryOrigin) {
+      lpEscrowName = BOT_PLATFORM_LOCKERS[creatorLower] || BOT_PLATFORM_DEPLOYERS[creatorLower] || (() => {
+        for (const lp of lpHolders) { const a = (lp.address ?? "").toLowerCase(); if (BOT_PLATFORM_LOCKERS[a]) return BOT_PLATFORM_LOCKERS[a]; }
+        return "Protocol";
+      })();
+    }
+
+    const isHoneypot = flag(token.is_honeypot);
+    const buyTax = parseFloat(token.buy_tax ?? "0") * 100;
+    const sellTax = parseFloat(token.sell_tax ?? "0") * 100;
+    const hasKillerTax = buyTax > 20 || sellTax > 20;
+    const isKnownFactory = !!lpEscrowName;
+
+    const redFlags: string[] = [];
+    if (isHoneypot && !isKnownFactory) redFlags.push("Honeypot, cannot sell");
+    if (buyTax > 10) redFlags.push(`High buy tax: ${buyTax.toFixed(1)}%`);
+    if (sellTax > 10) redFlags.push(`High sell tax: ${sellTax.toFixed(1)}%`);
+    if (!flag(token.is_open_source) && !isKnownFactory) redFlags.push("Contract not verified");
+    if (flag(token.hidden_owner) && !isKnownFactory) redFlags.push("Hidden owner detected");
+
+    let riskLevel: string;
+    if ((isHoneypot || hasKillerTax) && !isKnownFactory) riskLevel = "High Risk";
+    else if (isKnownFactory) riskLevel = redFlags.length > 0 ? "Caution" : "Clean";
+    else if (redFlags.length >= 2) riskLevel = "High Risk";
+    else if (redFlags.length >= 1) riskLevel = "Caution";
+    else riskLevel = "Clean";
+
+    let holderCount = parseInt(token.holder_count ?? "0");
+    if (holderCount === 0) {
+      try {
+        const bsRes = await fetch(`https://base.blockscout.com/api/v2/tokens/${encodeURIComponent(address)}/counters`, { signal: AbortSignal.timeout(6_000) });
+        if (bsRes.ok) { const bsData = await bsRes.json() as any; holderCount = parseInt(bsData?.token_holders_count ?? "0"); }
+      } catch {}
+    }
+
+    return {
+      riskLevel, isKnownFactory, protocolSecured: isKnownFactory, holderCount,
+      isOwnershipRenounced: flag(token.is_in_dex),
+      isHoneypot, buyTax, sellTax, redFlags, adminThreats: [],
+      tokenName: token.token_name, tokenSymbol: token.token_symbol,
+      lpEscrow: isKnownFactory ? { name: lpEscrowName, address: creatorLower, percent: 100 } : null,
+      isHighRisk: riskLevel === "High Risk",
+    };
+  } catch (err: any) {
+    console.error("[bot] directGoPlus fallback failed:", err?.message);
+    return null;
+  }
+}
+
 async function buildSnapshot(address: string, siteUrl: string): Promise<string> {
   try {
     const t0 = Date.now();
@@ -108,8 +174,13 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     ]);
     console.log(`[bot-perf] internal API + DexScreener: ${Date.now() - t0}ms`);
 
-    const api: any = apiResult.status === "fulfilled" ? apiResult.value : null;
+    let api: any = apiResult.status === "fulfilled" ? apiResult.value : null;
     const dexData: any = dexResult.status === "fulfilled" ? dexResult.value : null;
+
+    if (!api) {
+      console.log(`[bot] Internal API returned null, using direct GoPlus fallback for ${address.slice(0,10)}`);
+      api = await directGoPlus(address);
+    }
 
     const allPairs: any[] = dexData?.pairs ?? [];
     const basePairs = allPairs

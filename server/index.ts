@@ -108,7 +108,10 @@ app.use((req, res, next) => {
     const launchBot = async (attempt = 1): Promise<void> => {
       try {
         await bot.telegram.deleteWebhook({ drop_pending_updates: true }).catch(() => {});
-        await bot.telegram.callApi("getUpdates", { offset: -1, timeout: 0 }).catch(() => {});
+        for (let i = 0; i < 3; i++) {
+          await bot.telegram.callApi("getUpdates", { offset: -1, timeout: 0 }).catch(() => {});
+          await new Promise(r => setTimeout(r, 1000));
+        }
         await new Promise(r => setTimeout(r, 2000));
         await bot.launch({ dropPendingUpdates: true });
         log("Telegram bot polling started", "bot");
