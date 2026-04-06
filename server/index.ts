@@ -105,13 +105,15 @@ app.use((req, res, next) => {
   const isProduction = process.env.NODE_ENV === "production" || !!process.env.REPL_DEPLOYMENT;
   const bot = createBot();
   if (bot && isProduction) {
+    const instanceId = `${process.pid}-${Date.now()}`;
+    log(`Bot instance ${instanceId} queued`, "bot");
     const launchBot = async (attempt = 1): Promise<void> => {
       try {
-        await bot.telegram.deleteWebhook({ drop_pending_updates: true }).catch(() => {});
-        for (let i = 0; i < 3; i++) {
-          await bot.telegram.callApi("getUpdates", { offset: -1, timeout: 0 }).catch(() => {});
-          await new Promise(r => setTimeout(r, 1000));
-        }
+        const tkn = process.env.APOL_BOT_TOKEN!;
+        await fetch(`https://api.telegram.org/bot${tkn}/deleteWebhook?drop_pending_updates=true`, { signal: AbortSignal.timeout(10000) }).catch(() => {});
+        await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&timeout=0`, { signal: AbortSignal.timeout(10000) }).catch(() => {});
+        await new Promise(r => setTimeout(r, 3000));
+        await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&timeout=0`, { signal: AbortSignal.timeout(10000) }).catch(() => {});
         await new Promise(r => setTimeout(r, 2000));
         await bot.launch({ dropPendingUpdates: true });
         log("Telegram bot polling started", "bot");
@@ -139,7 +141,7 @@ app.use((req, res, next) => {
         }
       }
     };
-    setTimeout(() => launchBot(), 5_000);
+    setTimeout(() => launchBot(), 10_000);
 
     const shutdown = () => { bot.stop("SIGTERM"); };
     process.once("SIGTERM", shutdown);
