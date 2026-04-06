@@ -38,7 +38,7 @@ function fmtUsd(n: number): string {
 }
 
 function fmtPrice(n: number): string {
-  if (n <= 0 || isNaN(n)) return "Data Pending";
+  if (n <= 0 || isNaN(n)) return "N/A";
   if (n >= 1)    return `$${n.toFixed(2)}`;
   if (n >= 0.01) return `$${n.toFixed(4)}`;
   if (n >= 0.0001) return `$${n.toFixed(6)}`;
@@ -238,12 +238,13 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const buyTaxFmt  = isProtocolTax ? "Protocol Managed" : (api ? `${(api.buyTax ?? 0).toFixed(1)}%` : "Data Pending");
     const sellTaxFmt = isProtocolTax ? "Protocol Managed" : (api ? `${(api.sellTax ?? 0).toFixed(1)}%` : "Data Pending");
 
+    const hasDex = !!topPair;
     const liqUsd: number | null = topPair?.liquidity?.usd ?? null;
-    const liqFormatted = liqUsd !== null ? fmtUsd(liqUsd) : "Data Pending";
+    const liqFormatted = liqUsd !== null ? fmtUsd(liqUsd) : (hasDex ? "Data Pending" : "Not Listed");
     const priceRaw  = parseFloat(topPair?.priceUsd ?? "0");
-    const priceStr  = fmtPrice(priceRaw);
+    const priceStr  = priceRaw > 0 ? fmtPrice(priceRaw) : (hasDex ? "Data Pending" : "Not Listed");
     const fdvRaw    = topPair?.fdv ?? null;
-    const mcapStr   = fdvRaw ? fmtUsd(fdvRaw) : "Data Pending";
+    const mcapStr   = fdvRaw ? fmtUsd(fdvRaw) : (hasDex ? "Data Pending" : "Not Listed");
 
     const isKnownFactory = !!api?.isKnownFactory;
     const lpEscrowName   = api?.lpEscrow?.name ?? null;
