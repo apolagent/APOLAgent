@@ -195,6 +195,21 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       .sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
     const topPair = basePairs[0] ?? null;
 
+    if (api?.addressType === "wallet") {
+      const wFlags: string[] = api.walletFlags ?? [];
+      const wRisk = api.riskLevel ?? "Clean";
+      const wVerdict = api.apolVerdict ?? "No flags detected.";
+      const flagsText = wFlags.length > 0 ? wFlags.map((f: string) => `• ${f}`).join("\n") : "• No flags detected on Base chain.";
+      return (
+        `🔍 *APOL AGENT — WALLET SCAN*\n\n` +
+        `📍 Address: \`${address.slice(0,6)}...${address.slice(-4)}\`\n` +
+        `🌐 Chain: Base Mainnet\n\n` +
+        `RISK LEVEL: ${wRisk === "Clean" ? "🟢" : wRisk === "High Risk" ? "🔴" : "🟡"} *${wRisk.toUpperCase()}*\n\n` +
+        `${flagsText}\n\n` +
+        `_${wVerdict}_`
+      );
+    }
+
     if (!api && !topPair) {
       return (
         `⚠️ *INVESTIGATION STALLED*\n\n` +

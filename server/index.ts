@@ -107,15 +107,17 @@ app.use((req, res, next) => {
   const bot = createBot();
   if (bot && isProduction) {
     const BOT_LOCK = "/tmp/apol_bot.lock";
+    try { fs.unlinkSync(BOT_LOCK); } catch {}
     let hasLock = false;
+    await new Promise(r => setTimeout(r, Math.floor(Math.random() * 3000)));
     try {
       fs.writeFileSync(BOT_LOCK, `${process.pid}`, { flag: "wx" });
       hasLock = true;
     } catch {
       try {
-        const oldPid = parseInt(fs.readFileSync(BOT_LOCK, "utf8").trim());
-        try { process.kill(oldPid, 0); } catch { hasLock = true; fs.writeFileSync(BOT_LOCK, `${process.pid}`); }
-      } catch { hasLock = true; fs.writeFileSync(BOT_LOCK, `${process.pid}`); }
+        const lockPid = parseInt(fs.readFileSync(BOT_LOCK, "utf8").trim());
+        hasLock = lockPid === process.pid;
+      } catch { }
     }
 
     if (!hasLock) {
