@@ -75,6 +75,8 @@ const PLATFORM_DEPLOYERS: Record<string, string> = {
   "0xd46618f35099074c5a456b21d2967a6ff6841bd3": "Clanker v4",
   "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
   "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
+  "0x71b8efc8bcad65a5d9386d07f2dff57ab4eaf533": "Virtuals",
+  "0x9547e85f3016303a2996271314bde78b02021a28": "Virtuals",
 };
 
 const BURN_SET = new Set([
@@ -115,6 +117,7 @@ async function resolveProtocolLocker(
   creatorAddress: string,
   lpHolders: { address: string; percent: string }[],
   chain?: string,
+  tokenAddress?: string,
 ): Promise<{ name: string; address: string; percent: number } | null> {
   if (chain && chain !== "base" && chain !== "8453") return null;
 
@@ -163,8 +166,58 @@ async function resolveProtocolLocker(
           console.log(`[forensics] Creator ${creatorLower.slice(0,10)} → deployer ${deployerAddr.slice(0,10)} → ${PLATFORM_DEPLOYERS[deployerAddr]}`);
           return { name: PLATFORM_DEPLOYERS[deployerAddr], address: creatorLower, percent: 100 };
         }
+        if (deployerAddr && deployerAddr !== creatorLower) {
+          try {
+            const r2 = await fetch(
+              `https://base.blockscout.com/api/v2/addresses/${deployerAddr}`,
+              { signal: AbortSignal.timeout(5000) },
+            );
+            if (r2.ok) {
+              const data2 = await r2.json() as any;
+              const deployer2 = (data2.creator_address_hash || "").toLowerCase();
+              if (deployer2 && PLATFORM_DEPLOYERS[deployer2]) {
+                console.log(`[forensics] Creator ${creatorLower.slice(0,10)} → ${deployerAddr.slice(0,10)} → ${deployer2.slice(0,10)} → ${PLATFORM_DEPLOYERS[deployer2]}`);
+                return { name: PLATFORM_DEPLOYERS[deployer2], address: creatorLower, percent: 100 };
+              }
+            }
+          } catch (e2: any) { console.log(`[forensics] Blockscout hop2 error: ${e2.message ?? e2}`); }
+        }
       }
     } catch (e: any) { console.log(`[forensics] Blockscout timeout/error for creator ${creatorLower.slice(0,10)}: ${e.message ?? e}`); }
+  }
+
+  const tokenLower = (tokenAddress || "").toLowerCase();
+  if (tokenLower && !BURN_SET.has(tokenLower)) {
+    try {
+      const r = await fetch(
+        `https://base.blockscout.com/api/v2/addresses/${tokenLower}`,
+        { signal: AbortSignal.timeout(5000) },
+      );
+      if (r.ok) {
+        const data = await r.json() as any;
+        const contractDeployer = (data.creator_address_hash || "").toLowerCase();
+        if (contractDeployer && PLATFORM_DEPLOYERS[contractDeployer]) {
+          console.log(`[forensics] Token ${tokenLower.slice(0,10)} → Blockscout deployer ${contractDeployer.slice(0,10)} → ${PLATFORM_DEPLOYERS[contractDeployer]}`);
+          return { name: PLATFORM_DEPLOYERS[contractDeployer], address: tokenLower, percent: 100 };
+        }
+        if (contractDeployer && contractDeployer !== creatorLower) {
+          try {
+            const r2 = await fetch(
+              `https://base.blockscout.com/api/v2/addresses/${contractDeployer}`,
+              { signal: AbortSignal.timeout(5000) },
+            );
+            if (r2.ok) {
+              const data2 = await r2.json() as any;
+              const deployer2 = (data2.creator_address_hash || "").toLowerCase();
+              if (deployer2 && PLATFORM_DEPLOYERS[deployer2]) {
+                console.log(`[forensics] Token ${tokenLower.slice(0,10)} → ${contractDeployer.slice(0,10)} → ${deployer2.slice(0,10)} → ${PLATFORM_DEPLOYERS[deployer2]}`);
+                return { name: PLATFORM_DEPLOYERS[deployer2], address: tokenLower, percent: 100 };
+              }
+            }
+          } catch (e2: any) { console.log(`[forensics] Blockscout token hop2 error: ${e2.message ?? e2}`); }
+        }
+      }
+    } catch (e: any) { console.log(`[forensics] Blockscout timeout/error for token ${tokenLower.slice(0,10)}: ${e.message ?? e}`); }
   }
 
   return null;
@@ -574,7 +627,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             || (() => { for (const lp of lpHolders) { const a = (lp.address ?? "").toLowerCase(); if (PLATFORM_LOCKERS[a]) return PLATFORM_LOCKERS[a]; } return "Protocol"; })();
           protocolMatch = { name: matchName, address: creatorLower || scannedAddrLower, percent: 100 };
         } else {
-          protocolMatch = await resolveProtocolLocker(creatorAddress || "", lpHolders, chain);
+          protocolMatch = await resolveProtocolLocker(creatorAddress || "", lpHolders, chain, address as string);
         }
         const lpEscrowName = protocolMatch?.name ?? null;
         const lpEscrowAddress = protocolMatch?.address ?? null;
@@ -1249,6 +1302,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contractTokenData.creator_address || "",
         csLpHolders,
         chain,
+        contractAddress,
       );
 
       for (const lp of csLpHolders) {
@@ -1559,6 +1613,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       tokenData?.creator_address || "",
       lpHolders,
       chain,
+      contractAddress,
     );
     const auditProtocolLocker = auditProtocolMatch?.name ?? null;
     const auditIsProtocolSecure = !!auditProtocolMatch;
@@ -1721,6 +1776,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       tokenData?.creator_address || "",
       lpHolders,
       "base",
+      contractAddress,
     );
     const certProtocolLocker = certProtocolMatch?.name ?? null;
     const certIsProtocolSecure = !!certProtocolMatch;
