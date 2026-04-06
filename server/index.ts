@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { execFile } from "child_process";
+import fs from "fs";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createBot } from "./bot";
@@ -105,48 +106,65 @@ app.use((req, res, next) => {
   const isProduction = process.env.NODE_ENV === "production" || !!process.env.REPL_DEPLOYMENT;
   const bot = createBot();
   if (bot && isProduction) {
-    const instanceId = `${process.pid}-${Date.now()}`;
-    log(`Bot instance ${instanceId} queued`, "bot");
-    const launchBot = async (attempt = 1): Promise<void> => {
+    const BOT_LOCK = "/tmp/apol_bot.lock";
+    let hasLock = false;
+    try {
+      fs.writeFileSync(BOT_LOCK, `${process.pid}`, { flag: "wx" });
+      hasLock = true;
+    } catch {
       try {
-        const tkn = process.env.APOL_BOT_TOKEN!;
-        for (let flush = 0; flush < 5; flush++) {
+        const oldPid = parseInt(fs.readFileSync(BOT_LOCK, "utf8").trim());
+        try { process.kill(oldPid, 0); } catch { hasLock = true; fs.writeFileSync(BOT_LOCK, `${process.pid}`); }
+      } catch { hasLock = true; fs.writeFileSync(BOT_LOCK, `${process.pid}`); }
+    }
+
+    if (!hasLock) {
+      log(`Bot lock held by another process — skipping bot in PID ${process.pid}`, "bot");
+    } else {
+      log(`Bot lock acquired by PID ${process.pid}`, "bot");
+      const launchBot = async (attempt = 1): Promise<void> => {
+        try {
+          const tkn = process.env.APOL_BOT_TOKEN!;
           await fetch(`https://api.telegram.org/bot${tkn}/deleteWebhook?drop_pending_updates=true`, { signal: AbortSignal.timeout(5000) }).catch(() => {});
           await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&timeout=1`, { signal: AbortSignal.timeout(8000) }).catch(() => {});
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise(r => setTimeout(r, 2000));
+          await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&timeout=1`, { signal: AbortSignal.timeout(8000) }).catch(() => {});
+          await new Promise(r => setTimeout(r, 2000));
+          await bot.launch({ dropPendingUpdates: true, allowedUpdates: ["message", "callback_query"] });
+          log("Telegram bot polling started", "bot");
+          const registerCommands = () =>
+            bot.telegram.setMyCommands([
+              { command: "scan",        description: "Detailed CA investigation (Taxes, Liquidity, Honeypot)" },
+              { command: "scanx",       description: "X/Twitter social forensics & LARP detection" },
+              { command: "scanagent",   description: "Verify AI Agent authenticity and security" },
+              { command: "checkwallet", description: "Forensic wallet audit (Age, Funding, Volume)" },
+              { command: "map",         description: "Access the APOL Wall of Shame" },
+              { command: "verified",    description: "View APOL Certified Hero Projects" },
+            ])
+              .then(() => log("Telegram command menu registered", "bot"))
+              .catch(() => setTimeout(registerCommands, 10_000));
+          registerCommands();
+        } catch (err: any) {
+          const msg = err?.message ?? String(err);
+          log(`Telegram bot failed to start (attempt ${attempt}): ${msg}`, "bot");
+          if (msg.includes("409") && attempt <= 60) {
+            const delay = Math.min(attempt * 5_000, 30_000);
+            log(`Retrying bot launch in ${delay / 1000}s...`, "bot");
+            setTimeout(() => launchBot(attempt + 1), delay);
+          } else {
+            log(`Telegram bot gave up after ${attempt} attempts`, "bot");
+          }
         }
-        await new Promise(r => setTimeout(r, 3000));
-        await bot.launch({ dropPendingUpdates: true, allowedUpdates: ["message", "callback_query"] });
-        log("Telegram bot polling started", "bot");
-        const registerCommands = () =>
-          bot.telegram.setMyCommands([
-            { command: "scan",        description: "Detailed CA investigation (Taxes, Liquidity, Honeypot)" },
-            { command: "scanx",       description: "X/Twitter social forensics & LARP detection" },
-            { command: "scanagent",   description: "Verify AI Agent authenticity and security" },
-            { command: "checkwallet", description: "Forensic wallet audit (Age, Funding, Volume)" },
-            { command: "map",         description: "Access the APOL Wall of Shame" },
-            { command: "verified",    description: "View APOL Certified Hero Projects" },
-          ])
-            .then(() => log("Telegram command menu registered", "bot"))
-            .catch(() => setTimeout(registerCommands, 10_000));
-        registerCommands();
-      } catch (err: any) {
-        const msg = err?.message ?? String(err);
-        log(`Telegram bot failed to start (attempt ${attempt}): ${msg}`, "bot");
-        if (msg.includes("409") && attempt <= 60) {
-          const delay = Math.min(attempt * 3_000, 15_000);
-          log(`Retrying bot launch in ${delay / 1000}s...`, "bot");
-          setTimeout(() => launchBot(attempt + 1), delay);
-        } else {
-          log(`Telegram bot gave up after ${attempt} attempts`, "bot");
-        }
-      }
-    };
-    setTimeout(() => launchBot(), 15_000);
+      };
+      setTimeout(() => launchBot(), 10_000);
 
-    const shutdown = () => { bot.stop("SIGTERM"); };
-    process.once("SIGTERM", shutdown);
-    process.once("SIGINT",  shutdown);
+      const shutdown = () => {
+        try { fs.unlinkSync(BOT_LOCK); } catch {}
+        bot.stop("SIGTERM");
+      };
+      process.once("SIGTERM", shutdown);
+      process.once("SIGINT",  shutdown);
+    }
   } else if (bot) {
     log("Bot skipped in dev — only runs in production to avoid conflicts", "bot");
   }
