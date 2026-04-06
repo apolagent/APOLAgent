@@ -63,7 +63,7 @@ const GOPLUS_CHAIN: Record<string, string> = {
 };
 
 const PLATFORM_LOCKERS: Record<string, string> = {
-  "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore Managed",
+  "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore",
   "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
   "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker v4",
   "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
@@ -71,7 +71,7 @@ const PLATFORM_LOCKERS: Record<string, string> = {
 };
 
 const PLATFORM_DEPLOYERS: Record<string, string> = {
-  "0xade256e1c2763b8766efe1eeb7c578d93f621f6f": "ApeStore Managed",
+  "0xade256e1c2763b8766efe1eeb7c578d93f621f6f": "ApeStore",
   "0xd46618f35099074c5a456b21d2967a6ff6841bd3": "Clanker v4",
   "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
   "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
