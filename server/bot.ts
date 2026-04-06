@@ -42,13 +42,6 @@ function fmtPrice(n: number): string {
   if (n >= 1)    return `$${n.toFixed(2)}`;
   if (n >= 0.01) return `$${n.toFixed(4)}`;
   if (n >= 0.0001) return `$${n.toFixed(6)}`;
-  const s = n.toFixed(18);
-  const match = s.match(/^0\.(0+)([1-9]\d*)/);
-  if (match) {
-    const zeros = match[1].length;
-    const sig = match[2].slice(0, 4).replace(/0+$/, "");
-    return `$0.0{${zeros}}${sig}`;
-  }
   return `$${n.toFixed(10).replace(/0+$/, "")}`;
 }
 
