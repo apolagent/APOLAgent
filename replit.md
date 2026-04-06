@@ -70,10 +70,12 @@ shared/
   - `0xe85a...83a9` — Clanker V4 Factory → "Clanker v4"
   - `0xf362...5d68` — Clanker Locker → "Clanker v4"
   - `0x0b3e...7e1b` — Virtuals Protocol → "Virtuals"
+  - `0xdad6...2e32` — Virtuals Vault → "Virtuals"
 - **PLATFORM_DEPLOYERS** (EOAs that deploy per-token locker contracts):
   - `0xade2...1f6f` → "ApeStore Managed" (deploys ApeStore factory + per-token lockers)
   - `0xd466...1bd3` → "Clanker v4" (deploys Clanker locker + SingletonLpLocker/MultipleLpLockerUniV3)
   - `0x97cf...0a3` → "Virtuals" (deploys Virtuals Protocol)
+  - `0xdad6...2e32` → "Virtuals" (Virtuals Vault — bonding curve)
 - **Why deployer tracing**: GoPlus never exposes factory addresses directly for V3/V4 tokens. LP holders are per-token locker contracts (e.g., SingletonLpLocker) created by platform deployer EOAs.
 - **Virtuals early override** (`isVirtualsOrigin` + `isVirtualsContract`):
   - Matches tokens created by Virtuals factory `0x0b3e...7e1b` or deployer `0x97cf...0a3`
@@ -83,7 +85,8 @@ shared/
   - Safety gate: honeypot/killer-tax flags still force High Risk for non-Virtuals-contract tokens even if Virtuals-origin
 - **Override behavior**: When protocol match found:
   - `isSecure = true`, LP shown as "Protocol Managed"
-  - Risk level forced to Clean (unless honeypot or killer tax for non-Virtuals contracts)
+  - Risk level forced to Clean (unless honeypot or killer tax for non-factory contracts)
+- **Tax override**: If a factory-origin token has simulated buy/sell tax > 50% (bonding curve simulation failure), tax is forced to 0 and `taxOverride` field is set to the platform name. UI/bot shows "Tax: Protocol Managed (Virtuals)" instead of the false 99%.
 - **Holder count fallback**: If GoPlus returns 0 holders, falls back to Blockscout token counters API. Shows "Calculating..." instead of 0 on failure.
 - **Response fields**: `protocolSecured: true`, `isKnownFactory: true`, `holderCount`, `lpEscrow: { name, address, percent }`, `contractScan.protocolLocker`
 - **Risk hierarchy**: Honeypot or sell_tax > 20% → forced High Risk even if protocol-secured (except for Virtuals contract addresses)

@@ -67,6 +67,7 @@ type DetectiveResult = {
   tokenSymbol?: string;
   buyTax?: number;
   sellTax?: number;
+  taxOverride?: string | null;
   isHoneypot?: boolean;
   isMintable?: boolean;
   isOpenSource?: boolean;
@@ -348,8 +349,8 @@ function AdvancedResults({ result }: { result: AgentResult }) {
           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px" }}>
             {[
               { label: "Honeypot", value: cs.honeypot ? "DETECTED" : "CLEAR", color: cs.honeypot ? "#f87171" : G },
-              { label: "Buy Tax", value: `${cs.buyTax.toFixed(1)}%`, color: cs.buyTax > 5 ? "#f87171" : cs.buyTax > 0 ? "#facc15" : G },
-              { label: "Sell Tax", value: `${cs.sellTax.toFixed(1)}%`, color: cs.sellTax > 5 ? "#f87171" : cs.sellTax > 0 ? "#facc15" : G },
+              { label: "Buy Tax", value: checkResult?.taxOverride ? `Protocol Managed` : `${cs.buyTax.toFixed(1)}%`, color: checkResult?.taxOverride ? G : (cs.buyTax > 5 ? "#f87171" : cs.buyTax > 0 ? "#facc15" : G) },
+              { label: "Sell Tax", value: checkResult?.taxOverride ? `Protocol Managed` : `${cs.sellTax.toFixed(1)}%`, color: checkResult?.taxOverride ? G : (cs.sellTax > 5 ? "#f87171" : cs.sellTax > 0 ? "#facc15" : G) },
               { label: "Liquidity", value: lpStatus, color: lpColor },
             ].map((item, i) => (
               <div key={i}>
@@ -1010,8 +1011,8 @@ export default function AgentScanner() {
                         { label: "Proxy", value: checkResult.isProxy, bad: true },
                         { label: "Blacklist", value: checkResult.hasBlacklist, bad: true },
                         { label: "Pausable", value: checkResult.canPause, bad: true },
-                        { label: `Buy Tax ${checkResult.buyTax != null ? checkResult.buyTax.toFixed(1) + "%" : ""}`, value: (checkResult.buyTax ?? 0) > 10, bad: true },
-                        { label: `Sell Tax ${checkResult.sellTax != null ? checkResult.sellTax.toFixed(1) + "%" : ""}`, value: (checkResult.sellTax ?? 0) > 10, bad: true },
+                        { label: checkResult.taxOverride ? `Buy Tax: Protocol Managed (${checkResult.taxOverride})` : `Buy Tax ${checkResult.buyTax != null ? checkResult.buyTax.toFixed(1) + "%" : ""}`, value: checkResult.taxOverride ? false : (checkResult.buyTax ?? 0) > 10, bad: true },
+                        { label: checkResult.taxOverride ? `Sell Tax: Protocol Managed (${checkResult.taxOverride})` : `Sell Tax ${checkResult.sellTax != null ? checkResult.sellTax.toFixed(1) + "%" : ""}`, value: checkResult.taxOverride ? false : (checkResult.sellTax ?? 0) > 10, bad: true },
                         { label: "On DEX", value: checkResult.isInDex, bad: false },
                       ].map((item, i) => {
                         const isWarning = item.bad ? item.value : !item.value;

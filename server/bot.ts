@@ -68,12 +68,14 @@ const BOT_PLATFORM_LOCKERS: Record<string, string> = {
   "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
   "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker v4",
   "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
+  "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
 };
 
 const BOT_PLATFORM_DEPLOYERS: Record<string, string> = {
   "0xade256e1c2763b8766efe1eeb7c578d93f621f6f": "ApeStore",
   "0xd46618f35099074c5a456b21d2967a6ff6841bd3": "Clanker v4",
   "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
+  "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
 };
 
 const ALL_BOT_FACTORY_ADDRESSES = new Set([
@@ -117,10 +119,18 @@ async function directGoPlus(address: string): Promise<any> {
     }
 
     const isHoneypot = flag(token.is_honeypot);
-    const buyTax = parseFloat(token.buy_tax ?? "0") * 100;
-    const sellTax = parseFloat(token.sell_tax ?? "0") * 100;
-    const hasKillerTax = buyTax > 20 || sellTax > 20;
+    let buyTax = parseFloat(token.buy_tax ?? "0") * 100;
+    let sellTax = parseFloat(token.sell_tax ?? "0") * 100;
     const isKnownFactory = !!lpEscrowName;
+
+    let taxOverride: string | null = null;
+    if (isKnownFactory && (buyTax > 50 || sellTax > 50)) {
+      buyTax = 0;
+      sellTax = 0;
+      taxOverride = lpEscrowName;
+    }
+
+    const hasKillerTax = buyTax > 20 || sellTax > 20;
 
     const redFlags: string[] = [];
     if (isHoneypot && !isKnownFactory) redFlags.push("Honeypot, cannot sell");
@@ -147,7 +157,7 @@ async function directGoPlus(address: string): Promise<any> {
     return {
       riskLevel, isKnownFactory, protocolSecured: isKnownFactory, holderCount,
       isOwnershipRenounced: flag(token.is_in_dex),
-      isHoneypot, buyTax, sellTax, redFlags, adminThreats: [],
+      isHoneypot, buyTax, sellTax, taxOverride, redFlags, adminThreats: [],
       tokenName: token.token_name, tokenSymbol: token.token_symbol,
       lpEscrow: isKnownFactory ? { name: lpEscrowName, address: creatorLower, percent: 100 } : null,
       isHighRisk: riskLevel === "High Risk",
@@ -212,8 +222,9 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     }
 
     const holderCount = (api?.holderCount && api.holderCount > 0) ? api.holderCount.toLocaleString() : "Calculating...";
-    const buyTaxFmt  = api ? `${(api.buyTax ?? 0).toFixed(1)}%` : "Data Pending";
-    const sellTaxFmt = api ? `${(api.sellTax ?? 0).toFixed(1)}%` : "Data Pending";
+    const isProtocolTax = !!api?.taxOverride;
+    const buyTaxFmt  = isProtocolTax ? "Protocol Managed" : (api ? `${(api.buyTax ?? 0).toFixed(1)}%` : "Data Pending");
+    const sellTaxFmt = isProtocolTax ? "Protocol Managed" : (api ? `${(api.sellTax ?? 0).toFixed(1)}%` : "Data Pending");
 
     const liqUsd: number | null = topPair?.liquidity?.usd ?? null;
     const liqFormatted = liqUsd !== null ? fmtUsd(liqUsd) : "Data Pending";
@@ -909,9 +920,8 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     const ownerBal        = token ? flag(token.owner_change_balance)     : false;
     const hasCooldown     = token ? flag(token.trading_cooldown)         : false;
     const antiWhale       = token ? flag(token.anti_whale_modifiable)    : false;
-    const buyTax          = parseFloat(token?.buy_tax  ?? "0");
-    const sellTax         = parseFloat(token?.sell_tax ?? "0");
-    const highTax         = buyTax > 0.05 || sellTax > 0.05;
+    let agBuyTax          = parseFloat(token?.buy_tax  ?? "0");
+    let agSellTax         = parseFloat(token?.sell_tax ?? "0");
 
     // ── LP lock — on-chain forensics via Blockscout deployer tracing ─────────
     const lpHolders: any[] = token?.lp_holders ?? [];
@@ -984,6 +994,14 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     }
 
     const lpSecure = lpBurnedPct >= 50 || lpLockedPct >= 50 || agentIsKnownFactory;
+
+    let agTaxOverride: string | null = null;
+    if (agentIsKnownFactory && (agBuyTax > 0.50 || agSellTax > 0.50)) {
+      agBuyTax = 0;
+      agSellTax = 0;
+      agTaxOverride = agentLpEscrowName;
+    }
+    const highTax = agBuyTax > 0.05 || agSellTax > 0.05;
 
     // ── AI Threat Assessment ──────────────────────────────────────────────────
     // Prompt Injection Risk: can the agent's logic be covertly altered?
@@ -1067,9 +1085,9 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     const ownerFmt      = token
       ? (ownerRecovery || ownerBal ? "Privileged ⚠️" : "Renounced / Safe ✅")
       : "Data Pending";
-    const taxFmt        = token
-      ? `Buy ${pct(token.buy_tax)} / Sell ${pct(token.sell_tax)}`
-      : "Data Pending";
+    const taxFmt        = agTaxOverride
+      ? `Protocol Managed (${agTaxOverride})`
+      : (token ? `Buy ${pct(token.buy_tax)} / Sell ${pct(token.sell_tax)}` : "Data Pending");
 
     // ── Build message ─────────────────────────────────────────────────────────
     let msg = "";

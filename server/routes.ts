@@ -67,12 +67,14 @@ const PLATFORM_LOCKERS: Record<string, string> = {
   "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker v4",
   "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker v4",
   "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
+  "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
 };
 
 const PLATFORM_DEPLOYERS: Record<string, string> = {
   "0xade256e1c2763b8766efe1eeb7c578d93f621f6f": "ApeStore Managed",
   "0xd46618f35099074c5a456b21d2967a6ff6841bd3": "Clanker v4",
   "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
+  "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
 };
 
 const BURN_SET = new Set([
@@ -491,8 +493,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const isHoneypotGP = tokenData.is_honeypot === "1" || tokenData.is_honeypot === 1;
         const isHoneypotHP = hpData?.honeypotResult?.isHoneypot === true;
         const isHoneypot = isHoneypotGP || isHoneypotHP;
-        const buyTax = hpData?.simulationResult?.buyTax != null ? hpData.simulationResult.buyTax * 100 : taxPct(tokenData.buy_tax);
-        const sellTax = hpData?.simulationResult?.sellTax != null ? hpData.simulationResult.sellTax * 100 : taxPct(tokenData.sell_tax);
+        let buyTax = hpData?.simulationResult?.buyTax != null ? hpData.simulationResult.buyTax * 100 : taxPct(tokenData.buy_tax);
+        let sellTax = hpData?.simulationResult?.sellTax != null ? hpData.simulationResult.sellTax * 100 : taxPct(tokenData.sell_tax);
         const isMintable = tokenData.is_mintable === "1" || tokenData.is_mintable === 1;
         const isOpenSource = tokenData.is_open_source === "1" || tokenData.is_open_source === 1;
         const isInDex = tokenData.is_in_dex === "1" || tokenData.is_in_dex === 1;
@@ -578,6 +580,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const lpEscrowAddress = protocolMatch?.address ?? null;
         const lpEscrowPct = protocolMatch?.percent ?? 0;
         const isKnownFactory = !!protocolMatch;
+
+        let taxOverridden = false;
+        if (isKnownFactory && (buyTax !== null && buyTax > 50 || sellTax !== null && sellTax > 50)) {
+          buyTax = 0;
+          sellTax = 0;
+          taxOverridden = true;
+        }
         const isProtocolEscrow = isKnownFactory;
 
         const lpBurnedPct = lpHolders
@@ -694,6 +703,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           holderCount,
           buyTax,
           sellTax,
+          taxOverride: taxOverridden ? lpEscrowName : null,
           isHoneypot,
           isMintable,
           isOpenSource,
@@ -1537,8 +1547,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const isHoneypotHP = hpData?.IsHoneypot === true;
     const isHoneypot = isHoneypotGP || isHoneypotHP;
     const simulationSuccess = hpData != null ? hpData.simulationSuccess !== false : null;
-    const buyTax = hpData?.BuyTax != null ? hpData.BuyTax : taxPct(tokenData?.buy_tax ?? "0");
-    const sellTax = hpData?.SellTax != null ? hpData.SellTax : taxPct(tokenData?.sell_tax ?? "0");
+    let buyTax = hpData?.BuyTax != null ? hpData.BuyTax : taxPct(tokenData?.buy_tax ?? "0");
+    let sellTax = hpData?.SellTax != null ? hpData.SellTax : taxPct(tokenData?.sell_tax ?? "0");
 
     // LP Lock
     const lpHolders: any[] = tokenData?.lp_holders || [];
@@ -1564,6 +1574,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const loc = lp.tag || lockerLabel || (isBurn ? "Burn Address" : "Locked");
         if (!lockLocations.includes(loc)) lockLocations.push(loc);
       }
+    }
+
+    if (auditIsProtocolSecure && (buyTax !== null && buyTax > 50 || sellTax !== null && sellTax > 50)) {
+      buyTax = 0;
+      sellTax = 0;
     }
 
     if (auditIsProtocolSecure) {
@@ -1696,8 +1711,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const isHoneypot = hpData?.IsHoneypot ?? flag1(tokenData?.is_honeypot);
     const simulationSuccess = hpData ? (hpData.simulationSuccess ?? null) : null;
-    const buyTax = hpData?.BuyTax != null ? hpData.BuyTax : taxPct(tokenData?.buy_tax ?? "0");
-    const sellTax = hpData?.SellTax != null ? hpData.SellTax : taxPct(tokenData?.sell_tax ?? "0");
+    let buyTax = hpData?.BuyTax != null ? hpData.BuyTax : taxPct(tokenData?.buy_tax ?? "0");
+    let sellTax = hpData?.SellTax != null ? hpData.SellTax : taxPct(tokenData?.sell_tax ?? "0");
 
     const lpHolders: { address: string; balance: string; percent: string; is_contract: string; locked: string; tag: string }[]
       = tokenData?.lp_holders ?? [];
@@ -1709,6 +1724,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     );
     const certProtocolLocker = certProtocolMatch?.name ?? null;
     const certIsProtocolSecure = !!certProtocolMatch;
+
+    if (certIsProtocolSecure && (buyTax !== null && buyTax > 50 || sellTax !== null && sellTax > 50)) {
+      buyTax = 0;
+      sellTax = 0;
+    }
 
     let lockedBalance = 0;
     let totalBalance = 0;
