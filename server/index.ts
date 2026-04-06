@@ -110,12 +110,13 @@ app.use((req, res, next) => {
     const launchBot = async (attempt = 1): Promise<void> => {
       try {
         const tkn = process.env.APOL_BOT_TOKEN!;
-        await fetch(`https://api.telegram.org/bot${tkn}/deleteWebhook?drop_pending_updates=true`, { signal: AbortSignal.timeout(10000) }).catch(() => {});
-        await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&timeout=0`, { signal: AbortSignal.timeout(10000) }).catch(() => {});
+        for (let flush = 0; flush < 5; flush++) {
+          await fetch(`https://api.telegram.org/bot${tkn}/deleteWebhook?drop_pending_updates=true`, { signal: AbortSignal.timeout(5000) }).catch(() => {});
+          await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&timeout=1`, { signal: AbortSignal.timeout(8000) }).catch(() => {});
+          await new Promise(r => setTimeout(r, 1000));
+        }
         await new Promise(r => setTimeout(r, 3000));
-        await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&timeout=0`, { signal: AbortSignal.timeout(10000) }).catch(() => {});
-        await new Promise(r => setTimeout(r, 2000));
-        await bot.launch({ dropPendingUpdates: true });
+        await bot.launch({ dropPendingUpdates: true, allowedUpdates: ["message", "callback_query"] });
         log("Telegram bot polling started", "bot");
         const registerCommands = () =>
           bot.telegram.setMyCommands([
@@ -132,8 +133,8 @@ app.use((req, res, next) => {
       } catch (err: any) {
         const msg = err?.message ?? String(err);
         log(`Telegram bot failed to start (attempt ${attempt}): ${msg}`, "bot");
-        if (msg.includes("409") && attempt <= 30) {
-          const delay = Math.min(attempt * 5_000, 30_000);
+        if (msg.includes("409") && attempt <= 60) {
+          const delay = Math.min(attempt * 3_000, 15_000);
           log(`Retrying bot launch in ${delay / 1000}s...`, "bot");
           setTimeout(() => launchBot(attempt + 1), delay);
         } else {
@@ -141,7 +142,7 @@ app.use((req, res, next) => {
         }
       }
     };
-    setTimeout(() => launchBot(), 10_000);
+    setTimeout(() => launchBot(), 15_000);
 
     const shutdown = () => { bot.stop("SIGTERM"); };
     process.once("SIGTERM", shutdown);
