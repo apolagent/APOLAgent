@@ -68,6 +68,7 @@ const PLATFORM_LOCKERS: Record<string, string> = {
   "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker v4",
   "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
   "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
+  "0x39112541720078c70164ea4deb61f0a4811910f9": "Flaunch",
 };
 
 const PLATFORM_DEPLOYERS: Record<string, string> = {
@@ -77,6 +78,7 @@ const PLATFORM_DEPLOYERS: Record<string, string> = {
   "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
   "0x71b8efc8bcad65a5d9386d07f2dff57ab4eaf533": "Virtuals",
   "0x9547e85f3016303a2996271314bde78b02021a28": "Virtuals",
+  "0x39112541720078c70164ea4deb61f0a4811910f9": "Flaunch",
 };
 
 const BURN_SET = new Set([
@@ -458,6 +460,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ]);
     }
     const issues = redFlags.join("; ");
+    const hasCannotSellFlag = redFlags.some(f => f.toLowerCase().includes("honeypot") || f.toLowerCase().includes("cannot sell"));
+    const hasTrapTaxFlag = redFlags.some(f => {
+      const m = f.match(/(buy|sell) tax:\s*([\d.]+)%/i);
+      return m && parseFloat(m[2]) > 90;
+    });
+    if (riskLevel === "High Risk" && (hasCannotSellFlag || hasTrapTaxFlag)) {
+      return pickRandom([
+        `Citizen, ${token} is a TRAP / HONEYPOT. Confirmed malicious code. You cannot sell this token. Do NOT buy. 🚨`,
+        `RED ALERT on ${token}. This is a confirmed TRAP. You cannot sell. Do NOT interact with this contract. 🚨`,
+        `Citizen, ${token} is a HONEYPOT. Our scan confirms you cannot sell. Do NOT buy this token under any circumstances. 🚨`,
+      ]);
+    }
     if (riskLevel === "High Risk") {
       return pickRandom([
         `Citizen, ${token} is a TRAP. APOL Agent flagged: ${issues}. Do NOT buy this token. This has rug written all over it. 🚨`,
@@ -465,6 +479,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         `RED ALERT on ${token}. My scan shows: ${issues}. I've seen this a thousand times, stay far away. 🚨`,
         `Warrant issued for ${token}. Security violations: ${issues}. Do not interact with this contract under any circumstances. 🚨`,
         `Citizen, ${token} has multiple critical red flags: ${issues}. Your funds will not survive this trade. I'm ordering you to stand down. 🚨`,
+      ]);
+    }
+    const onlyLpUnlocked = redFlags.length === 1 && redFlags[0]?.includes("LP not locked");
+    if (riskLevel === "Caution" && onlyLpUnlocked) {
+      return pickRandom([
+        `Citizen, ${token} has one issue: LP is currently unlocked. Exercise caution as liquidity is not yet burnt or locked in a third-party locker. 🔍`,
+        `${token} checks out on most metrics, but LP is unlocked. Liquidity is not yet burnt or locked. Proceed with caution, Citizen. 🔍`,
+        `Our scan on ${token} found no critical threats, but LP is currently unlocked. Be aware the liquidity is not yet secured in a third-party locker. 🔍`,
       ]);
     }
     return pickRandom([
@@ -701,7 +723,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         let riskLevel: string;
-        if ((hasHoneypot || hasKillerTax) && !isFactoryContract) {
+        const isVirtualsToken = lpEscrowName === "Virtuals";
+        const hasCannotSell = isHoneypot;
+        const hasTrapTax = !isVirtualsToken && ((buyTax !== null && buyTax > 90) || (sellTax !== null && sellTax > 90));
+        const isTrapOrHoneypot = hasCannotSell || hasTrapTax;
+        const onlyUnlockedLP = hasUnlockedLP && !isTrapOrHoneypot && !hasCriticalFlag && redFlags.length === 1 && redFlags[0]?.includes("LP not locked");
+
+        if (isTrapOrHoneypot && !isFactoryContract) {
+          riskLevel = "High Risk";
+        } else if ((hasHoneypot || hasKillerTax) && !isFactoryContract) {
           riskLevel = "High Risk";
         } else if (factoryEarlyMatch) {
           riskLevel = redFlags.length > 0 ? "Caution" : "Clean";
@@ -713,8 +743,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (redFlags.length >= 3) riskLevel = "High Risk";
           else if (redFlags.length >= 1) riskLevel = "Caution";
           else riskLevel = "Clean";
+        } else if (onlyUnlockedLP) {
+          riskLevel = "Caution";
         } else {
-          if (hasUnlockedLP || redFlags.length >= 2) riskLevel = "High Risk";
+          if (redFlags.length >= 2) riskLevel = "High Risk";
           else if (redFlags.length >= 1) riskLevel = "Caution";
           else riskLevel = "Clean";
         }

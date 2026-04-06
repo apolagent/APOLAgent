@@ -62,6 +62,7 @@ const BOT_PLATFORM_LOCKERS: Record<string, string> = {
   "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker v4",
   "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
   "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
+  "0x39112541720078c70164ea4deb61f0a4811910f9": "Flaunch",
 };
 
 const BOT_PLATFORM_DEPLOYERS: Record<string, string> = {
@@ -71,6 +72,7 @@ const BOT_PLATFORM_DEPLOYERS: Record<string, string> = {
   "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
   "0x71b8efc8bcad65a5d9386d07f2dff57ab4eaf533": "Virtuals",
   "0x9547e85f3016303a2996271314bde78b02021a28": "Virtuals",
+  "0x39112541720078c70164ea4deb61f0a4811910f9": "Flaunch",
 };
 
 const ALL_BOT_FACTORY_ADDRESSES = new Set([
