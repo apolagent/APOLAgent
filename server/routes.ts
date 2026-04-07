@@ -165,19 +165,21 @@ async function rpcCheckUniV3Pool(tokenAddress: string): Promise<boolean> {
   return results.some(r => r && r !== "0x" + "0".repeat(64) && r !== "0x");
 }
 
+const V4_DEPLOY_BLOCK = "0x16E3600";
+
 async function rpcCheckUniV4Pool(tokenAddress: string): Promise<boolean> {
   if (!BASE_RPC_URL) return false;
   const padToken = "0x" + tokenAddress.replace("0x", "").toLowerCase().padStart(64, "0");
   const [asCurrency0, asCurrency1] = await Promise.all([
     rpcCall("eth_getLogs", [{
       address: UNISWAP_V4_POOL_MANAGER,
-      fromBlock: "0x0",
+      fromBlock: V4_DEPLOY_BLOCK,
       toBlock: "latest",
       topics: [null, null, padToken, null],
     }]),
     rpcCall("eth_getLogs", [{
       address: UNISWAP_V4_POOL_MANAGER,
-      fromBlock: "0x0",
+      fromBlock: V4_DEPLOY_BLOCK,
       toBlock: "latest",
       topics: [null, null, null, padToken],
     }]),
@@ -700,6 +702,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         malicious = j.result || {};
       } catch { /* non-fatal */ }
 
+      let earlyDexVersion: "v3" | "v4" | null = null;
+
       // 2. ALCHEMY-FIRST: Alchemy RPC is the FIRST call for EVERY scan on Base (Dual-DEX: V3 + V4)
       if (chain === "base") {
         const alchemyT0 = Date.now();
@@ -709,6 +713,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           rpcCheckDualDex(address as string),
         ]);
         const { version: dexVersion, isInDex: hasPool } = dexResult;
+        earlyDexVersion = dexVersion;
         const liveStatus = dexLiveStatus(dexVersion);
         console.log(`[alchemy-first] DEX check: ${dexVersion ? dexVersion.toUpperCase() + " FOUND" : "NONE"} for ${(address as string).slice(0,10)} in ${Date.now() - alchemyT0}ms`);
 
@@ -725,6 +730,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const d2 = deployer2.toLowerCase();
               fastPlatform = PLATFORM_DEPLOYERS[d2] || PLATFORM_LOCKERS[d2] || null;
             }
+          }
+
+          if (!fastPlatform) {
+            try {
+              const earlyHolders = await rpcGetTopHolders(address as string);
+              for (const h of earlyHolders) {
+                const ha = (h.address || "").toLowerCase();
+                if (PLATFORM_LOCKERS[ha]) { fastPlatform = PLATFORM_LOCKERS[ha]; break; }
+                if (PLATFORM_DEPLOYERS[ha]) { fastPlatform = PLATFORM_DEPLOYERS[ha]; break; }
+              }
+              if (!fastPlatform) {
+                const holderAddrs = earlyHolders.slice(0, 5).map(h => (h.address || "").toLowerCase()).filter(Boolean);
+                const holderDeployers = await Promise.allSettled(
+                  holderAddrs.map(a => fetch(`https://base.blockscout.com/api/v2/addresses/${a}`, { signal: AbortSignal.timeout(4000) }).then(r => r.json()).then((d: any) => ({ holder: a, deployer: (d?.creator_address_hash || "").toLowerCase() })))
+                );
+                for (const r of holderDeployers) {
+                  if (r.status === "fulfilled" && r.value.deployer) {
+                    const dep = r.value.deployer;
+                    if (PLATFORM_DEPLOYERS[dep]) { fastPlatform = PLATFORM_DEPLOYERS[dep]; break; }
+                    if (PLATFORM_LOCKERS[dep]) { fastPlatform = PLATFORM_LOCKERS[dep]; break; }
+                  }
+                }
+              }
+            } catch { /* non-fatal, fall through to GoPlus */ }
           }
 
           if (fastPlatform) {
@@ -967,7 +996,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const isOpenSource = tokenData.is_open_source === "1" || tokenData.is_open_source === 1;
         let isInDex = tokenData.is_in_dex === "1" || tokenData.is_in_dex === 1;
 
-        let nonWhitelistDexVersion: "v3" | "v4" | null = null;
+        let nonWhitelistDexVersion: "v3" | "v4" | null = earlyDexVersion;
         if (!isInDex && chain === "base") {
           const dexFallback = await rpcCheckDualDex(address as string);
           if (dexFallback.isInDex) {

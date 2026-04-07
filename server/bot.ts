@@ -121,19 +121,21 @@ async function botCheckUniV3Pool(tokenAddress: string): Promise<boolean> {
   return results.some(r => r && r !== "0x" + "0".repeat(64) && r !== "0x");
 }
 
+const BOT_V4_DEPLOY_BLOCK = "0x16E3600";
+
 async function botCheckUniV4Pool(tokenAddress: string): Promise<boolean> {
   if (!BOT_RPC_URL) return false;
   const padToken = "0x" + tokenAddress.replace("0x", "").toLowerCase().padStart(64, "0");
   const [asCurrency0, asCurrency1] = await Promise.all([
     botRpcCall("eth_getLogs", [{
       address: UNISWAP_V4_POOL_MANAGER,
-      fromBlock: "0x0",
+      fromBlock: BOT_V4_DEPLOY_BLOCK,
       toBlock: "latest",
       topics: [null, null, padToken, null],
     }]),
     botRpcCall("eth_getLogs", [{
       address: UNISWAP_V4_POOL_MANAGER,
-      fromBlock: "0x0",
+      fromBlock: BOT_V4_DEPLOY_BLOCK,
       toBlock: "latest",
       topics: [null, null, null, padToken],
     }]),
@@ -302,6 +304,37 @@ async function directGoPlus(address: string): Promise<any> {
                   if (deployer2) fastPlatform = BOT_PLATFORM_DEPLOYERS[deployer2] || BOT_PLATFORM_LOCKERS[deployer2] || null;
                 }
               } catch {}
+            }
+          }
+        }
+      } catch {}
+    }
+
+    if (!fastPlatform) {
+      try {
+        const thRes = await fetch(`https://base.blockscout.com/api/v2/tokens/${encodeURIComponent(address)}/holders?limit=10`, { signal: AbortSignal.timeout(5000) });
+        if (thRes.ok) {
+          const thData = await thRes.json() as any;
+          const items: any[] = thData?.items ?? [];
+          for (const item of items) {
+            const ha = (item?.address?.hash || "").toLowerCase();
+            if (BOT_PLATFORM_LOCKERS[ha]) { fastPlatform = BOT_PLATFORM_LOCKERS[ha]; break; }
+            if (BOT_PLATFORM_DEPLOYERS[ha]) { fastPlatform = BOT_PLATFORM_DEPLOYERS[ha]; break; }
+          }
+          if (!fastPlatform) {
+            const contractHolders = items.filter(i => i?.address?.is_contract).slice(0, 5);
+            const hDeployers = await Promise.allSettled(
+              contractHolders.map(i => {
+                const ha = (i?.address?.hash || "").toLowerCase();
+                return fetch(`https://base.blockscout.com/api/v2/addresses/${ha}`, { signal: AbortSignal.timeout(4000) })
+                  .then(r => r.json()).then((d: any) => (d?.creator_address_hash || "").toLowerCase());
+              })
+            );
+            for (const r of hDeployers) {
+              if (r.status === "fulfilled" && r.value) {
+                if (BOT_PLATFORM_DEPLOYERS[r.value]) { fastPlatform = BOT_PLATFORM_DEPLOYERS[r.value]; break; }
+                if (BOT_PLATFORM_LOCKERS[r.value]) { fastPlatform = BOT_PLATFORM_LOCKERS[r.value]; break; }
+              }
             }
           }
         }
