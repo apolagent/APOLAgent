@@ -93,12 +93,25 @@ shared/
 - **Bot async scanning**: All scan commands (`/scan`, `/checkwallet`, `/scanagent`, `/scanx`) use edit-message pattern — send "Analyzing..." immediately, then edit with results. 60s timeout. On edit failure, deletes loading message and sends reply.
 - **Used in**: `/api/detective/analyze`, `/api/agent/analyze` (contractScan), `/api/admin/audit`, `/api/verify/:address`, `bot.ts`
 
-## Data Sources (Priority Order)
-1. **GoPlus API** — Primary token security data (tax, honeypot, LP holders, ownership)
-2. **Alchemy RPC** (`BASE_RPC_URL`) — Direct blockchain queries via `eth_getCode` (contract detection) and `eth_call` (ERC-20 name/symbol/supply). Used as fallback when GoPlus returns no data for a contract.
-3. **Blockscout API** — Contract verification, deployer tracing (2-hop), holder counts fallback
-4. **Honeypot.is** — Secondary honeypot simulation
-5. **DexScreener** — Price, market cap, liquidity data
+## Alchemy-First Security Engine
+- **Internal forensic whitelist ALWAYS overrides GoPlus** for LP security, honeypot, and tax assessment
+- **Whitelisted factory tokens** (matched via `PLATFORM_LOCKERS` + `PLATFORM_DEPLOYERS`):
+  - LP Status forced to "[Platform] Managed" — GoPlus LP data ignored
+  - Red flags from GoPlus (honeypot, hidden owner, blacklist, proxy, etc.) are suppressed
+  - Admin threats cleared for factory-managed contracts
+- **Virtuals override**: If factory is Virtuals, `isHoneypot` forced FALSE, risk forced to Clean/Caution (proxy-transfer false positives from GoPlus)
+- **ApeStore/Flaunch listing**: If Alchemy confirms Uniswap V3 pool exists (`rpcCheckUniV3Pool`), `isInDex` forced TRUE — don't wait for indexers
+- **Tax override**: Factory tokens with simulated tax > 50% → tax forced to 0% (bonding curve simulation failure)
+- **Top holders via Alchemy**: When GoPlus returns 0 holders, Blockscout holders API + Alchemy `balanceOf` calls populate top 10 holder data
+- **Uniswap V3 pool detection**: Queries Base Uniswap V3 Factory (`0x3312...FDfD`) for `getPool(tokenA, WETH, fee)` across 4 fee tiers (500, 3000, 10000, 100)
+
+## Data Sources (Priority Order for Whitelisted Tokens)
+1. **Alchemy RPC** (`BASE_RPC_URL`) — Source of truth for whitelisted factory tokens. Direct `eth_call` for pool detection, balanceOf, totalSupply.
+2. **Internal Whitelist** — `PLATFORM_LOCKERS` + `PLATFORM_DEPLOYERS` override GoPlus LP/honeypot/tax
+3. **GoPlus API** — Token security data (used for non-whitelisted tokens only for LP/honeypot/tax)
+4. **Blockscout API** — Contract verification, deployer tracing (2-hop), holder counts, top holder addresses
+5. **Honeypot.is** — Secondary honeypot simulation (overridden for whitelisted factories)
+6. **DexScreener** — Price, market cap, liquidity data
 
 ## Secrets
 - `APOL_BOT_TOKEN` - Telegram bot token

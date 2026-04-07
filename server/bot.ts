@@ -5,6 +5,10 @@ import { storage } from "./storage";
 
 const GOPLUS_BASE = "https://api.gopluslabs.io/api/v1";
 const BASE_CHAIN_ID = "8453";
+const BOT_RPC_URL = process.env.BASE_RPC_URL || "";
+const UNISWAP_V3_FACTORY = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD";
+const WETH_BASE = "0x4200000000000000000000000000000000000006";
+const FEE_TIERS = [500, 3000, 10000, 100];
 
 function getSiteUrl(): string {
   return "https://apolagent.online";
@@ -80,6 +84,51 @@ const ALL_BOT_FACTORY_ADDRESSES = new Set([
   ...Object.keys(BOT_PLATFORM_DEPLOYERS).map(a => a.toLowerCase()),
 ]);
 
+// ─── Alchemy RPC helpers ─────────────────────────────────────────────────────
+
+async function botRpcCall(method: string, params: any[]): Promise<any> {
+  if (!BOT_RPC_URL) return null;
+  try {
+    const r = await fetch(BOT_RPC_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) return null;
+    const j = await r.json() as any;
+    return j.result ?? null;
+  } catch { return null; }
+}
+
+async function botCheckUniV3Pool(tokenAddress: string): Promise<boolean> {
+  if (!BOT_RPC_URL) return false;
+  const GET_POOL_SIG = "0x1698ee82";
+  const addrA = tokenAddress.toLowerCase() < WETH_BASE.toLowerCase() ? tokenAddress : WETH_BASE;
+  const addrB = tokenAddress.toLowerCase() < WETH_BASE.toLowerCase() ? WETH_BASE : tokenAddress;
+  const padA = addrA.replace("0x", "").padStart(64, "0");
+  const padB = addrB.replace("0x", "").padStart(64, "0");
+  for (const fee of FEE_TIERS) {
+    const padFee = fee.toString(16).padStart(64, "0");
+    const data = `${GET_POOL_SIG}${padA}${padB}${padFee}`;
+    const result = await botRpcCall("eth_call", [{ to: UNISWAP_V3_FACTORY, data }, "latest"]);
+    if (result && result !== "0x" + "0".repeat(64) && result !== "0x") return true;
+  }
+  return false;
+}
+
+function botGetPlatformName(creatorAddress: string, lpHolders: any[]): string | null {
+  const cl = (creatorAddress || "").toLowerCase();
+  if (BOT_PLATFORM_LOCKERS[cl]) return BOT_PLATFORM_LOCKERS[cl];
+  if (BOT_PLATFORM_DEPLOYERS[cl]) return BOT_PLATFORM_DEPLOYERS[cl];
+  for (const lp of lpHolders) {
+    const a = (lp.address ?? "").toLowerCase();
+    if (BOT_PLATFORM_LOCKERS[a]) return BOT_PLATFORM_LOCKERS[a];
+    if (BOT_PLATFORM_DEPLOYERS[a]) return BOT_PLATFORM_DEPLOYERS[a];
+  }
+  return null;
+}
+
 // ─── Master timeout helper ───────────────────────────────────────────────────
 
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -105,17 +154,20 @@ async function directGoPlus(address: string): Promise<any> {
     const flag = (v: any) => v === "1" || v === 1 || v === true;
     const creatorLower = (token.creator_address || "").toLowerCase();
     const lpHolders: any[] = token.lp_holders ?? [];
-    const isFactoryOrigin = ALL_BOT_FACTORY_ADDRESSES.has(creatorLower) || lpHolders.some((lp: any) => ALL_BOT_FACTORY_ADDRESSES.has((lp.address ?? "").toLowerCase()));
+    const platformName = botGetPlatformName(creatorLower, lpHolders);
+    const isFactoryOrigin = !!platformName || ALL_BOT_FACTORY_ADDRESSES.has(creatorLower) || lpHolders.some((lp: any) => ALL_BOT_FACTORY_ADDRESSES.has((lp.address ?? "").toLowerCase()));
+    const isVirtualsFactory = platformName === "Virtuals";
+    const isApeStoreOrFlaunch = platformName === "ApeStore" || platformName === "Flaunch";
 
-    let lpEscrowName: string | null = null;
-    if (isFactoryOrigin) {
-      lpEscrowName = BOT_PLATFORM_LOCKERS[creatorLower] || BOT_PLATFORM_DEPLOYERS[creatorLower] || (() => {
-        for (const lp of lpHolders) { const a = (lp.address ?? "").toLowerCase(); if (BOT_PLATFORM_LOCKERS[a]) return BOT_PLATFORM_LOCKERS[a]; }
-        return "Protocol";
-      })();
+    let lpEscrowName: string | null = platformName;
+    if (!lpEscrowName && isFactoryOrigin) lpEscrowName = "Protocol";
+
+    let isHoneypot = flag(token.is_honeypot);
+    if (isVirtualsFactory && isHoneypot) {
+      isHoneypot = false;
+      console.log(`[bot] Virtuals override: isHoneypot forced FALSE for ${address.slice(0,10)}`);
     }
 
-    const isHoneypot = flag(token.is_honeypot);
     let buyTax = parseFloat(token.buy_tax ?? "0") * 100;
     let sellTax = parseFloat(token.sell_tax ?? "0") * 100;
     const isKnownFactory = !!lpEscrowName;
@@ -127,7 +179,14 @@ async function directGoPlus(address: string): Promise<any> {
       taxOverride = lpEscrowName;
     }
 
-    const hasKillerTax = buyTax > 20 || sellTax > 20;
+    let isInDex = flag(token.is_in_dex);
+    if (isKnownFactory && !isInDex) {
+      const hasPool = await botCheckUniV3Pool(address);
+      if (hasPool) {
+        isInDex = true;
+        console.log(`[bot] Alchemy override: Uniswap V3 pool confirmed for ${address.slice(0,10)}`);
+      }
+    }
 
     const redFlags: string[] = [];
     if (isHoneypot && !isKnownFactory) redFlags.push("Honeypot, cannot sell");
@@ -137,8 +196,9 @@ async function directGoPlus(address: string): Promise<any> {
     if (flag(token.hidden_owner) && !isKnownFactory) redFlags.push("Hidden owner detected");
 
     let riskLevel: string;
-    if ((isHoneypot || hasKillerTax) && !isKnownFactory) riskLevel = "High Risk";
+    if (isVirtualsFactory) riskLevel = redFlags.length > 0 ? "Caution" : "Clean";
     else if (isKnownFactory) riskLevel = redFlags.length > 0 ? "Caution" : "Clean";
+    else if ((isHoneypot || buyTax > 20 || sellTax > 20) && !isKnownFactory) riskLevel = "High Risk";
     else if (redFlags.length >= 2) riskLevel = "High Risk";
     else if (redFlags.length >= 1) riskLevel = "Caution";
     else riskLevel = "Clean";
@@ -158,6 +218,9 @@ async function directGoPlus(address: string): Promise<any> {
       tokenName: token.token_name, tokenSymbol: token.token_symbol,
       lpEscrow: isKnownFactory ? { name: lpEscrowName, address: creatorLower, percent: 100 } : null,
       isHighRisk: riskLevel === "High Risk",
+      isInDex,
+      platformName,
+      isWhitelistedFactory: isKnownFactory,
     };
   } catch (err: any) {
     console.error("[bot] directGoPlus fallback failed:", err?.message);
@@ -261,19 +324,22 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
 
     const holderCount = (api?.holderCount && api.holderCount > 0) ? api.holderCount.toLocaleString() : "Calculating...";
     const isProtocolTax = !!api?.taxOverride;
-    const buyTaxFmt  = isProtocolTax ? "Protocol Managed" : (api ? `${(api.buyTax ?? 0).toFixed(1)}%` : "Data Pending");
-    const sellTaxFmt = isProtocolTax ? "Protocol Managed" : (api ? `${(api.sellTax ?? 0).toFixed(1)}%` : "Data Pending");
+    const pName = api?.platformName || api?.lpEscrow?.name || null;
+    const buyTaxFmt  = isProtocolTax ? `0.0% (${pName || "Platform"})` : (api ? `${(api.buyTax ?? 0).toFixed(1)}%` : "Data Pending");
+    const sellTaxFmt = isProtocolTax ? `0.0% (${pName || "Platform"})` : (api ? `${(api.sellTax ?? 0).toFixed(1)}%` : "Data Pending");
 
     const hasDex = !!topPair;
-    const liqUsd: number | null = topPair?.liquidity?.usd ?? null;
-    const liqFormatted = liqUsd !== null ? fmtUsd(liqUsd) : (hasDex ? "Data Pending" : "Not Listed");
-    const priceRaw  = parseFloat(topPair?.priceUsd ?? "0");
-    const priceStr  = priceRaw > 0 ? fmtPrice(priceRaw) : (hasDex ? "Data Pending" : "Not Listed");
-    const fdvRaw    = topPair?.fdv ?? null;
-    const mcapStr   = fdvRaw ? fmtUsd(fdvRaw) : (hasDex ? "Data Pending" : "Not Listed");
-
+    const isInDex = !!api?.isInDex;
     const isKnownFactory = !!api?.isKnownFactory;
     const lpEscrowName   = api?.lpEscrow?.name ?? null;
+
+    const liqUsd: number | null = topPair?.liquidity?.usd ?? null;
+    const liqFormatted = liqUsd !== null ? fmtUsd(liqUsd) : (hasDex ? "Data Pending" : (isKnownFactory && isInDex ? "Pool Active" : "Not Listed"));
+    const priceRaw  = parseFloat(topPair?.priceUsd ?? "0");
+    const priceStr  = priceRaw > 0 ? fmtPrice(priceRaw) : (hasDex ? "Data Pending" : (isKnownFactory ? "Indexing..." : "Not Listed"));
+    const fdvRaw    = topPair?.fdv ?? null;
+    const mcapStr   = fdvRaw ? fmtUsd(fdvRaw) : (hasDex ? "Data Pending" : (isKnownFactory ? "Indexing..." : "Not Listed"));
+
     const isProtocolEscrow = !!api?.protocolSecured;
     const isOwnershipRenounced = !!api?.isOwnershipRenounced;
     const redFlags: string[] = api?.redFlags ?? [];

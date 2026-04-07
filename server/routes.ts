@@ -134,6 +134,70 @@ async function rpcGetDeployer(address: string): Promise<string | null> {
     return d.creator_address_hash?.toLowerCase() ?? null;
   } catch { return null; }
 }
+
+const UNISWAP_V3_FACTORY = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD";
+const WETH_BASE = "0x4200000000000000000000000000000000000006";
+const FEE_TIERS = [500, 3000, 10000, 100];
+
+async function rpcCheckUniV3Pool(tokenAddress: string): Promise<boolean> {
+  if (!BASE_RPC_URL) return false;
+  const GET_POOL_SIG = "0x1698ee82";
+  const addrA = tokenAddress.toLowerCase() < WETH_BASE.toLowerCase() ? tokenAddress : WETH_BASE;
+  const addrB = tokenAddress.toLowerCase() < WETH_BASE.toLowerCase() ? WETH_BASE : tokenAddress;
+  const padA = addrA.replace("0x", "").padStart(64, "0");
+  const padB = addrB.replace("0x", "").padStart(64, "0");
+
+  for (const fee of FEE_TIERS) {
+    const padFee = fee.toString(16).padStart(64, "0");
+    const data = `${GET_POOL_SIG}${padA}${padB}${padFee}`;
+    const result = await rpcCall("eth_call", [{ to: UNISWAP_V3_FACTORY, data }, "latest"]);
+    if (result && result !== "0x" + "0".repeat(64) && result !== "0x") return true;
+  }
+  return false;
+}
+
+async function rpcGetTopHolders(tokenAddress: string, decimals: number = 18): Promise<{ address: string; balance: string; percent: number }[]> {
+  if (!BASE_RPC_URL) return [];
+  try {
+    const r = await fetch(
+      `https://base.blockscout.com/api/v2/tokens/${encodeURIComponent(tokenAddress)}/holders?limit=10`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!r.ok) return [];
+    const d = await r.json() as any;
+    const items: any[] = d?.items ?? [];
+    const BALANCE_SIG = "0x70a08231";
+    const SUPPLY_SIG = "0x18160ddd";
+    const supplyHex = await rpcCall("eth_call", [{ to: tokenAddress, data: SUPPLY_SIG }, "latest"]);
+    const totalSupply = supplyHex ? BigInt(supplyHex) : BigInt(0);
+
+    const holders: { address: string; balance: string; percent: number }[] = [];
+    for (const item of items.slice(0, 10)) {
+      const addr = item?.address?.hash ?? "";
+      if (!addr) continue;
+      const padAddr = addr.replace("0x", "").padStart(64, "0");
+      const balHex = await rpcCall("eth_call", [{ to: tokenAddress, data: `${BALANCE_SIG}${padAddr}` }, "latest"]);
+      const bal = balHex ? BigInt(balHex) : BigInt(0);
+      const pct = totalSupply > 0 ? Number((bal * BigInt(10000)) / totalSupply) / 100 : 0;
+      const balStr = (Number(bal) / Math.pow(10, decimals)).toLocaleString("en-US", { maximumFractionDigits: 2 });
+      holders.push({ address: addr, balance: balStr, percent: pct });
+    }
+    return holders;
+  } catch { return []; }
+}
+
+function getPlatformName(creatorAddress: string, lpHolders: any[]): string | null {
+  const cl = (creatorAddress || "").toLowerCase();
+  if (PLATFORM_LOCKERS[cl]) return PLATFORM_LOCKERS[cl];
+  if (PLATFORM_DEPLOYERS[cl]) return PLATFORM_DEPLOYERS[cl];
+  for (const lp of lpHolders) {
+    const a = (lp.address ?? "").toLowerCase();
+    if (PLATFORM_LOCKERS[a]) return PLATFORM_LOCKERS[a];
+    if (PLATFORM_DEPLOYERS[a]) return PLATFORM_DEPLOYERS[a];
+  }
+  return null;
+}
+
 const GOPLUS_CHAIN: Record<string, string> = {
   ethereum: "1", bsc: "56", polygon: "137", arbitrum: "42161",
   optimism: "10", base: "8453", avalanche: "43114", tron: "tron", solana: "solana", other: "1",
@@ -692,14 +756,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (isContract) {
+        const creatorAddress = tokenData.creator_address || null;
+        const lpHoldersRaw: any[] = tokenData.lp_holders ?? [];
+        const earlyPlatform = getPlatformName(creatorAddress || "", lpHoldersRaw);
+        const isWhitelistedFactory = !!earlyPlatform || isKnownFactoryOrigin(creatorAddress || "", lpHoldersRaw);
+        const isVirtualsFactory = earlyPlatform === "Virtuals";
+        const isApeStoreOrFlaunch = earlyPlatform === "ApeStore" || earlyPlatform === "Flaunch";
+
         const isHoneypotGP = tokenData.is_honeypot === "1" || tokenData.is_honeypot === 1;
         const isHoneypotHP = hpData?.honeypotResult?.isHoneypot === true;
-        const isHoneypot = isHoneypotGP || isHoneypotHP;
+        let isHoneypot = isHoneypotGP || isHoneypotHP;
+
+        if (isVirtualsFactory && isHoneypot) {
+          isHoneypot = false;
+          console.log(`[forensics] Virtuals factory override: isHoneypot forced FALSE for ${(address as string).slice(0,10)}`);
+        }
+
         let buyTax = hpData?.simulationResult?.buyTax != null ? hpData.simulationResult.buyTax * 100 : taxPct(tokenData.buy_tax);
         let sellTax = hpData?.simulationResult?.sellTax != null ? hpData.simulationResult.sellTax * 100 : taxPct(tokenData.sell_tax);
         const isMintable = tokenData.is_mintable === "1" || tokenData.is_mintable === 1;
         const isOpenSource = tokenData.is_open_source === "1" || tokenData.is_open_source === 1;
-        const isInDex = tokenData.is_in_dex === "1" || tokenData.is_in_dex === 1;
+        let isInDex = tokenData.is_in_dex === "1" || tokenData.is_in_dex === 1;
+
+        if (isWhitelistedFactory && !isInDex && chain === "base") {
+          const hasPool = await rpcCheckUniV3Pool(address as string);
+          if (hasPool) {
+            isInDex = true;
+            console.log(`[forensics] Alchemy override: Uniswap V3 pool confirmed for ${(address as string).slice(0,10)} — isInDex forced TRUE`);
+          }
+        }
+
         const slippageModifiable = tokenData.slippage_modifiable === "1" || tokenData.slippage_modifiable === 1;
 
         const canTakeBackOwnership = tokenData.can_take_back_ownership === "1" || tokenData.can_take_back_ownership === 1;
@@ -720,7 +806,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const hasBlacklist = flag1(tokenData.is_blacklisted) || flag1(tokenData.is_blacklist);
         const hasWhitelist = flag1(tokenData.is_whitelisted) || flag1(tokenData.is_whitelist);
         const ownerAddress = tokenData.owner_address || null;
-        const creatorAddress = tokenData.creator_address || null;
         const ownerIsContract = flag1(tokenData.owner_type);
 
         const BURN_ADDRESSES = [
@@ -762,11 +847,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        const lpHolders: any[] = tokenData.lp_holders ?? [];
+        const lpHolders: any[] = lpHoldersRaw;
 
         const scannedAddrLower = (address as string).toLowerCase();
         const isFactoryContract = ALL_KNOWN_FACTORY_ADDRESSES.has(scannedAddrLower);
-        const factoryEarlyMatch = isFactoryContract || isKnownFactoryOrigin(creatorAddress || "", lpHolders);
+        const factoryEarlyMatch = isFactoryContract || isWhitelistedFactory;
 
         let protocolMatch: { name: string; address: string; percent: number } | null = null;
         if (factoryEarlyMatch) {
@@ -800,14 +885,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const lpSecure = lpBurnedPct >= 50 || lpLockedPct >= 50 || isProtocolEscrow;
 
         const redFlags: string[] = [];
-        if (isHoneypot) redFlags.push("Honeypot, cannot sell");
+        if (isHoneypot && !isWhitelistedFactory) redFlags.push("Honeypot, cannot sell");
         if (buyTax !== null && buyTax > 10) redFlags.push(`High buy tax: ${buyTax.toFixed(1)}%`);
         if (sellTax !== null && sellTax > 10) redFlags.push(`High sell tax: ${sellTax.toFixed(1)}%`);
 
         if (isOwnershipRenounced) {
           if (canTakeBackOwnership) redFlags.push("Recoverable ownership (fake renounce)");
-          if (hasHiddenOwner) redFlags.push("Hidden owner detected despite renounce");
-        } else {
+          if (hasHiddenOwner && !isWhitelistedFactory) redFlags.push("Hidden owner detected despite renounce");
+        } else if (!isWhitelistedFactory) {
           if (isMintable) redFlags.push("Owner can mint unlimited tokens");
           if (slippageModifiable) redFlags.push("Owner can modify slippage");
           if (canTakeBackOwnership) redFlags.push("Recoverable ownership");
@@ -819,9 +904,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (hasBlacklist) redFlags.push("Blacklist function");
         }
 
-        if (!isOpenSource) redFlags.push("Contract not verified / open source");
+        if (!isOpenSource && !isWhitelistedFactory) redFlags.push("Contract not verified / open source");
         if (!lpSecure && !isProtocolEscrow) redFlags.push("LP not locked");
-        if (holderCount > 0 && holderCount < 200) redFlags.push("Low holder count");
+        if (holderCount > 0 && holderCount < 200 && !isWhitelistedFactory) redFlags.push("Low holder count");
+
+        let topHolders: { address: string; balance: string; percent: number }[] = [];
+        if (holderCount <= 0 || (tokenData.holders ?? []).length === 0) {
+          const rpcToken = await rpcGetTokenInfo(address as string);
+          topHolders = await rpcGetTopHolders(address as string, rpcToken?.decimals ?? 18);
+          if (topHolders.length > 0) {
+            console.log(`[forensics] Alchemy populated ${topHolders.length} top holders for ${(address as string).slice(0,10)}`);
+          }
+        }
 
         const hasHoneypot = isHoneypot;
         const hasKillerTax = (sellTax !== null && sellTax > 20) || (buyTax !== null && buyTax > 20);
@@ -830,33 +924,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const protocolSecured = isProtocolEscrow;
 
-        if (factoryEarlyMatch && (isFactoryContract || (!hasHoneypot && !hasKillerTax))) {
+        if (factoryEarlyMatch) {
           const filteredFlags = redFlags.filter(f => {
             const fl = f.toLowerCase();
             if (fl.includes("lp not locked")) return false;
             if (fl.includes("low holder")) return false;
             if (fl.includes("not verified")) return false;
             if (fl.includes("hidden owner")) return false;
-            if (isFactoryContract && (fl.includes("honeypot") || fl.includes("mint"))) return false;
+            if (fl.includes("honeypot") || fl.includes("mint")) return false;
+            if (fl.includes("proxy")) return false;
+            if (fl.includes("blacklist")) return false;
             return true;
           });
           redFlags.length = 0;
           redFlags.push(...filteredFlags);
-          const filteredThreats = adminThreats.filter(t =>
-            t.severity === "critical" && !t.label.includes("HIDDEN OWNER")
-          );
           adminThreats.length = 0;
-          adminThreats.push(...filteredThreats);
         }
 
         let riskLevel: string;
-        const isVirtualsToken = lpEscrowName === "Virtuals";
-        const hasCannotSell = isHoneypot;
-        const hasTrapTax = !isVirtualsToken && ((buyTax !== null && buyTax > 90) || (sellTax !== null && sellTax > 90));
+        const isVirtualsToken = lpEscrowName === "Virtuals" || isVirtualsFactory;
+        const hasCannotSell = isHoneypot && !isWhitelistedFactory;
+        const hasTrapTax = !isVirtualsToken && !isWhitelistedFactory && ((buyTax !== null && buyTax > 90) || (sellTax !== null && sellTax > 90));
         const isTrapOrHoneypot = hasCannotSell || hasTrapTax;
         const onlyUnlockedLP = hasUnlockedLP && !isTrapOrHoneypot && !hasCriticalFlag && redFlags.length === 1 && redFlags[0]?.includes("LP not locked");
 
-        if (isTrapOrHoneypot && !isFactoryContract) {
+        if (isVirtualsFactory) {
+          riskLevel = redFlags.length > 0 ? "Caution" : "Clean";
+        } else if (isTrapOrHoneypot && !isFactoryContract) {
           riskLevel = "High Risk";
         } else if ((hasHoneypot || hasKillerTax) && !isFactoryContract) {
           riskLevel = "High Risk";
@@ -930,6 +1024,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             address: lpEscrowAddress,
             percent: lpEscrowPct,
           } : null,
+          topHolders: topHolders.length > 0 ? topHolders : undefined,
+          isWhitelistedFactory,
+          platformName: earlyPlatform || lpEscrowName || null,
         });
       }
 
