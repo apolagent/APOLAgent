@@ -189,10 +189,36 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       api = await directGoPlus(address);
     }
 
-    const allPairs: any[] = dexData?.pairs ?? [];
-    const basePairs = allPairs
+    let allPairs: any[] = dexData?.pairs ?? [];
+    let basePairs = allPairs
       .filter((p: any) => p.chainId === "base")
       .sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
+
+    if (basePairs.length === 0) {
+      try {
+        const searchQ = api?.tokenName || api?.tokenSymbol || "";
+        if (searchQ) {
+          const sRes = await fetch(
+            `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(searchQ)}`,
+            { signal: AbortSignal.timeout(6000) }
+          );
+          if (sRes.ok) {
+            const sData = await sRes.json() as any;
+            const sPairs: any[] = sData?.pairs ?? [];
+            const matched = sPairs.filter((p: any) =>
+              p.chainId === "base" &&
+              (p.baseToken?.address?.toLowerCase() === address.toLowerCase() ||
+               p.quoteToken?.address?.toLowerCase() === address.toLowerCase())
+            );
+            if (matched.length > 0) {
+              basePairs = matched.sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
+              console.log(`[bot] DexScreener search fallback found ${matched.length} pairs for ${searchQ}`);
+            }
+          }
+        }
+      } catch {}
+    }
+
     const topPair = basePairs[0] ?? null;
 
     if (api?.addressType === "wallet") {
@@ -878,11 +904,28 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     const tKey  = Object.keys(goplusData?.result ?? {})[0];
     const token = tKey ? (goplusData.result[tKey] as any) : null;
 
-    const allPairs: any[] = dexData?.pairs ?? [];
-    const basePairs = allPairs
+    let agAllPairs: any[] = dexData?.pairs ?? [];
+    let agBasePairs = agAllPairs
       .filter((p: any) => p.chainId === "base")
       .sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
-    const topPair = basePairs[0] ?? null;
+
+    if (agBasePairs.length === 0) {
+      try {
+        const sq = token?.token_name || token?.token_symbol || "";
+        if (sq) {
+          const sRes = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(sq)}`, { signal: AbortSignal.timeout(6000) });
+          if (sRes.ok) {
+            const sData = await sRes.json() as any;
+            const matched = (sData?.pairs ?? []).filter((p: any) =>
+              p.chainId === "base" && (p.baseToken?.address?.toLowerCase() === address.toLowerCase() || p.quoteToken?.address?.toLowerCase() === address.toLowerCase())
+            );
+            if (matched.length > 0) agBasePairs = matched.sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
+          }
+        }
+      } catch {}
+    }
+
+    const topPair = agBasePairs[0] ?? null;
 
     if (!token && !topPair) {
       return (

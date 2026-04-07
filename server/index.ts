@@ -107,31 +107,22 @@ app.use((req, res, next) => {
   if (bot && isProduction) {
     const tkn = process.env.APOL_BOT_TOKEN!;
 
-    const forceClosePolling = async () => {
-      for (let i = 0; i < 3; i++) {
-        try {
-          await fetch(`https://api.telegram.org/bot${tkn}/deleteWebhook?drop_pending_updates=true`, { signal: AbortSignal.timeout(5000) });
-          await fetch(`https://api.telegram.org/bot${tkn}/close`, { signal: AbortSignal.timeout(5000) });
-          await fetch(`https://api.telegram.org/bot${tkn}/logOut`, { signal: AbortSignal.timeout(5000) }).catch(() => {});
-        } catch {}
-        await new Promise(r => setTimeout(r, 1000));
-        try {
-          const r = await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&timeout=0`, { signal: AbortSignal.timeout(5000) });
-          const j = await r.json() as any;
-          if (j.ok) return true;
-        } catch {}
-        await new Promise(r => setTimeout(r, 2000));
-      }
-      return false;
+    const clearOldSession = async (): Promise<boolean> => {
+      try {
+        await fetch(`https://api.telegram.org/bot${tkn}/deleteWebhook?drop_pending_updates=true`, { signal: AbortSignal.timeout(5000) }).catch(() => {});
+        await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&timeout=0`, { signal: AbortSignal.timeout(5000) }).catch(() => {});
+        await new Promise(r => setTimeout(r, 500));
+        const r = await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&timeout=0`, { signal: AbortSignal.timeout(5000) });
+        const j = await r.json() as any;
+        return j.ok === true;
+      } catch { return false; }
     };
 
     const launchBot = async (attempt = 1): Promise<void> => {
       try {
-        if (attempt === 1) {
-          log("Closing previous bot session...", "bot");
-          await forceClosePolling();
-          await new Promise(r => setTimeout(r, 3000));
-        }
+        log(`Bot launch attempt ${attempt}...`, "bot");
+        await clearOldSession();
+        await new Promise(r => setTimeout(r, 2000));
         await bot.launch({ dropPendingUpdates: true, allowedUpdates: ["message", "callback_query"] });
         log("Telegram bot polling started successfully", "bot");
         bot.telegram.setMyCommands([
@@ -145,23 +136,24 @@ app.use((req, res, next) => {
       } catch (err: any) {
         const msg = err?.message ?? String(err);
         log(`Bot start failed (attempt ${attempt}): ${msg}`, "bot");
-        if (msg.includes("409") && attempt <= 30) {
-          const delay = Math.min(5_000 + attempt * 3_000, 30_000);
-          log(`Retrying in ${delay / 1000}s (attempt ${attempt + 1})...`, "bot");
+        if ((msg.includes("409") || msg.includes("Conflict")) && attempt <= 20) {
+          const delay = Math.min(10_000 + attempt * 5_000, 60_000);
+          log(`Waiting ${delay / 1000}s for old session to expire, then retrying...`, "bot");
           await new Promise(r => setTimeout(r, delay));
-          await forceClosePolling();
-          await new Promise(r => setTimeout(r, 2000));
           return launchBot(attempt + 1);
+        } else if (msg.includes("Logged out") || msg.includes("logged out")) {
+          log("Bot was previously logged out — waiting 10 minutes before retry...", "bot");
+          await new Promise(r => setTimeout(r, 10 * 60 * 1000));
+          return launchBot(1);
         } else {
-          log(`Bot gave up after ${attempt} attempts`, "bot");
+          log(`Bot gave up after ${attempt} attempts: ${msg}`, "bot");
         }
       }
     };
-    setTimeout(() => launchBot(), 5_000);
+    setTimeout(() => launchBot(), 8_000);
 
     const shutdown = () => {
       try { bot.stop("SIGTERM"); } catch {}
-      fetch(`https://api.telegram.org/bot${tkn}/close`, { signal: AbortSignal.timeout(3000) }).catch(() => {});
     };
     process.once("SIGTERM", shutdown);
     process.once("SIGINT", shutdown);
