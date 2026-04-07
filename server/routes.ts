@@ -136,8 +136,16 @@ async function rpcGetDeployer(address: string): Promise<string | null> {
 }
 
 const UNISWAP_V3_FACTORY = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD";
+const UNISWAP_V4_POOL_MANAGER = "0x498581ff718922c3f8e6a244956af099b2652b2b";
 const WETH_BASE = "0x4200000000000000000000000000000000000006";
 const FEE_TIERS = [500, 3000, 10000, 100];
+
+const V4_HOOK_ADDRESSES = [
+  "0xd60d6b218116cfd801e28f78d011a203d2b068cc",
+  "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a",
+];
+
+const ERC8183_VAULT = "0xdad686299fb562f89e55da05f1d96fabeb2a2e32";
 
 async function rpcCheckUniV3Pool(tokenAddress: string): Promise<boolean> {
   if (!BASE_RPC_URL) return false;
@@ -155,6 +163,61 @@ async function rpcCheckUniV3Pool(tokenAddress: string): Promise<boolean> {
     })
   );
   return results.some(r => r && r !== "0x" + "0".repeat(64) && r !== "0x");
+}
+
+async function rpcCheckUniV4Pool(tokenAddress: string): Promise<boolean> {
+  if (!BASE_RPC_URL) return false;
+  const padToken = "0x" + tokenAddress.replace("0x", "").toLowerCase().padStart(64, "0");
+  const [asCurrency0, asCurrency1] = await Promise.all([
+    rpcCall("eth_getLogs", [{
+      address: UNISWAP_V4_POOL_MANAGER,
+      fromBlock: "0x0",
+      toBlock: "latest",
+      topics: [null, null, padToken, null],
+    }]),
+    rpcCall("eth_getLogs", [{
+      address: UNISWAP_V4_POOL_MANAGER,
+      fromBlock: "0x0",
+      toBlock: "latest",
+      topics: [null, null, null, padToken],
+    }]),
+  ]);
+  const logs0 = Array.isArray(asCurrency0) ? asCurrency0 : [];
+  const logs1 = Array.isArray(asCurrency1) ? asCurrency1 : [];
+  return logs0.length > 0 || logs1.length > 0;
+}
+
+type DexResult = { version: "v3" | "v4" | null; isInDex: boolean };
+
+async function rpcCheckDualDex(tokenAddress: string): Promise<DexResult> {
+  if (!BASE_RPC_URL) return { version: null, isInDex: false };
+  const [hasV3, hasV4] = await Promise.all([
+    rpcCheckUniV3Pool(tokenAddress),
+    rpcCheckUniV4Pool(tokenAddress),
+  ]);
+  if (hasV4) return { version: "v4", isInDex: true };
+  if (hasV3) return { version: "v3", isInDex: true };
+  return { version: null, isInDex: false };
+}
+
+function dexLiveStatus(version: "v3" | "v4" | null): string | null {
+  if (version === "v4") return "Live (Direct-to-V4) ✅";
+  if (version === "v3") return "Live (Direct-to-V3) ✅";
+  return null;
+}
+
+function isErc8183Vault(addr: string): boolean {
+  return addr.toLowerCase() === ERC8183_VAULT;
+}
+
+function resolveVirtualsLabel(platformName: string, creatorAddress: string, lpHolders: any[]): string {
+  if (platformName !== "Virtuals") return `${platformName} Managed ✅`;
+  const cl = (creatorAddress || "").toLowerCase();
+  if (isErc8183Vault(cl)) return "Virtuals Managed (ERC-8183) 🤖";
+  for (const lp of lpHolders) {
+    if (isErc8183Vault((lp.address ?? "").toLowerCase())) return "Virtuals Managed (ERC-8183) 🤖";
+  }
+  return "Virtuals Managed ✅";
 }
 
 async function rpcGetTopHolders(tokenAddress: string, decimals: number = 18): Promise<{ address: string; balance: string; percent: number }[]> {
@@ -216,6 +279,7 @@ const PLATFORM_LOCKERS: Record<string, string> = {
   "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
   "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
   "0x39112541720078c70164ea4deb61f0a4811910f9": "Flaunch",
+  [ERC8183_VAULT]: "Virtuals",
 };
 
 const PLATFORM_DEPLOYERS: Record<string, string> = {
@@ -636,16 +700,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         malicious = j.result || {};
       } catch { /* non-fatal */ }
 
-      // 2. ALCHEMY-FIRST: Alchemy RPC is the FIRST call for EVERY scan on Base
+      // 2. ALCHEMY-FIRST: Alchemy RPC is the FIRST call for EVERY scan on Base (Dual-DEX: V3 + V4)
       if (chain === "base") {
         const alchemyT0 = Date.now();
-        const [earlyRpcIsCtx, earlyDeployer, hasV3Pool] = await Promise.all([
+        const [earlyRpcIsCtx, earlyDeployer, dexResult] = await Promise.all([
           rpcIsContract(address as string),
           rpcGetDeployer(address as string),
-          rpcCheckUniV3Pool(address as string),
+          rpcCheckDualDex(address as string),
         ]);
-        const liveStatus = hasV3Pool ? "Live (Direct-to-V3) ✅" : null;
-        console.log(`[alchemy-first] V3 pool check: ${hasV3Pool ? "FOUND" : "NONE"} for ${(address as string).slice(0,10)} in ${Date.now() - alchemyT0}ms`);
+        const { version: dexVersion, isInDex: hasPool } = dexResult;
+        const liveStatus = dexLiveStatus(dexVersion);
+        console.log(`[alchemy-first] DEX check: ${dexVersion ? dexVersion.toUpperCase() + " FOUND" : "NONE"} for ${(address as string).slice(0,10)} in ${Date.now() - alchemyT0}ms`);
 
         if (earlyRpcIsCtx) {
           const addrLower = (address as string).toLowerCase();
@@ -706,7 +771,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               console.log(`[alchemy-first] Blockscout returned 0 holders for ${addrLower.slice(0,10)} — Alchemy balanceOf activity: ${hasActivity}`);
             }
 
-            const isInDex = hasV3Pool;
+            const isInDex = hasPool;
+            const lpLabel = resolveVirtualsLabel(fastPlatform, earlyDeployer || "", topHolders);
 
             const scannedName = tName.toLowerCase().trim();
             const scannedSymbol = tSymbol.toLowerCase().trim();
@@ -719,7 +785,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 buyTax: "0", sellTax: "0", isMintable: false, isOpenSource: true,
                 holderCount, holderCountLabel, greenBadge: true, redFlags: [], malicious: {}, lookupCount, authenticityScore: 100,
                 liveStatus,
-                lpStatus: `${fastPlatform} Managed ✅`,
+                lpStatus: lpLabel,
+                dexVersion: dexVersion,
               });
             }
 
@@ -770,7 +837,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               isWhitelistedFactory: true,
               platformName: fastPlatform,
               liveStatus,
-              lpStatus: `${fastPlatform} Managed ✅`,
+              lpStatus: lpLabel,
+              dexVersion: dexVersion,
             });
           }
         }
@@ -899,13 +967,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const isOpenSource = tokenData.is_open_source === "1" || tokenData.is_open_source === 1;
         let isInDex = tokenData.is_in_dex === "1" || tokenData.is_in_dex === 1;
 
-        let nonWhitelistV3Pool = false;
+        let nonWhitelistDexVersion: "v3" | "v4" | null = null;
         if (!isInDex && chain === "base") {
-          const hasPool = await rpcCheckUniV3Pool(address as string);
-          if (hasPool) {
+          const dexFallback = await rpcCheckDualDex(address as string);
+          if (dexFallback.isInDex) {
             isInDex = true;
-            nonWhitelistV3Pool = true;
-            console.log(`[forensics] Alchemy override: Uniswap V3 pool confirmed for ${(address as string).slice(0,10)} — isInDex forced TRUE`);
+            nonWhitelistDexVersion = dexFallback.version;
+            console.log(`[forensics] Alchemy override: Uniswap ${dexFallback.version?.toUpperCase()} pool confirmed for ${(address as string).slice(0,10)} — isInDex forced TRUE`);
           }
         }
 
@@ -1150,8 +1218,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           topHolders: topHolders.length > 0 ? topHolders : undefined,
           isWhitelistedFactory,
           platformName: earlyPlatform || lpEscrowName || null,
-          liveStatus: (isInDex || nonWhitelistV3Pool) ? "Live (Direct-to-V3) ✅" : null,
-          lpStatus: isKnownFactory ? `${lpEscrowName || "Protocol"} Managed ✅` : (lpSecure ? "Secured ✅" : "Unlocked ⚠️"),
+          liveStatus: isInDex ? dexLiveStatus(nonWhitelistDexVersion) : null,
+          lpStatus: isKnownFactory
+            ? resolveVirtualsLabel(lpEscrowName || "Protocol", creatorAddress || "", lpHoldersRaw)
+            : (lpSecure ? "Secured ✅" : "Unlocked ⚠️"),
+          dexVersion: nonWhitelistDexVersion,
         });
       }
 
@@ -1972,11 +2043,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (auditFastPlatform) {
         console.log(`[audit] WHITELIST HIT: ${auditAddrLower.slice(0,10)} → ${auditFastPlatform} — skipping GoPlus/Honeypot.is`);
 
-        const [auditRpcToken, auditHolderFb, auditTopHolders, auditHasV3Pool] = await Promise.all([
+        const [auditRpcToken, auditHolderFb, auditTopHolders, auditDexResult] = await Promise.all([
           rpcGetTokenInfo(contractAddress),
           fetchHolderCountFallback(contractAddress),
           rpcGetTopHolders(contractAddress),
-          rpcCheckUniV3Pool(contractAddress),
+          rpcCheckDualDex(contractAddress),
         ]);
 
         const auditHolderCount = auditHolderFb !== null && auditHolderFb > 0 ? auditHolderFb : 0;
@@ -1991,7 +2062,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           holderCount: auditHolderCount,
           holderCountLabel: auditHolderLabel,
           isOpenSource: true,
-          isInDex: auditHasV3Pool,
+          isInDex: auditDexResult.isInDex,
+          dexVersion: auditDexResult.version,
           honeypot: { isHoneypot: false, simulationSuccess: true, buyTax: 0, sellTax: 0, source: "Whitelisted Factory" },
           liquidityLock: {
             lockedPercent: 100,
@@ -2159,7 +2231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       isSingleSigAdmin: !!auditIsSingleSig,
       riskLevel,
       dataSource: tokenData ? "GoPlus" : "No data",
-    });
+    } as any);
   });
 
   // ─── Public Verification Certificate ──────────────────────────────────────
@@ -2203,11 +2275,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (certFastPlatform) {
       console.log(`[cert] WHITELIST HIT: ${certAddrLower.slice(0,10)} → ${certFastPlatform} — skipping GoPlus/Honeypot.is`);
 
-      const [certRpcToken, certHolderFb, certTopHolders, certHasV3Pool] = await Promise.all([
+      const [certRpcToken, certHolderFb, certTopHolders, certDexResult] = await Promise.all([
         rpcGetTokenInfo(contractAddress),
         fetchHolderCountFallback(contractAddress),
         rpcGetTopHolders(contractAddress),
-        rpcCheckUniV3Pool(contractAddress),
+        rpcCheckDualDex(contractAddress),
       ]);
 
       const certHolderCount = certHolderFb !== null && certHolderFb > 0 ? certHolderFb : 0;
@@ -2221,7 +2293,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         holderCount: certHolderCount,
         holderCountLabel: certHolderLabel,
         isOpenSource: true,
-        isInDex: certHasV3Pool,
+        isInDex: certDexResult.isInDex,
+        dexVersion: certDexResult.version,
         honeypot: { isHoneypot: false, simulationSuccess: true, buyTax: 0, sellTax: 0, source: "Whitelisted Factory" },
         liquidityLock: {
           lockedPercent: 100,

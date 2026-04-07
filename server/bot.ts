@@ -7,8 +7,11 @@ const GOPLUS_BASE = "https://api.gopluslabs.io/api/v1";
 const BASE_CHAIN_ID = "8453";
 const BOT_RPC_URL = process.env.BASE_RPC_URL || "";
 const UNISWAP_V3_FACTORY = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD";
+const UNISWAP_V4_POOL_MANAGER = "0x498581ff718922c3f8e6a244956af099b2652b2b";
 const WETH_BASE = "0x4200000000000000000000000000000000000006";
 const FEE_TIERS = [500, 3000, 10000, 100];
+
+const BOT_ERC8183_VAULT = "0xdad686299fb562f89e55da05f1d96fabeb2a2e32";
 
 function getSiteUrl(): string {
   return "https://apolagent.online";
@@ -116,6 +119,57 @@ async function botCheckUniV3Pool(tokenAddress: string): Promise<boolean> {
     })
   );
   return results.some(r => r && r !== "0x" + "0".repeat(64) && r !== "0x");
+}
+
+async function botCheckUniV4Pool(tokenAddress: string): Promise<boolean> {
+  if (!BOT_RPC_URL) return false;
+  const padToken = "0x" + tokenAddress.replace("0x", "").toLowerCase().padStart(64, "0");
+  const [asCurrency0, asCurrency1] = await Promise.all([
+    botRpcCall("eth_getLogs", [{
+      address: UNISWAP_V4_POOL_MANAGER,
+      fromBlock: "0x0",
+      toBlock: "latest",
+      topics: [null, null, padToken, null],
+    }]),
+    botRpcCall("eth_getLogs", [{
+      address: UNISWAP_V4_POOL_MANAGER,
+      fromBlock: "0x0",
+      toBlock: "latest",
+      topics: [null, null, null, padToken],
+    }]),
+  ]);
+  const logs0 = Array.isArray(asCurrency0) ? asCurrency0 : [];
+  const logs1 = Array.isArray(asCurrency1) ? asCurrency1 : [];
+  return logs0.length > 0 || logs1.length > 0;
+}
+
+type BotDexResult = { version: "v3" | "v4" | null; isInDex: boolean };
+
+async function botCheckDualDex(tokenAddress: string): Promise<BotDexResult> {
+  if (!BOT_RPC_URL) return { version: null, isInDex: false };
+  const [hasV3, hasV4] = await Promise.all([
+    botCheckUniV3Pool(tokenAddress),
+    botCheckUniV4Pool(tokenAddress),
+  ]);
+  if (hasV4) return { version: "v4", isInDex: true };
+  if (hasV3) return { version: "v3", isInDex: true };
+  return { version: null, isInDex: false };
+}
+
+function botDexLiveStatus(version: "v3" | "v4" | null): string | null {
+  if (version === "v4") return "Live (Direct-to-V4) ✅";
+  if (version === "v3") return "Live (Direct-to-V3) ✅";
+  return null;
+}
+
+function botResolveVirtualsLabel(platformName: string, creatorAddress: string, lpHolders: any[]): string {
+  if (platformName !== "Virtuals") return `${platformName} Managed ✅`;
+  const cl = (creatorAddress || "").toLowerCase();
+  if (cl === BOT_ERC8183_VAULT) return "Virtuals Managed (ERC-8183) 🤖";
+  for (const lp of lpHolders) {
+    if ((lp.address ?? "").toLowerCase() === BOT_ERC8183_VAULT) return "Virtuals Managed (ERC-8183) 🤖";
+  }
+  return "Virtuals Managed ✅";
 }
 
 function botGetPlatformName(creatorAddress: string, lpHolders: any[]): string | null {
@@ -229,18 +283,19 @@ async function directGoPlus(address: string): Promise<any> {
     const addrLower = address.toLowerCase();
 
     let fastPlatform: string | null = BOT_PLATFORM_LOCKERS[addrLower] || BOT_PLATFORM_DEPLOYERS[addrLower] || null;
+    let earlyDeployerBot = "";
 
     if (!fastPlatform) {
       try {
         const bsRes = await fetch(`https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(address)}`, { signal: AbortSignal.timeout(6000) });
         if (bsRes.ok) {
           const bsData = await bsRes.json() as any;
-          const deployer = (bsData?.creator_address_hash || "").toLowerCase();
-          if (deployer) {
-            fastPlatform = BOT_PLATFORM_DEPLOYERS[deployer] || BOT_PLATFORM_LOCKERS[deployer] || null;
+          earlyDeployerBot = (bsData?.creator_address_hash || "").toLowerCase();
+          if (earlyDeployerBot) {
+            fastPlatform = BOT_PLATFORM_DEPLOYERS[earlyDeployerBot] || BOT_PLATFORM_LOCKERS[earlyDeployerBot] || null;
             if (!fastPlatform) {
               try {
-                const bs2 = await fetch(`https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(deployer)}`, { signal: AbortSignal.timeout(5000) });
+                const bs2 = await fetch(`https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(earlyDeployerBot)}`, { signal: AbortSignal.timeout(5000) });
                 if (bs2.ok) {
                   const d2 = await bs2.json() as any;
                   const deployer2 = (d2?.creator_address_hash || "").toLowerCase();
@@ -256,11 +311,12 @@ async function directGoPlus(address: string): Promise<any> {
     if (fastPlatform) {
       console.log(`[bot] WHITELIST HIT: ${address.slice(0,10)} → ${fastPlatform} — skipping GoPlus/Honeypot.is`);
 
-      const [tokenInfo, hasV3Pool, holderCountFb] = await Promise.all([
+      const [tokenInfo, dexResult, holderCountFb] = await Promise.all([
         botGetTokenInfo(address),
-        botCheckUniV3Pool(address),
+        botCheckDualDex(address),
         botFetchHolderCount(address),
       ]);
+      const { version: dexVersion, isInDex: hasDexPool } = dexResult;
 
       let holderCount = holderCountFb || 0;
       let holderCountLabel: string;
@@ -288,7 +344,8 @@ async function directGoPlus(address: string): Promise<any> {
         console.log(`[bot] Blockscout 0 holders for ${address.slice(0,10)} — Alchemy balanceOf activity: ${hasActivity}`);
       }
 
-      const liveStatus = hasV3Pool ? "Live (Direct-to-V3) ✅" : null;
+      const liveStatus = botDexLiveStatus(dexVersion);
+      const lpLabel = botResolveVirtualsLabel(fastPlatform, earlyDeployerBot || addrLower, []);
 
       return {
         riskLevel: "Clean",
@@ -307,11 +364,12 @@ async function directGoPlus(address: string): Promise<any> {
         tokenSymbol: tokenInfo?.symbol || "???",
         lpEscrow: { name: fastPlatform, address: addrLower, percent: 100 },
         isHighRisk: false,
-        isInDex: hasV3Pool,
+        isInDex: hasDexPool,
         platformName: fastPlatform,
         isWhitelistedFactory: true,
         liveStatus,
-        lpStatus: `${fastPlatform} Managed ✅`,
+        lpStatus: lpLabel,
+        dexVersion,
       };
     }
 
@@ -351,13 +409,13 @@ async function directGoPlus(address: string): Promise<any> {
     }
 
     let isInDex = flagFn(token.is_in_dex);
-    let gpV3Pool = false;
+    let gpDexVersion: "v3" | "v4" | null = null;
     if (!isInDex) {
-      const hasPool = await botCheckUniV3Pool(address);
-      if (hasPool) {
+      const dexFb = await botCheckDualDex(address);
+      if (dexFb.isInDex) {
         isInDex = true;
-        gpV3Pool = true;
-        console.log(`[bot] Alchemy override: Uniswap V3 pool confirmed for ${address.slice(0,10)}`);
+        gpDexVersion = dexFb.version;
+        console.log(`[bot] Alchemy override: Uniswap ${dexFb.version?.toUpperCase()} pool confirmed for ${address.slice(0,10)}`);
       }
     }
 
@@ -390,8 +448,11 @@ async function directGoPlus(address: string): Promise<any> {
       isInDex,
       platformName,
       isWhitelistedFactory: isKnownFactory,
-      liveStatus: (isInDex || gpV3Pool) ? "Live (Direct-to-V3) ✅" : null,
-      lpStatus: isKnownFactory ? `${lpEscrowName || "Protocol"} Managed ✅` : null,
+      liveStatus: isInDex ? botDexLiveStatus(gpDexVersion) : null,
+      lpStatus: isKnownFactory
+        ? botResolveVirtualsLabel(lpEscrowName || "Protocol", creatorLower, lpHolders)
+        : null,
+      dexVersion: gpDexVersion,
     };
   } catch (err: any) {
     console.error("[bot] directGoPlus fallback failed:", err?.message);
@@ -517,7 +578,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const redFlags: string[] = api?.redFlags ?? [];
     const adminThreats: any[] = api?.adminThreats ?? [];
 
-    const liveStatus: string | null = api?.liveStatus || (isInDex ? "Live (Direct-to-V3) ✅" : null);
+    const liveStatus: string | null = api?.liveStatus || (isInDex ? botDexLiveStatus(api?.dexVersion || null) : null);
 
     let lpStatus: string;
     if (api?.lpStatus)                  lpStatus = api.lpStatus;
@@ -1830,25 +1891,26 @@ export function createBot(): Telegraf | null {
     const alchemyPreCheck = (async () => {
       try {
         const t0 = Date.now();
-        const [hasV3Pool, tokenInfo] = await Promise.all([
-          botCheckUniV3Pool(address),
+        const [dexPre, tokenInfo] = await Promise.all([
+          botCheckDualDex(address),
           botGetTokenInfo(address),
         ]);
         const elapsed = Date.now() - t0;
-        if (elapsed < 4000 && hasV3Pool && tokenInfo && loadingMsg) {
+        if (elapsed < 4000 && dexPre.isInDex && tokenInfo && loadingMsg) {
+          const quickLabel = botDexLiveStatus(dexPre.version) || "Live ✅";
           const quickMsg =
             `🔍 *APOL AGENT — QUICK SCAN*\n\n` +
             `📍 \`${shortAddr(address)}\`\n` +
             `⛓️ Base Mainnet\n\n` +
             `*${tokenInfo.name}* ($${tokenInfo.symbol})\n` +
-            `📡 Status: *Live (Direct-to-V3) ✅*\n` +
+            `📡 Status: *${quickLabel}*\n` +
             `_Full forensic report loading..._`;
           try {
             await ctx.telegram.editMessageText(
               loadingMsg.chat.id, loadingMsg.message_id, undefined,
               quickMsg, { parse_mode: "Markdown", disable_web_page_preview: true } as any,
             );
-            console.log(`[bot] Alchemy pre-check completed in ${elapsed}ms — quick status sent for ${address.slice(0,10)}`);
+            console.log(`[bot] Alchemy pre-check completed in ${elapsed}ms — quick status (${dexPre.version}) sent for ${address.slice(0,10)}`);
           } catch { /* non-fatal */ }
         }
       } catch { /* non-fatal */ }
