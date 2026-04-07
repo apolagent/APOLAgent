@@ -93,8 +93,16 @@ shared/
 - **Bot async scanning**: All scan commands (`/scan`, `/checkwallet`, `/scanagent`, `/scanx`) use edit-message pattern — send "Analyzing..." immediately, then edit with results. 60s timeout. On edit failure, deletes loading message and sends reply.
 - **Used in**: `/api/detective/analyze`, `/api/agent/analyze` (contractScan), `/api/admin/audit`, `/api/verify/:address`, `bot.ts`
 
+## Data Sources (Priority Order)
+1. **GoPlus API** — Primary token security data (tax, honeypot, LP holders, ownership)
+2. **Alchemy RPC** (`BASE_RPC_URL`) — Direct blockchain queries via `eth_getCode` (contract detection) and `eth_call` (ERC-20 name/symbol/supply). Used as fallback when GoPlus returns no data for a contract.
+3. **Blockscout API** — Contract verification, deployer tracing (2-hop), holder counts fallback
+4. **Honeypot.is** — Secondary honeypot simulation
+5. **DexScreener** — Price, market cap, liquidity data
+
 ## Secrets
 - `APOL_BOT_TOKEN` - Telegram bot token
+- `BASE_RPC_URL` - Alchemy Base RPC endpoint (contract detection + token info fallback)
 - `MORALIS_API_KEY` - Moralis Web3 API (wallet forensics)
 - `BASESCAN_API_KEY` - Basescan explorer links
 - `CHAINABUSE_API_KEY` - ChainAbuse threat reports

@@ -54,9 +54,86 @@ function requireAdmin(req: Request & { adminAddress?: string }, res: Response, n
   next();
 }
 
+const BASE_RPC_URL = process.env.BASE_RPC_URL || "";
 const CHAINABUSE_API_KEY = process.env.CHAINABUSE_API_KEY;
 const CHAINABUSE_BASE = "https://api.chainabuse.com/v0";
 const GOPLUS_BASE = "https://api.gopluslabs.io/api/v1";
+
+async function rpcCall(method: string, params: any[]): Promise<any> {
+  if (!BASE_RPC_URL) return null;
+  try {
+    const r = await fetch(BASE_RPC_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) return null;
+    const j = await r.json() as any;
+    return j.result ?? null;
+  } catch { return null; }
+}
+
+async function rpcIsContract(address: string): Promise<boolean> {
+  const code = await rpcCall("eth_getCode", [address, "latest"]);
+  return !!code && code !== "0x" && code !== "0x0";
+}
+
+function decodeString(hex: string): string {
+  if (!hex || hex === "0x" || hex.length < 130) return "";
+  try {
+    const offsetVal = parseInt(hex.slice(2, 66), 16);
+    const start = 2 + offsetVal * 2;
+    const lenHex = hex.slice(start, start + 64);
+    const len = parseInt(lenHex, 16);
+    const strHex = hex.slice(start + 64, start + 64 + len * 2);
+    const bytes = Buffer.from(strHex, "hex");
+    return bytes.toString("utf8").replace(/\0/g, "");
+  } catch { return ""; }
+}
+
+function decodeUint(hex: string): string {
+  if (!hex || hex === "0x") return "0";
+  try { return BigInt(hex).toString(); } catch { return "0"; }
+}
+
+async function rpcGetTokenInfo(address: string): Promise<{ name: string; symbol: string; totalSupply: string; decimals: number } | null> {
+  if (!BASE_RPC_URL) return null;
+  try {
+    const NAME_SIG = "0x06fdde03";
+    const SYMBOL_SIG = "0x95d89b41";
+    const SUPPLY_SIG = "0x18160ddd";
+    const DECIMALS_SIG = "0x313ce567";
+
+    const [nameHex, symbolHex, supplyHex, decimalsHex] = await Promise.all([
+      rpcCall("eth_call", [{ to: address, data: NAME_SIG }, "latest"]),
+      rpcCall("eth_call", [{ to: address, data: SYMBOL_SIG }, "latest"]),
+      rpcCall("eth_call", [{ to: address, data: SUPPLY_SIG }, "latest"]),
+      rpcCall("eth_call", [{ to: address, data: DECIMALS_SIG }, "latest"]),
+    ]);
+
+    const name = decodeString(nameHex);
+    const symbol = decodeString(symbolHex);
+    if (!name && !symbol) return null;
+
+    const totalSupply = decodeUint(supplyHex);
+    const decimals = decimalsHex ? parseInt(decimalsHex, 16) : 18;
+    return { name, symbol, totalSupply, decimals };
+  } catch { return null; }
+}
+
+async function rpcGetDeployer(address: string): Promise<string | null> {
+  if (!BASE_RPC_URL) return null;
+  try {
+    const r = await fetch(
+      `https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(address)}`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!r.ok) return null;
+    const d = await r.json() as any;
+    return d.creator_address_hash?.toLowerCase() ?? null;
+  } catch { return null; }
+}
 const GOPLUS_CHAIN: Record<string, string> = {
   ethereum: "1", bsc: "56", polygon: "137", arbitrum: "42161",
   optimism: "10", base: "8453", avalanche: "43114", tron: "tron", solana: "solana", other: "1",
@@ -539,47 +616,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       let isContract = tokenData !== null;
-      let blockscoutToken: any = null;
 
       if (!isContract && chain === "base") {
-        try {
-          const bsRes = await fetch(`https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(address as string)}`, { signal: AbortSignal.timeout(8000) });
-          if (bsRes.ok) {
-            const bsData = await bsRes.json() as any;
-            if (bsData.is_contract) {
-              isContract = true;
-              blockscoutToken = bsData.token;
-              console.log(`[forensics] GoPlus missed contract ${(address as string).slice(0,10)}… — Blockscout confirms is_contract=true, token=${blockscoutToken?.name ?? "unknown"}`);
-              if (!tokenData) {
-                tokenData = {
-                  token_name: blockscoutToken?.name ?? "Unknown",
-                  token_symbol: blockscoutToken?.symbol ?? "???",
-                  holder_count: String(blockscoutToken?.holders_count ?? "0"),
-                  total_supply: blockscoutToken?.total_supply ?? "0",
-                  is_open_source: bsData.is_verified ? "1" : "0",
-                  is_honeypot: "0",
-                  is_mintable: "0",
-                  is_proxy: "0",
-                  is_in_dex: "0",
-                  buy_tax: "0",
-                  sell_tax: "0",
-                  can_take_back_ownership: "0",
-                  owner_change_balance: "0",
-                  hidden_owner: "0",
-                  selfdestruct: "0",
-                  external_call: "0",
-                  is_blacklisted: "0",
-                  transfer_pausable: "0",
-                  cannot_sell_all: "0",
-                  creator_address: bsData.creator_address_hash ?? "",
-                  lp_holders: [],
-                  holders: [],
-                  _fromBlockscout: true,
-                };
-              }
-            }
+        const [rpcIsCtx, bsRes] = await Promise.allSettled([
+          rpcIsContract(address as string),
+          fetch(`https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(address as string)}`, { signal: AbortSignal.timeout(8000) }).then(r => r.ok ? r.json() : null),
+        ]);
+        const rpcConfirmed = rpcIsCtx.status === "fulfilled" && rpcIsCtx.value === true;
+        const bsData = bsRes.status === "fulfilled" ? bsRes.value : null;
+        const bsConfirmed = bsData?.is_contract === true;
+
+        if (rpcConfirmed || bsConfirmed) {
+          isContract = true;
+          const rpcToken = await rpcGetTokenInfo(address as string);
+          const bsToken = bsData?.token;
+          const tName = rpcToken?.name || bsToken?.name || "Unknown";
+          const tSymbol = rpcToken?.symbol || bsToken?.symbol || "???";
+          const tSupply = rpcToken?.totalSupply || bsToken?.total_supply || "0";
+          const tHolders = String(bsToken?.holders_count ?? "0");
+          const creatorAddr = bsData?.creator_address_hash ?? "";
+          const src = rpcConfirmed ? "Alchemy RPC" : "Blockscout";
+          console.log(`[forensics] GoPlus missed contract ${(address as string).slice(0,10)}… — ${src} confirms is_contract=true, token=${tName} (${tSymbol})`);
+          if (!tokenData) {
+            tokenData = {
+              token_name: tName,
+              token_symbol: tSymbol,
+              holder_count: tHolders,
+              total_supply: tSupply,
+              is_open_source: bsData?.is_verified ? "1" : "0",
+              is_honeypot: "0",
+              is_mintable: "0",
+              is_proxy: "0",
+              is_in_dex: "0",
+              buy_tax: "0",
+              sell_tax: "0",
+              can_take_back_ownership: "0",
+              owner_change_balance: "0",
+              hidden_owner: "0",
+              selfdestruct: "0",
+              external_call: "0",
+              is_blacklisted: "0",
+              transfer_pausable: "0",
+              cannot_sell_all: "0",
+              creator_address: creatorAddr,
+              lp_holders: [],
+              holders: [],
+              _fromBlockscout: true,
+            };
           }
-        } catch { /* non-fatal */ }
+        }
       }
 
       const scannedName = (tokenData?.token_name || "").toLowerCase().trim();
