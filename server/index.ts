@@ -107,12 +107,9 @@ app.use((req, res, next) => {
   if (bot && isProduction) {
     const tkn = process.env.APOL_BOT_TOKEN!;
 
-    const clearOldSession = async (): Promise<boolean> => {
+    const isBotReady = async (): Promise<boolean> => {
       try {
-        await fetch(`https://api.telegram.org/bot${tkn}/deleteWebhook?drop_pending_updates=true`, { signal: AbortSignal.timeout(5000) }).catch(() => {});
-        await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&timeout=0`, { signal: AbortSignal.timeout(5000) }).catch(() => {});
-        await new Promise(r => setTimeout(r, 500));
-        const r = await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&timeout=0`, { signal: AbortSignal.timeout(5000) });
+        const r = await fetch(`https://api.telegram.org/bot${tkn}/getMe`, { signal: AbortSignal.timeout(5000) });
         const j = await r.json() as any;
         return j.ok === true;
       } catch { return false; }
@@ -120,9 +117,15 @@ app.use((req, res, next) => {
 
     const launchBot = async (attempt = 1): Promise<void> => {
       try {
-        log(`Bot launch attempt ${attempt}...`, "bot");
-        await clearOldSession();
-        await new Promise(r => setTimeout(r, 2000));
+        log(`Bot launch attempt ${attempt} — checking token status...`, "bot");
+        const ready = await isBotReady();
+        if (!ready) {
+          log("Bot token not ready (likely logged out ban). Waiting 2 minutes silently...", "bot");
+          await new Promise(r => setTimeout(r, 2 * 60 * 1000));
+          return launchBot(attempt);
+        }
+        await fetch(`https://api.telegram.org/bot${tkn}/deleteWebhook?drop_pending_updates=true`, { signal: AbortSignal.timeout(5000) }).catch(() => {});
+        await new Promise(r => setTimeout(r, 1000));
         await bot.launch({ dropPendingUpdates: true, allowedUpdates: ["message", "callback_query"] });
         log("Telegram bot polling started successfully", "bot");
         bot.telegram.setMyCommands([
@@ -136,21 +139,19 @@ app.use((req, res, next) => {
       } catch (err: any) {
         const msg = err?.message ?? String(err);
         log(`Bot start failed (attempt ${attempt}): ${msg}`, "bot");
-        if ((msg.includes("409") || msg.includes("Conflict")) && attempt <= 20) {
-          const delay = Math.min(10_000 + attempt * 5_000, 60_000);
-          log(`Waiting ${delay / 1000}s for old session to expire, then retrying...`, "bot");
+        if (msg.includes("409") || msg.includes("Conflict")) {
+          const delay = Math.min(15_000 + attempt * 5_000, 60_000);
+          log(`409 conflict — waiting ${delay / 1000}s for old session to expire...`, "bot");
           await new Promise(r => setTimeout(r, delay));
           return launchBot(attempt + 1);
-        } else if (msg.includes("Logged out") || msg.includes("logged out")) {
-          log("Bot was previously logged out — waiting 10 minutes before retry...", "bot");
-          await new Promise(r => setTimeout(r, 10 * 60 * 1000));
-          return launchBot(1);
         } else {
-          log(`Bot gave up after ${attempt} attempts: ${msg}`, "bot");
+          log(`Unexpected error — retrying in 60s...`, "bot");
+          await new Promise(r => setTimeout(r, 60_000));
+          return launchBot(attempt + 1);
         }
       }
     };
-    setTimeout(() => launchBot(), 8_000);
+    setTimeout(() => launchBot(), 10_000);
 
     const shutdown = () => {
       try { bot.stop("SIGTERM"); } catch {}
