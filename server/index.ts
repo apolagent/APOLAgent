@@ -106,28 +106,34 @@ app.use((req, res, next) => {
   const bot = createBot();
   if (bot && isProduction) {
     const tkn = process.env.APOL_BOT_TOKEN!;
-
-    const isBotReady = async (): Promise<boolean> => {
-      try {
-        const r = await fetch(`https://api.telegram.org/bot${tkn}/getMe`, { signal: AbortSignal.timeout(5000) });
-        const j = await r.json() as any;
-        return j.ok === true;
-      } catch { return false; }
-    };
+    const myId = `${process.pid}-${Date.now()}`;
 
     const launchBot = async (attempt = 1): Promise<void> => {
       try {
-        log(`Bot launch attempt ${attempt} — checking token status...`, "bot");
-        const ready = await isBotReady();
-        if (!ready) {
-          log("Bot token not ready (likely logged out ban). Waiting 2 minutes silently...", "bot");
-          await new Promise(r => setTimeout(r, 2 * 60 * 1000));
+        log(`[${myId}] Bot launch attempt ${attempt}...`, "bot");
+
+        const meRes = await fetch(`https://api.telegram.org/bot${tkn}/getMe`, { signal: AbortSignal.timeout(5000) });
+        const meData = await meRes.json() as any;
+        if (!meData.ok) {
+          log(`Bot token error: ${meData.description}. Waiting 2 min...`, "bot");
+          await new Promise(r => setTimeout(r, 120_000));
           return launchBot(attempt);
         }
+
         await fetch(`https://api.telegram.org/bot${tkn}/deleteWebhook?drop_pending_updates=true`, { signal: AbortSignal.timeout(5000) }).catch(() => {});
-        await new Promise(r => setTimeout(r, 1000));
+
+        const updRes = await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&limit=1&timeout=0`, { signal: AbortSignal.timeout(10000) });
+        const updData = await updRes.json() as any;
+        if (!updData.ok && updData.error_code === 409) {
+          log(`Another polling session active. Waiting 30s...`, "bot");
+          await new Promise(r => setTimeout(r, 30_000));
+          return launchBot(attempt + 1);
+        }
+
+        await new Promise(r => setTimeout(r, 1500));
         await bot.launch({ dropPendingUpdates: true, allowedUpdates: ["message", "callback_query"] });
-        log("Telegram bot polling started successfully", "bot");
+        log("Telegram bot polling started successfully ✓", "bot");
+
         bot.telegram.setMyCommands([
           { command: "scan",        description: "Detailed CA investigation (Taxes, Liquidity, Honeypot)" },
           { command: "scanx",       description: "X/Twitter social forensics & LARP detection" },
@@ -140,22 +146,21 @@ app.use((req, res, next) => {
         const msg = err?.message ?? String(err);
         log(`Bot start failed (attempt ${attempt}): ${msg}`, "bot");
         if (msg.includes("409") || msg.includes("Conflict")) {
-          const delay = Math.min(15_000 + attempt * 5_000, 60_000);
-          log(`409 conflict — waiting ${delay / 1000}s for old session to expire...`, "bot");
+          const delay = Math.min(20_000 + attempt * 10_000, 90_000);
+          log(`409 conflict — waiting ${delay / 1000}s...`, "bot");
           await new Promise(r => setTimeout(r, delay));
           return launchBot(attempt + 1);
-        } else {
-          log(`Unexpected error — retrying in 60s...`, "bot");
-          await new Promise(r => setTimeout(r, 60_000));
-          return launchBot(attempt + 1);
         }
+        log(`Retrying in 30s...`, "bot");
+        await new Promise(r => setTimeout(r, 30_000));
+        return launchBot(attempt + 1);
       }
     };
-    setTimeout(() => launchBot(), 10_000);
 
-    const shutdown = () => {
-      try { bot.stop("SIGTERM"); } catch {}
-    };
+    const jitter = Math.floor(Math.random() * 5000) + 8000;
+    setTimeout(() => launchBot(), jitter);
+
+    const shutdown = () => { try { bot.stop("SIGTERM"); } catch {} };
     process.once("SIGTERM", shutdown);
     process.once("SIGINT", shutdown);
   } else if (bot) {
