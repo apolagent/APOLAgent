@@ -324,9 +324,8 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
 
     const holderCount = (api?.holderCount && api.holderCount > 0) ? api.holderCount.toLocaleString() : "Calculating...";
     const isProtocolTax = !!api?.taxOverride;
-    const pName = api?.platformName || api?.lpEscrow?.name || null;
-    const buyTaxFmt  = isProtocolTax ? `0.0% (${pName || "Platform"})` : (api ? `${(api.buyTax ?? 0).toFixed(1)}%` : "Data Pending");
-    const sellTaxFmt = isProtocolTax ? `0.0% (${pName || "Platform"})` : (api ? `${(api.sellTax ?? 0).toFixed(1)}%` : "Data Pending");
+    const buyTaxFmt  = isProtocolTax ? `0.0%` : (api ? `${(api.buyTax ?? 0).toFixed(1)}%` : "Data Pending");
+    const sellTaxFmt = isProtocolTax ? `0.0%` : (api ? `${(api.sellTax ?? 0).toFixed(1)}%` : "Data Pending");
 
     const hasDex = !!topPair;
     const isInDex = !!api?.isInDex;
