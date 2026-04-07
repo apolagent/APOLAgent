@@ -538,7 +538,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch { /* non-fatal */ }
       }
 
-      const isContract = tokenData !== null;
+      let isContract = tokenData !== null;
+      let blockscoutToken: any = null;
+
+      if (!isContract && chain === "base") {
+        try {
+          const bsRes = await fetch(`https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(address as string)}`, { signal: AbortSignal.timeout(8000) });
+          if (bsRes.ok) {
+            const bsData = await bsRes.json() as any;
+            if (bsData.is_contract) {
+              isContract = true;
+              blockscoutToken = bsData.token;
+              console.log(`[forensics] GoPlus missed contract ${(address as string).slice(0,10)}… — Blockscout confirms is_contract=true, token=${blockscoutToken?.name ?? "unknown"}`);
+              if (!tokenData) {
+                tokenData = {
+                  token_name: blockscoutToken?.name ?? "Unknown",
+                  token_symbol: blockscoutToken?.symbol ?? "???",
+                  holder_count: String(blockscoutToken?.holders_count ?? "0"),
+                  total_supply: blockscoutToken?.total_supply ?? "0",
+                  is_open_source: bsData.is_verified ? "1" : "0",
+                  is_honeypot: "0",
+                  is_mintable: "0",
+                  is_proxy: "0",
+                  is_in_dex: "0",
+                  buy_tax: "0",
+                  sell_tax: "0",
+                  can_take_back_ownership: "0",
+                  owner_change_balance: "0",
+                  hidden_owner: "0",
+                  selfdestruct: "0",
+                  external_call: "0",
+                  is_blacklisted: "0",
+                  transfer_pausable: "0",
+                  cannot_sell_all: "0",
+                  creator_address: bsData.creator_address_hash ?? "",
+                  lp_holders: [],
+                  holders: [],
+                  _fromBlockscout: true,
+                };
+              }
+            }
+          }
+        } catch { /* non-fatal */ }
+      }
 
       const scannedName = (tokenData?.token_name || "").toLowerCase().trim();
       const scannedSymbol = (tokenData?.token_symbol || "").toLowerCase().trim();
