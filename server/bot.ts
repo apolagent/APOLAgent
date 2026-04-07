@@ -314,7 +314,7 @@ async function directGoPlus(address: string): Promise<any> {
     }
 
     let isInDex = flagFn(token.is_in_dex);
-    if (isKnownFactory && !isInDex) {
+    if (!isInDex) {
       const hasPool = await botCheckUniV3Pool(address);
       if (hasPool) {
         isInDex = true;
@@ -452,7 +452,9 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       );
     }
 
-    const holderCount = (api?.holderCount && api.holderCount > 0) ? api.holderCount.toLocaleString() : "Calculating...";
+    const holderCount = api?.holderCountLabel
+      ? (parseInt(api.holderCountLabel) > 0 ? parseInt(api.holderCountLabel).toLocaleString() : api.holderCountLabel)
+      : (api?.holderCount && api.holderCount > 0) ? api.holderCount.toLocaleString() : "Scanning (High Activity)";
     const isProtocolTax = !!api?.taxOverride;
     const buyTaxFmt  = isProtocolTax ? `0.0%` : (api ? `${(api.buyTax ?? 0).toFixed(1)}%` : "Data Pending");
     const sellTaxFmt = isProtocolTax ? `0.0%` : (api ? `${(api.sellTax ?? 0).toFixed(1)}%` : "Data Pending");
@@ -463,11 +465,11 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const lpEscrowName   = api?.lpEscrow?.name ?? null;
 
     const liqUsd: number | null = topPair?.liquidity?.usd ?? null;
-    const liqFormatted = liqUsd !== null ? fmtUsd(liqUsd) : (hasDex ? "Data Pending" : (isKnownFactory && isInDex ? "Pool Active" : "Not Listed"));
+    const liqFormatted = liqUsd !== null ? fmtUsd(liqUsd) : (hasDex ? "Data Pending" : (isKnownFactory ? "Platform Managed" : "Data Pending"));
     const priceRaw  = parseFloat(topPair?.priceUsd ?? "0");
-    const priceStr  = priceRaw > 0 ? fmtPrice(priceRaw) : (hasDex ? "Data Pending" : (isKnownFactory ? "Indexing..." : "Not Listed"));
+    const priceStr  = priceRaw > 0 ? fmtPrice(priceRaw) : (hasDex ? "Data Pending" : (isKnownFactory ? "Indexing..." : "Data Pending"));
     const fdvRaw    = topPair?.fdv ?? null;
-    const mcapStr   = fdvRaw ? fmtUsd(fdvRaw) : (hasDex ? "Data Pending" : (isKnownFactory ? "Indexing..." : "Not Listed"));
+    const mcapStr   = fdvRaw ? fmtUsd(fdvRaw) : (hasDex ? "Data Pending" : (isKnownFactory ? "Indexing..." : "Data Pending"));
 
     const isProtocolEscrow = !!api?.protocolSecured;
     const isOwnershipRenounced = !!api?.isOwnershipRenounced;
@@ -1179,7 +1181,7 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     } else {
       holderRaw = parseInt(token?.holder_count ?? "0");
     }
-    const holderFmt  = holderRaw > 0 ? holderRaw.toLocaleString() : "Calculating...";
+    const holderFmt  = holderRaw > 0 ? holderRaw.toLocaleString() : "Scanning (High Activity)";
 
     // Social links from DexScreener
     const website  = topPair?.info?.websites?.[0]?.url ?? null;
