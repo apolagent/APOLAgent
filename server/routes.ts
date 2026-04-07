@@ -657,7 +657,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
         malicious = j.result || {};
       } catch { /* non-fatal */ }
 
-      // 2. Token Security check (determines if contract)
+      // 2. FORENSIC FIRST: Check internal whitelist BEFORE any 3rd-party API calls
+      if (chain === "base") {
+        const [earlyRpcIsCtx, earlyDeployer] = await Promise.all([
+          rpcIsContract(address as string),
+          rpcGetDeployer(address as string),
+        ]);
+
+        if (earlyRpcIsCtx) {
+          const addrLower = (address as string).toLowerCase();
+          const deployerLower = (earlyDeployer || "").toLowerCase();
+
+          let fastPlatform = PLATFORM_LOCKERS[addrLower] || PLATFORM_DEPLOYERS[addrLower]
+            || PLATFORM_LOCKERS[deployerLower] || PLATFORM_DEPLOYERS[deployerLower] || null;
+
+          if (!fastPlatform && earlyDeployer) {
+            const deployer2 = await rpcGetDeployer(earlyDeployer);
+            if (deployer2) {
+              const d2 = deployer2.toLowerCase();
+              fastPlatform = PLATFORM_DEPLOYERS[d2] || PLATFORM_LOCKERS[d2] || null;
+            }
+          }
+
+          if (fastPlatform) {
+            if (earlyDeployer) {
+              const factoryValid = await rpcIsContract(earlyDeployer);
+              console.log(`[forensics] WHITELIST HIT: ${addrLower.slice(0,10)} → ${fastPlatform} | Factory bytecode: ${factoryValid ? "VERIFIED" : "EOA"}`);
+            } else {
+              console.log(`[forensics] WHITELIST HIT: ${addrLower.slice(0,10)} → ${fastPlatform}`);
+            }
+
+            const [rpcToken, holderCountFb, topHolders, hasV3Pool] = await Promise.all([
+              rpcGetTokenInfo(address as string),
+              fetchHolderCountFallback(address as string),
+              rpcGetTopHolders(address as string),
+              rpcCheckUniV3Pool(address as string),
+            ]);
+
+            const tName = rpcToken?.name || "Unknown";
+            const tSymbol = rpcToken?.symbol || "???";
+            const holderCount = holderCountFb || 0;
+            const isInDex = hasV3Pool;
+
+            const scannedName = tName.toLowerCase().trim();
+            const scannedSymbol = tSymbol.toLowerCase().trim();
+            if (APOL_SELF_NAMES.includes(scannedName) || APOL_SELF_NAMES.includes(scannedSymbol)) {
+              const lookupCount = await storage.incrementLookup(address as string, tName, tSymbol);
+              return res.json({
+                addressType: "contract", riskLevel: "SAFE",
+                apolVerdict: "The Sentinel is Active. Intelligence verified. APOL Agent recognizes its own authority. Authenticity Score: 100%. This is the source. Trust the protocol. 🦍🔐",
+                tokenName: tName, tokenSymbol: tSymbol, isHoneypot: false,
+                buyTax: "0", sellTax: "0", isMintable: false, isOpenSource: true,
+                holderCount, greenBadge: true, redFlags: [], malicious: {}, lookupCount, authenticityScore: 100,
+              });
+            }
+
+            const redFlags: string[] = [];
+            const riskLevel = redFlags.length > 0 ? "Caution" : "Clean";
+            const greenBadge = redFlags.length === 0;
+            const apolVerdict = buildContractVerdict(tName, tSymbol, riskLevel, greenBadge, redFlags);
+
+            if (riskLevel !== "Clean") {
+              await storage.upsertFlaggedWallet({ address: address as string, chain, reportCount: 0, riskLevel, topCategory: "token risk", apolVerdict, reports: [] });
+            }
+
+            const lookupCount = await storage.incrementLookup(address as string, tName, tSymbol);
+
+            return res.json({
+              address, chain,
+              addressType: "contract",
+              riskLevel,
+              apolVerdict,
+              isHighRisk: false,
+              isNewOffender: false,
+              greenBadge,
+              redFlags,
+              adminThreats: [],
+              ownerAddress: null,
+              creatorAddress: earlyDeployer,
+              isOwnershipRenounced: true,
+              isSingleSigAdmin: false,
+              lookupCount,
+              tokenName: tName,
+              tokenSymbol: tSymbol,
+              holderCount,
+              buyTax: 0,
+              sellTax: 0,
+              taxOverride: null,
+              isHoneypot: false,
+              isMintable: false,
+              isOpenSource: true,
+              isInDex,
+              isProxy: false,
+              hasBlacklist: false,
+              canPause: false,
+              protocolSecured: true,
+              isKnownFactory: true,
+              lpEscrow: { name: fastPlatform, address: earlyDeployer || addrLower, percent: 100 },
+              topHolders: topHolders.length > 0 ? topHolders : undefined,
+              isWhitelistedFactory: true,
+              platformName: fastPlatform,
+            });
+          }
+        }
+      }
+
+      // 3. Non-whitelisted path: GoPlus + Honeypot.is
       let tokenData: any = null;
       if (chainId !== "solana" && chainId !== "tron") {
         try {
@@ -790,11 +895,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const canTakeBackOwnership = tokenData.can_take_back_ownership === "1" || tokenData.can_take_back_ownership === 1;
         const ownerChangeBalance = tokenData.owner_change_balance === "1" || tokenData.owner_change_balance === 1;
-        let holderCount = parseInt(tokenData.holder_count ?? "0");
-        if (holderCount <= 0) {
-          const fallbackCount = await fetchHolderCountFallback(address as string);
-          if (fallbackCount !== null) holderCount = fallbackCount;
-        }
+        const blockscoutHolderCount = await fetchHolderCountFallback(address as string);
+        let holderCount = blockscoutHolderCount !== null && blockscoutHolderCount > 0
+          ? blockscoutHolderCount
+          : parseInt(tokenData.holder_count ?? "0");
 
         const flag1 = (v: any) => v === "1" || v === 1 || v === true;
         const isProxy = flag1(tokenData.is_proxy);
@@ -908,13 +1012,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!lpSecure && !isProtocolEscrow) redFlags.push("LP not locked");
         if (holderCount > 0 && holderCount < 200 && !isWhitelistedFactory) redFlags.push("Low holder count");
 
-        let topHolders: { address: string; balance: string; percent: number }[] = [];
-        if (holderCount <= 0 || (tokenData.holders ?? []).length === 0) {
-          const rpcToken = await rpcGetTokenInfo(address as string);
-          topHolders = await rpcGetTopHolders(address as string, rpcToken?.decimals ?? 18);
-          if (topHolders.length > 0) {
-            console.log(`[forensics] Alchemy populated ${topHolders.length} top holders for ${(address as string).slice(0,10)}`);
-          }
+        const rpcTokenForHolders = await rpcGetTokenInfo(address as string);
+        let topHolders = await rpcGetTopHolders(address as string, rpcTokenForHolders?.decimals ?? 18);
+        if (topHolders.length > 0) {
+          console.log(`[forensics] RPC populated ${topHolders.length} top holders for ${(address as string).slice(0,10)}`);
         }
 
         const hasHoneypot = isHoneypot;

@@ -75,7 +75,7 @@ shared/
   - `0xade2...1f6f` → "ApeStore Managed" (deploys ApeStore factory + per-token lockers)
   - `0xd466...1bd3` → "Clanker v4" (deploys Clanker locker + SingletonLpLocker/MultipleLpLockerUniV3)
   - `0x97cf...0a3` → "Virtuals" (deploys Virtuals Protocol)
-  - `0xdad6...2e32` → "Virtuals" (Virtuals Vault — bonding curve)
+  - `0xdad6...2e32` → "Virtuals" (Virtuals Vault — Live on Uniswap V3)
 - **Why deployer tracing**: GoPlus never exposes factory addresses directly for V3/V4 tokens. LP holders are per-token locker contracts (e.g., SingletonLpLocker) created by platform deployer EOAs.
 - **Virtuals early override** (`isVirtualsOrigin` + `isVirtualsContract`):
   - Matches tokens created by Virtuals factory `0x0b3e...7e1b` or deployer `0x97cf...0a3`
@@ -86,31 +86,37 @@ shared/
 - **Override behavior**: When protocol match found:
   - `isSecure = true`, LP shown as "Protocol Managed"
   - Risk level forced to Clean (unless honeypot or killer tax for non-factory contracts)
-- **Tax override**: If a factory-origin token has simulated buy/sell tax > 50% (bonding curve simulation failure), tax is forced to 0 and `taxOverride` field is set to the platform name. UI/bot shows "Tax: Protocol Managed (Virtuals)" instead of the false 99%.
+- **Tax override**: If a factory-origin token has simulated buy/sell tax > 50% (Direct-to-V3 simulation failure), tax is forced to 0 and `taxOverride` field is set to the platform name. UI/bot shows "Tax: Protocol Managed (Virtuals)" instead of the false 99%.
 - **Holder count fallback**: If GoPlus returns 0 holders, falls back to Blockscout token counters API. Shows "Calculating..." instead of 0 on failure.
 - **Response fields**: `protocolSecured: true`, `isKnownFactory: true`, `holderCount`, `lpEscrow: { name, address, percent }`, `contractScan.protocolLocker`
 - **Risk hierarchy**: Honeypot or sell_tax > 20% → forced High Risk even if protocol-secured (except for Virtuals contract addresses)
 - **Bot async scanning**: All scan commands (`/scan`, `/checkwallet`, `/scanagent`, `/scanx`) use edit-message pattern — send "Analyzing..." immediately, then edit with results. 60s timeout. On edit failure, deletes loading message and sends reply.
 - **Used in**: `/api/detective/analyze`, `/api/agent/analyze` (contractScan), `/api/admin/audit`, `/api/verify/:address`, `bot.ts`
 
-## Alchemy-First Security Engine
-- **Internal forensic whitelist ALWAYS overrides GoPlus** for LP security, honeypot, and tax assessment
+## Forensic First Security Engine
+- **Architecture**: Alchemy RPC → Internal Whitelist → Blockscout → GoPlus → Honeypot.is (strict priority order for token security)
+- **Exception**: GoPlus `address_security` (malicious address check) runs first for ALL addresses — this is a wallet-level safety check, not token-specific
+- **Whitelisted tokens return IMMEDIATELY**: GoPlus and Honeypot.is are NEVER called for whitelisted factory tokens
+- **2-hop deployer tracing**: Blockscout traces token → deployer → deployer's deployer to match factory origins
+- **Factory bytecode verification**: Alchemy `eth_getCode` logs deployer type (contract vs EOA) — deployer EOAs are accepted by design since platform deployer EOAs (e.g., ApeStore, Clanker) are in the whitelist
 - **Whitelisted factory tokens** (matched via `PLATFORM_LOCKERS` + `PLATFORM_DEPLOYERS`):
-  - LP Status forced to "[Platform] Managed" — GoPlus LP data ignored
-  - Red flags from GoPlus (honeypot, hidden owner, blacklist, proxy, etc.) are suppressed
-  - Admin threats cleared for factory-managed contracts
-- **Virtuals override**: If factory is Virtuals, `isHoneypot` forced FALSE, risk forced to Clean/Caution (proxy-transfer false positives from GoPlus)
-- **ApeStore/Flaunch listing**: If Alchemy confirms Uniswap V3 pool exists (`rpcCheckUniV3Pool`), `isInDex` forced TRUE — don't wait for indexers
-- **Tax override**: Factory tokens with simulated tax > 50% → tax forced to 0% (bonding curve simulation failure)
-- **Top holders via Alchemy**: When GoPlus returns 0 holders, Blockscout holders API + Alchemy `balanceOf` calls populate top 10 holder data
+  - All data sourced from Alchemy RPC + Blockscout only
+  - `isHoneypot: false`, `protocolSecured: true`, `isKnownFactory: true`
+  - LP Status forced to "[Platform] Managed"
+  - No red flags, no admin threats
+- **Non-whitelisted tokens**: GoPlus + Honeypot.is used as before, but holder count is Blockscout-first (GoPlus fallback)
+- **Top holders always via RPC**: Blockscout holder addresses + Alchemy `balanceOf` verification runs unconditionally for ALL tokens
+- **ApeStore/Flaunch listing**: If Alchemy confirms Uniswap V3 pool exists (`rpcCheckUniV3Pool`), `isInDex` forced TRUE
+- **Tax override**: Factory tokens with simulated tax > 50% → tax forced to 0% (Direct-to-V3 simulation failure)
 - **Uniswap V3 pool detection**: Queries Base Uniswap V3 Factory (`0x3312...FDfD`) for `getPool(tokenA, WETH, fee)` across 4 fee tiers (500, 3000, 10000, 100)
+- **Bot timeout fix**: Whitelisted tokens skip GoPlus/Honeypot.is in both `directGoPlus` and `buildAgentScan`, eliminating 10-15s timeouts
 
-## Data Sources (Priority Order for Whitelisted Tokens)
-1. **Alchemy RPC** (`BASE_RPC_URL`) — Source of truth for whitelisted factory tokens. Direct `eth_call` for pool detection, balanceOf, totalSupply.
-2. **Internal Whitelist** — `PLATFORM_LOCKERS` + `PLATFORM_DEPLOYERS` override GoPlus LP/honeypot/tax
-3. **GoPlus API** — Token security data (used for non-whitelisted tokens only for LP/honeypot/tax)
-4. **Blockscout API** — Contract verification, deployer tracing (2-hop), holder counts, top holder addresses
-5. **Honeypot.is** — Secondary honeypot simulation (overridden for whitelisted factories)
+## Data Sources (Priority Order)
+1. **Alchemy RPC** (`BASE_RPC_URL`) — `eth_call` for contract detection, token info, balanceOf, totalSupply, pool detection, bytecode verification
+2. **Internal Whitelist** — `PLATFORM_LOCKERS` + `PLATFORM_DEPLOYERS` maps (both routes.ts and bot.ts maintain copies)
+3. **Blockscout API** — Deployer tracing (2-hop), holder counts (PRIMARY), top holder addresses
+4. **GoPlus API** — Token security data (non-whitelisted tokens only); wallet `address_security` checks (always)
+5. **Honeypot.is** — Secondary honeypot simulation (non-whitelisted tokens only)
 6. **DexScreener** — Price, market cap, liquidity data
 
 ## Secrets

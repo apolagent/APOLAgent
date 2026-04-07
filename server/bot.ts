@@ -129,6 +129,84 @@ function botGetPlatformName(creatorAddress: string, lpHolders: any[]): string | 
   return null;
 }
 
+// ─── RPC token info + holder helpers ─────────────────────────────────────────
+
+function botDecodeString(hex: string): string {
+  if (!hex || hex === "0x" || hex.length < 130) return "";
+  try {
+    const offsetVal = parseInt(hex.slice(2, 66), 16);
+    const start = 2 + offsetVal * 2;
+    const lenHex = hex.slice(start, start + 64);
+    const len = parseInt(lenHex, 16);
+    const strHex = hex.slice(start + 64, start + 64 + len * 2);
+    const bytes = Buffer.from(strHex, "hex");
+    return bytes.toString("utf8").replace(/\0/g, "");
+  } catch { return ""; }
+}
+
+function botDecodeUint(hex: string): string {
+  if (!hex || hex === "0x") return "0";
+  try { return BigInt(hex).toString(); } catch { return "0"; }
+}
+
+async function botGetTokenInfo(address: string): Promise<{ name: string; symbol: string; totalSupply: string; decimals: number } | null> {
+  if (!BOT_RPC_URL) return null;
+  try {
+    const [nameHex, symbolHex, supplyHex, decimalsHex] = await Promise.all([
+      botRpcCall("eth_call", [{ to: address, data: "0x06fdde03" }, "latest"]),
+      botRpcCall("eth_call", [{ to: address, data: "0x95d89b41" }, "latest"]),
+      botRpcCall("eth_call", [{ to: address, data: "0x18160ddd" }, "latest"]),
+      botRpcCall("eth_call", [{ to: address, data: "0x313ce567" }, "latest"]),
+    ]);
+    const name = botDecodeString(nameHex);
+    const symbol = botDecodeString(symbolHex);
+    if (!name && !symbol) return null;
+    const totalSupply = botDecodeUint(supplyHex);
+    const decimals = decimalsHex ? parseInt(decimalsHex, 16) : 18;
+    return { name, symbol, totalSupply, decimals };
+  } catch { return null; }
+}
+
+async function botFetchHolderCount(address: string): Promise<number | null> {
+  try {
+    const r = await fetch(
+      `https://base.blockscout.com/api/v2/tokens/${encodeURIComponent(address)}/counters`,
+      { signal: AbortSignal.timeout(6_000) },
+    );
+    if (!r.ok) return null;
+    const data = await r.json() as any;
+    const count = parseInt(data?.token_holders_count ?? "0");
+    return count > 0 ? count : null;
+  } catch { return null; }
+}
+
+async function botGetTopHolders(tokenAddress: string, decimals: number = 18): Promise<{ address: string; balance: string; percent: number }[]> {
+  if (!BOT_RPC_URL) return [];
+  try {
+    const r = await fetch(
+      `https://base.blockscout.com/api/v2/tokens/${encodeURIComponent(tokenAddress)}/holders?limit=5`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!r.ok) return [];
+    const d = await r.json() as any;
+    const items: any[] = d?.items ?? [];
+    const supplyHex = await botRpcCall("eth_call", [{ to: tokenAddress, data: "0x18160ddd" }, "latest"]);
+    const totalSupply = supplyHex ? BigInt(supplyHex) : BigInt(0);
+    const holders: { address: string; balance: string; percent: number }[] = [];
+    for (const item of items.slice(0, 5)) {
+      const addr = item?.address?.hash ?? "";
+      if (!addr) continue;
+      const padAddr = addr.replace("0x", "").padStart(64, "0");
+      const balHex = await botRpcCall("eth_call", [{ to: tokenAddress, data: `0x70a08231${padAddr}` }, "latest"]);
+      const bal = balHex ? BigInt(balHex) : BigInt(0);
+      const pct = totalSupply > 0 ? Number((bal * BigInt(10000)) / totalSupply) / 100 : 0;
+      const balStr = (Number(bal) / Math.pow(10, decimals)).toLocaleString("en-US", { maximumFractionDigits: 2 });
+      holders.push({ address: addr, balance: balStr, percent: pct });
+    }
+    return holders;
+  } catch { return []; }
+}
+
 // ─── Master timeout helper ───────────────────────────────────────────────────
 
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -142,6 +220,64 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 
 async function directGoPlus(address: string): Promise<any> {
   try {
+    const addrLower = address.toLowerCase();
+
+    let fastPlatform: string | null = BOT_PLATFORM_LOCKERS[addrLower] || BOT_PLATFORM_DEPLOYERS[addrLower] || null;
+
+    if (!fastPlatform) {
+      try {
+        const bsRes = await fetch(`https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(address)}`, { signal: AbortSignal.timeout(6000) });
+        if (bsRes.ok) {
+          const bsData = await bsRes.json() as any;
+          const deployer = (bsData?.creator_address_hash || "").toLowerCase();
+          if (deployer) {
+            fastPlatform = BOT_PLATFORM_DEPLOYERS[deployer] || BOT_PLATFORM_LOCKERS[deployer] || null;
+            if (!fastPlatform) {
+              try {
+                const bs2 = await fetch(`https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(deployer)}`, { signal: AbortSignal.timeout(5000) });
+                if (bs2.ok) {
+                  const d2 = await bs2.json() as any;
+                  const deployer2 = (d2?.creator_address_hash || "").toLowerCase();
+                  if (deployer2) fastPlatform = BOT_PLATFORM_DEPLOYERS[deployer2] || BOT_PLATFORM_LOCKERS[deployer2] || null;
+                }
+              } catch {}
+            }
+          }
+        }
+      } catch {}
+    }
+
+    if (fastPlatform) {
+      console.log(`[bot] WHITELIST HIT: ${address.slice(0,10)} → ${fastPlatform} — skipping GoPlus/Honeypot.is`);
+
+      const [tokenInfo, hasV3Pool, holderCountFb] = await Promise.all([
+        botGetTokenInfo(address),
+        botCheckUniV3Pool(address),
+        botFetchHolderCount(address),
+      ]);
+
+      return {
+        riskLevel: "Clean",
+        isKnownFactory: true,
+        protocolSecured: true,
+        holderCount: holderCountFb || 0,
+        isOwnershipRenounced: true,
+        isHoneypot: false,
+        buyTax: 0,
+        sellTax: 0,
+        taxOverride: null,
+        redFlags: [],
+        adminThreats: [],
+        tokenName: tokenInfo?.name || "Unknown",
+        tokenSymbol: tokenInfo?.symbol || "???",
+        lpEscrow: { name: fastPlatform, address: addrLower, percent: 100 },
+        isHighRisk: false,
+        isInDex: hasV3Pool,
+        platformName: fastPlatform,
+        isWhitelistedFactory: true,
+      };
+    }
+
     const gpRes = await fetch(
       `https://api.gopluslabs.com/api/v1/token_security/8453?contract_addresses=${encodeURIComponent(address)}`,
       { signal: AbortSignal.timeout(15_000) }
@@ -151,19 +287,17 @@ async function directGoPlus(address: string): Promise<any> {
     const token = gpData?.result?.[address.toLowerCase()] ?? gpData?.result?.[Object.keys(gpData?.result || {})[0]] ?? null;
     if (!token) return null;
 
-    const flag = (v: any) => v === "1" || v === 1 || v === true;
+    const flagFn = (v: any) => v === "1" || v === 1 || v === true;
     const creatorLower = (token.creator_address || "").toLowerCase();
     const lpHolders: any[] = token.lp_holders ?? [];
     const platformName = botGetPlatformName(creatorLower, lpHolders);
     const isFactoryOrigin = !!platformName || ALL_BOT_FACTORY_ADDRESSES.has(creatorLower) || lpHolders.some((lp: any) => ALL_BOT_FACTORY_ADDRESSES.has((lp.address ?? "").toLowerCase()));
-    const isVirtualsFactory = platformName === "Virtuals";
-    const isApeStoreOrFlaunch = platformName === "ApeStore" || platformName === "Flaunch";
 
     let lpEscrowName: string | null = platformName;
     if (!lpEscrowName && isFactoryOrigin) lpEscrowName = "Protocol";
 
-    let isHoneypot = flag(token.is_honeypot);
-    if (isVirtualsFactory && isHoneypot) {
+    let isHoneypot = flagFn(token.is_honeypot);
+    if (platformName === "Virtuals" && isHoneypot) {
       isHoneypot = false;
       console.log(`[bot] Virtuals override: isHoneypot forced FALSE for ${address.slice(0,10)}`);
     }
@@ -179,7 +313,7 @@ async function directGoPlus(address: string): Promise<any> {
       taxOverride = lpEscrowName;
     }
 
-    let isInDex = flag(token.is_in_dex);
+    let isInDex = flagFn(token.is_in_dex);
     if (isKnownFactory && !isInDex) {
       const hasPool = await botCheckUniV3Pool(address);
       if (hasPool) {
@@ -192,28 +326,24 @@ async function directGoPlus(address: string): Promise<any> {
     if (isHoneypot && !isKnownFactory) redFlags.push("Honeypot, cannot sell");
     if (buyTax > 10) redFlags.push(`High buy tax: ${buyTax.toFixed(1)}%`);
     if (sellTax > 10) redFlags.push(`High sell tax: ${sellTax.toFixed(1)}%`);
-    if (!flag(token.is_open_source) && !isKnownFactory) redFlags.push("Contract not verified");
-    if (flag(token.hidden_owner) && !isKnownFactory) redFlags.push("Hidden owner detected");
+    if (!flagFn(token.is_open_source) && !isKnownFactory) redFlags.push("Contract not verified");
+    if (flagFn(token.hidden_owner) && !isKnownFactory) redFlags.push("Hidden owner detected");
 
     let riskLevel: string;
-    if (isVirtualsFactory) riskLevel = redFlags.length > 0 ? "Caution" : "Clean";
-    else if (isKnownFactory) riskLevel = redFlags.length > 0 ? "Caution" : "Clean";
-    else if ((isHoneypot || buyTax > 20 || sellTax > 20) && !isKnownFactory) riskLevel = "High Risk";
+    if (isKnownFactory) riskLevel = redFlags.length > 0 ? "Caution" : "Clean";
+    else if ((isHoneypot || buyTax > 20 || sellTax > 20)) riskLevel = "High Risk";
     else if (redFlags.length >= 2) riskLevel = "High Risk";
     else if (redFlags.length >= 1) riskLevel = "Caution";
     else riskLevel = "Clean";
 
-    let holderCount = parseInt(token.holder_count ?? "0");
-    if (holderCount === 0) {
-      try {
-        const bsRes = await fetch(`https://base.blockscout.com/api/v2/tokens/${encodeURIComponent(address)}/counters`, { signal: AbortSignal.timeout(6_000) });
-        if (bsRes.ok) { const bsData = await bsRes.json() as any; holderCount = parseInt(bsData?.token_holders_count ?? "0"); }
-      } catch {}
-    }
+    const bsHolderCount = await botFetchHolderCount(address);
+    let holderCount = bsHolderCount !== null && bsHolderCount > 0
+      ? bsHolderCount
+      : parseInt(token.holder_count ?? "0");
 
     return {
       riskLevel, isKnownFactory, protocolSecured: isKnownFactory, holderCount,
-      isOwnershipRenounced: flag(token.is_in_dex),
+      isOwnershipRenounced: flagFn(token.is_in_dex),
       isHoneypot, buyTax, sellTax, taxOverride, redFlags, adminThreats: [],
       tokenName: token.token_name, tokenSymbol: token.token_symbol,
       lpEscrow: isKnownFactory ? { name: lpEscrowName, address: creatorLower, percent: 100 } : null,
@@ -952,18 +1082,44 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     }
     const { address } = resolved;
 
+    let agentFastPlatform: string | null = BOT_PLATFORM_LOCKERS[address.toLowerCase()] || BOT_PLATFORM_DEPLOYERS[address.toLowerCase()] || null;
+    if (!agentFastPlatform) {
+      try {
+        const bsRes = await fetch(`https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(address)}`, { signal: AbortSignal.timeout(6000) });
+        if (bsRes.ok) {
+          const bsData = await bsRes.json() as any;
+          const deployer = (bsData?.creator_address_hash || "").toLowerCase();
+          if (deployer) {
+            agentFastPlatform = BOT_PLATFORM_DEPLOYERS[deployer] || BOT_PLATFORM_LOCKERS[deployer] || null;
+            if (!agentFastPlatform) {
+              try {
+                const bs2 = await fetch(`https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(deployer)}`, { signal: AbortSignal.timeout(5000) });
+                if (bs2.ok) {
+                  const d2 = await bs2.json() as any;
+                  const deployer2 = (d2?.creator_address_hash || "").toLowerCase();
+                  if (deployer2) agentFastPlatform = BOT_PLATFORM_DEPLOYERS[deployer2] || BOT_PLATFORM_LOCKERS[deployer2] || null;
+                }
+              } catch {}
+            }
+          }
+        }
+      } catch {}
+    }
+
     const [agGoplusResult, agDexResult] = await Promise.allSettled([
-      fetch(
-        `${GOPLUS_BASE}/token_security/${BASE_CHAIN_ID}?contract_addresses=${encodeURIComponent(address)}`,
-        { signal: AbortSignal.timeout(8_000) }
-      ).then(r => r.json()),
+      agentFastPlatform
+        ? Promise.resolve(null)
+        : fetch(
+            `${GOPLUS_BASE}/token_security/${BASE_CHAIN_ID}?contract_addresses=${encodeURIComponent(address)}`,
+            { signal: AbortSignal.timeout(8_000) }
+          ).then(r => r.json()),
       fetch(
         `https://api.dexscreener.com/latest/dex/tokens/${address}`,
         { signal: AbortSignal.timeout(8_000) }
       ).then(r => r.json()),
     ]);
 
-    const goplusData = agGoplusResult.status === "fulfilled" ? agGoplusResult.value : null;
+    const goplusData = agentFastPlatform ? null : (agGoplusResult.status === "fulfilled" ? agGoplusResult.value : null);
     const dexData    = agDexResult.status === "fulfilled" ? agDexResult.value : null;
 
     const tKey  = Object.keys(goplusData?.result ?? {})[0];
@@ -992,7 +1148,7 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
 
     const topPair = agBasePairs[0] ?? null;
 
-    if (!token && !topPair) {
+    if (!token && !topPair && !agentFastPlatform) {
       return (
         `⚠️ *AGENT NOT FOUND*\n\n` +
         `Contract \`${address}\` not found on Base Mainnet.\n` +
@@ -1000,8 +1156,13 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
       );
     }
 
-    const agentName   = resolved.name   || token?.token_name   || topPair?.baseToken?.name   || "Unknown Agent";
-    const agentSymbol = resolved.symbol || token?.token_symbol || topPair?.baseToken?.symbol || "?";
+    let agentFastTokenInfo: { name: string; symbol: string } | null = null;
+    if (agentFastPlatform && !token) {
+      const rpcInfo = await botGetTokenInfo(address);
+      if (rpcInfo) agentFastTokenInfo = rpcInfo;
+    }
+    const agentName   = resolved.name   || token?.token_name   || agentFastTokenInfo?.name   || topPair?.baseToken?.name   || "Unknown Agent";
+    const agentSymbol = resolved.symbol || token?.token_symbol || agentFastTokenInfo?.symbol || topPair?.baseToken?.symbol || "?";
 
     // ── Market data ───────────────────────────────────────────────────────────
     const liqUsd     = topPair?.liquidity?.usd ?? null;
@@ -1011,19 +1172,12 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     const totalSupply = token?.total_supply ? parseFloat(token.total_supply) / (10 ** parseInt(token.decimals ?? "18")) : null;
     const fdvRaw     = topPair?.fdv ?? null;
     const mcapFmt    = fdvRaw ? fmtUsd(fdvRaw) : fmtMcap(priceRaw, totalSupply);
-    let holderRaw  = parseInt(token?.holder_count ?? "0");
-    if (holderRaw <= 0 && address) {
-      try {
-        const hcRes = await fetch(
-          `https://base.blockscout.com/api/v2/tokens/${encodeURIComponent(address)}/counters`,
-          { signal: AbortSignal.timeout(6_000) },
-        );
-        if (hcRes.ok) {
-          const hcData = await hcRes.json() as any;
-          const fallback = parseInt(hcData?.token_holders_count ?? "0");
-          if (fallback > 0) holderRaw = fallback;
-        }
-      } catch { /* non-fatal */ }
+    let holderRaw = 0;
+    const agBsCount = await botFetchHolderCount(address);
+    if (agBsCount !== null && agBsCount > 0) {
+      holderRaw = agBsCount;
+    } else {
+      holderRaw = parseInt(token?.holder_count ?? "0");
     }
     const holderFmt  = holderRaw > 0 ? holderRaw.toLocaleString() : "Calculating...";
 
@@ -1034,7 +1188,7 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
 
     // ── Contract security flags ────────────────────────────────────────────────
     const isHoneypot      = token ? flag(token.is_honeypot)              : false;
-    const isVerified      = token ? flag(token.is_open_source)           : false;
+    const isVerified      = agentFastPlatform ? true : (token ? flag(token.is_open_source) : false);
     const isMintable      = token ? flag(token.is_mintable)              : false;
     const hasBlacklist    = token ? flag(token.is_blacklist)             : false;
     const ownerRecovery   = token ? flag(token.can_take_back_ownership)  : false;
@@ -1054,11 +1208,11 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
       .filter(h => flag(h.is_locked))
       .reduce((acc, h) => acc + parseFloat(h.percent ?? "0") * 100, 0);
 
-    let agentLpEscrowName: string | null = null;
-    let agentIsKnownFactory = false;
+    let agentLpEscrowName: string | null = agentFastPlatform;
+    let agentIsKnownFactory = !!agentFastPlatform;
 
     const agentCreatorLower = (token?.creator_address || "").toLowerCase();
-    const agentIsKnownOrigin = ALL_BOT_FACTORY_ADDRESSES.has(agentCreatorLower) || lpHolders.some(lp => ALL_BOT_FACTORY_ADDRESSES.has((lp.address ?? "").toLowerCase()));
+    const agentIsKnownOrigin = agentIsKnownFactory || ALL_BOT_FACTORY_ADDRESSES.has(agentCreatorLower) || lpHolders.some(lp => ALL_BOT_FACTORY_ADDRESSES.has((lp.address ?? "").toLowerCase()));
 
     if (agentIsKnownOrigin && BOT_PLATFORM_LOCKERS[agentCreatorLower]) {
       agentLpEscrowName = BOT_PLATFORM_LOCKERS[agentCreatorLower];
@@ -1166,7 +1320,7 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     // ── Final verdict ─────────────────────────────────────────────────────────
     const criticalCount  = [promptRisk, exfilRisk].filter(r => r === "CRITICAL").length;
     const highCount      = [promptRisk, exfilRisk].filter(r => r === "HIGH").length;
-    const noContract     = !token;
+    const noContract     = !token && !agentFastPlatform;
     const tinyLiquidity  = liqUsd !== null && liqUsd < 5_000;
 
     let verdict: string;
