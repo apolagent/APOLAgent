@@ -147,13 +147,14 @@ async function rpcCheckUniV3Pool(tokenAddress: string): Promise<boolean> {
   const padA = addrA.replace("0x", "").padStart(64, "0");
   const padB = addrB.replace("0x", "").padStart(64, "0");
 
-  for (const fee of FEE_TIERS) {
-    const padFee = fee.toString(16).padStart(64, "0");
-    const data = `${GET_POOL_SIG}${padA}${padB}${padFee}`;
-    const result = await rpcCall("eth_call", [{ to: UNISWAP_V3_FACTORY, data }, "latest"]);
-    if (result && result !== "0x" + "0".repeat(64) && result !== "0x") return true;
-  }
-  return false;
+  const results = await Promise.all(
+    FEE_TIERS.map(fee => {
+      const padFee = fee.toString(16).padStart(64, "0");
+      const data = `${GET_POOL_SIG}${padA}${padB}${padFee}`;
+      return rpcCall("eth_call", [{ to: UNISWAP_V3_FACTORY, data }, "latest"]);
+    })
+  );
+  return results.some(r => r && r !== "0x" + "0".repeat(64) && r !== "0x");
 }
 
 async function rpcGetTopHolders(tokenAddress: string, decimals: number = 18): Promise<{ address: string; balance: string; percent: number }[]> {
@@ -171,13 +172,18 @@ async function rpcGetTopHolders(tokenAddress: string, decimals: number = 18): Pr
     const supplyHex = await rpcCall("eth_call", [{ to: tokenAddress, data: SUPPLY_SIG }, "latest"]);
     const totalSupply = supplyHex ? BigInt(supplyHex) : BigInt(0);
 
+    const validItems = items.slice(0, 10).filter((item: any) => !!item?.address?.hash);
+    const balHexes = await Promise.all(
+      validItems.map((item: any) => {
+        const addr = item.address.hash;
+        const padAddr = addr.replace("0x", "").padStart(64, "0");
+        return rpcCall("eth_call", [{ to: tokenAddress, data: `${BALANCE_SIG}${padAddr}` }, "latest"]);
+      })
+    );
     const holders: { address: string; balance: string; percent: number }[] = [];
-    for (const item of items.slice(0, 10)) {
-      const addr = item?.address?.hash ?? "";
-      if (!addr) continue;
-      const padAddr = addr.replace("0x", "").padStart(64, "0");
-      const balHex = await rpcCall("eth_call", [{ to: tokenAddress, data: `${BALANCE_SIG}${padAddr}` }, "latest"]);
-      const bal = balHex ? BigInt(balHex) : BigInt(0);
+    for (let i = 0; i < validItems.length; i++) {
+      const addr = validItems[i].address.hash;
+      const bal = balHexes[i] ? BigInt(balHexes[i]) : BigInt(0);
       const pct = totalSupply > 0 ? Number((bal * BigInt(10000)) / totalSupply) / 100 : 0;
       const balStr = (Number(bal) / Math.pow(10, decimals)).toLocaleString("en-US", { maximumFractionDigits: 2 });
       holders.push({ address: addr, balance: balStr, percent: pct });
@@ -277,90 +283,63 @@ async function resolveProtocolLocker(
     }
   }
 
-  for (const lp of lpHolders.slice(0, 3)) {
-    const addr = (lp.address ?? "").toLowerCase();
-    const pct = parseFloat(lp.percent ?? "0") * 100;
-    if (!addr || BURN_SET.has(addr)) continue;
-    try {
-      const r = await fetch(
-        `https://base.blockscout.com/api/v2/addresses/${addr}`,
-        { signal: AbortSignal.timeout(5000) },
-      );
-      if (!r.ok) { console.log(`[forensics] Blockscout ${r.status} for LP ${addr.slice(0,10)}`); continue; }
-      const data = await r.json() as any;
-      const deployerAddr = (data.creator_address_hash || "").toLowerCase();
-      if (deployerAddr && PLATFORM_DEPLOYERS[deployerAddr]) {
-        console.log(`[forensics] LP ${addr.slice(0,10)} → deployer ${deployerAddr.slice(0,10)} → ${PLATFORM_DEPLOYERS[deployerAddr]}`);
-        return { name: PLATFORM_DEPLOYERS[deployerAddr], address: addr, percent: pct };
-      }
-    } catch (e: any) { console.log(`[forensics] Blockscout timeout/error for LP ${addr.slice(0,10)}: ${e.message ?? e}`); }
-  }
-
-  if (creatorLower && !BURN_SET.has(creatorLower)) {
-    try {
-      const r = await fetch(
-        `https://base.blockscout.com/api/v2/addresses/${creatorLower}`,
-        { signal: AbortSignal.timeout(5000) },
-      );
-      if (r.ok) {
-        const data = await r.json() as any;
-        const deployerAddr = (data.creator_address_hash || "").toLowerCase();
-        if (deployerAddr && PLATFORM_DEPLOYERS[deployerAddr]) {
-          console.log(`[forensics] Creator ${creatorLower.slice(0,10)} → deployer ${deployerAddr.slice(0,10)} → ${PLATFORM_DEPLOYERS[deployerAddr]}`);
-          return { name: PLATFORM_DEPLOYERS[deployerAddr], address: creatorLower, percent: 100 };
-        }
-        if (deployerAddr && deployerAddr !== creatorLower) {
-          try {
-            const r2 = await fetch(
-              `https://base.blockscout.com/api/v2/addresses/${deployerAddr}`,
-              { signal: AbortSignal.timeout(5000) },
-            );
-            if (r2.ok) {
-              const data2 = await r2.json() as any;
-              const deployer2 = (data2.creator_address_hash || "").toLowerCase();
-              if (deployer2 && PLATFORM_DEPLOYERS[deployer2]) {
-                console.log(`[forensics] Creator ${creatorLower.slice(0,10)} → ${deployerAddr.slice(0,10)} → ${deployer2.slice(0,10)} → ${PLATFORM_DEPLOYERS[deployer2]}`);
-                return { name: PLATFORM_DEPLOYERS[deployer2], address: creatorLower, percent: 100 };
-              }
-            }
-          } catch (e2: any) { console.log(`[forensics] Blockscout hop2 error: ${e2.message ?? e2}`); }
-        }
-      }
-    } catch (e: any) { console.log(`[forensics] Blockscout timeout/error for creator ${creatorLower.slice(0,10)}: ${e.message ?? e}`); }
-  }
+  const lpCandidates = lpHolders.slice(0, 3)
+    .map(lp => ({ addr: (lp.address ?? "").toLowerCase(), pct: parseFloat(lp.percent ?? "0") * 100 }))
+    .filter(c => c.addr && !BURN_SET.has(c.addr));
 
   const tokenLower = (tokenAddress || "").toLowerCase();
-  if (tokenLower && !BURN_SET.has(tokenLower)) {
-    try {
-      const r = await fetch(
-        `https://base.blockscout.com/api/v2/addresses/${tokenLower}`,
-        { signal: AbortSignal.timeout(5000) },
-      );
-      if (r.ok) {
-        const data = await r.json() as any;
-        const contractDeployer = (data.creator_address_hash || "").toLowerCase();
-        if (contractDeployer && PLATFORM_DEPLOYERS[contractDeployer]) {
-          console.log(`[forensics] Token ${tokenLower.slice(0,10)} → Blockscout deployer ${contractDeployer.slice(0,10)} → ${PLATFORM_DEPLOYERS[contractDeployer]}`);
-          return { name: PLATFORM_DEPLOYERS[contractDeployer], address: tokenLower, percent: 100 };
-        }
-        if (contractDeployer && contractDeployer !== creatorLower) {
-          try {
-            const r2 = await fetch(
-              `https://base.blockscout.com/api/v2/addresses/${contractDeployer}`,
-              { signal: AbortSignal.timeout(5000) },
-            );
-            if (r2.ok) {
-              const data2 = await r2.json() as any;
-              const deployer2 = (data2.creator_address_hash || "").toLowerCase();
-              if (deployer2 && PLATFORM_DEPLOYERS[deployer2]) {
-                console.log(`[forensics] Token ${tokenLower.slice(0,10)} → ${contractDeployer.slice(0,10)} → ${deployer2.slice(0,10)} → ${PLATFORM_DEPLOYERS[deployer2]}`);
-                return { name: PLATFORM_DEPLOYERS[deployer2], address: tokenLower, percent: 100 };
-              }
-            }
-          } catch (e2: any) { console.log(`[forensics] Blockscout token hop2 error: ${e2.message ?? e2}`); }
-        }
+
+  const bsFetchTargets: { addr: string; pct: number; tag: string }[] = [];
+  for (const c of lpCandidates) bsFetchTargets.push({ addr: c.addr, pct: c.pct, tag: "lp" });
+  if (creatorLower && !BURN_SET.has(creatorLower)) bsFetchTargets.push({ addr: creatorLower, pct: 100, tag: "creator" });
+  if (tokenLower && !BURN_SET.has(tokenLower)) bsFetchTargets.push({ addr: tokenLower, pct: 100, tag: "token" });
+
+  const bsResults = await Promise.allSettled(
+    bsFetchTargets.map(t =>
+      fetch(`https://base.blockscout.com/api/v2/addresses/${t.addr}`, { signal: AbortSignal.timeout(5000) })
+        .then(r => r.ok ? r.json() as Promise<any> : null)
+    )
+  );
+
+  for (let i = 0; i < bsFetchTargets.length; i++) {
+    const t = bsFetchTargets[i];
+    const data = bsResults[i].status === "fulfilled" ? bsResults[i].value : null;
+    if (!data) continue;
+    const deployerAddr = (data.creator_address_hash || "").toLowerCase();
+    if (deployerAddr && PLATFORM_DEPLOYERS[deployerAddr]) {
+      console.log(`[forensics] ${t.tag} ${t.addr.slice(0,10)} → deployer ${deployerAddr.slice(0,10)} → ${PLATFORM_DEPLOYERS[deployerAddr]}`);
+      return { name: PLATFORM_DEPLOYERS[deployerAddr], address: t.addr, percent: t.pct };
+    }
+  }
+
+  const hop2Targets: { deployerAddr: string; parentAddr: string; pct: number; tag: string }[] = [];
+  for (let i = 0; i < bsFetchTargets.length; i++) {
+    const t = bsFetchTargets[i];
+    const data = bsResults[i].status === "fulfilled" ? bsResults[i].value : null;
+    if (!data) continue;
+    const deployerAddr = (data.creator_address_hash || "").toLowerCase();
+    if (deployerAddr && deployerAddr !== t.addr && deployerAddr !== creatorLower) {
+      hop2Targets.push({ deployerAddr, parentAddr: t.addr, pct: t.pct, tag: t.tag });
+    }
+  }
+
+  if (hop2Targets.length > 0) {
+    const hop2Results = await Promise.allSettled(
+      hop2Targets.map(h =>
+        fetch(`https://base.blockscout.com/api/v2/addresses/${h.deployerAddr}`, { signal: AbortSignal.timeout(5000) })
+          .then(r => r.ok ? r.json() as Promise<any> : null)
+      )
+    );
+    for (let i = 0; i < hop2Targets.length; i++) {
+      const h = hop2Targets[i];
+      const data2 = hop2Results[i].status === "fulfilled" ? hop2Results[i].value : null;
+      if (!data2) continue;
+      const deployer2 = (data2.creator_address_hash || "").toLowerCase();
+      if (deployer2 && PLATFORM_DEPLOYERS[deployer2]) {
+        console.log(`[forensics] ${h.tag} ${h.parentAddr.slice(0,10)} → ${h.deployerAddr.slice(0,10)} → ${deployer2.slice(0,10)} → ${PLATFORM_DEPLOYERS[deployer2]}`);
+        return { name: PLATFORM_DEPLOYERS[deployer2], address: h.parentAddr, percent: h.pct };
       }
-    } catch (e: any) { console.log(`[forensics] Blockscout timeout/error for token ${tokenLower.slice(0,10)}: ${e.message ?? e}`); }
+    }
   }
 
   return null;

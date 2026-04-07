@@ -108,13 +108,14 @@ async function botCheckUniV3Pool(tokenAddress: string): Promise<boolean> {
   const addrB = tokenAddress.toLowerCase() < WETH_BASE.toLowerCase() ? WETH_BASE : tokenAddress;
   const padA = addrA.replace("0x", "").padStart(64, "0");
   const padB = addrB.replace("0x", "").padStart(64, "0");
-  for (const fee of FEE_TIERS) {
-    const padFee = fee.toString(16).padStart(64, "0");
-    const data = `${GET_POOL_SIG}${padA}${padB}${padFee}`;
-    const result = await botRpcCall("eth_call", [{ to: UNISWAP_V3_FACTORY, data }, "latest"]);
-    if (result && result !== "0x" + "0".repeat(64) && result !== "0x") return true;
-  }
-  return false;
+  const results = await Promise.all(
+    FEE_TIERS.map(fee => {
+      const padFee = fee.toString(16).padStart(64, "0");
+      const data = `${GET_POOL_SIG}${padA}${padB}${padFee}`;
+      return botRpcCall("eth_call", [{ to: UNISWAP_V3_FACTORY, data }, "latest"]);
+    })
+  );
+  return results.some(r => r && r !== "0x" + "0".repeat(64) && r !== "0x");
 }
 
 function botGetPlatformName(creatorAddress: string, lpHolders: any[]): string | null {
@@ -192,13 +193,18 @@ async function botGetTopHolders(tokenAddress: string, decimals: number = 18): Pr
     const items: any[] = d?.items ?? [];
     const supplyHex = await botRpcCall("eth_call", [{ to: tokenAddress, data: "0x18160ddd" }, "latest"]);
     const totalSupply = supplyHex ? BigInt(supplyHex) : BigInt(0);
+    const validItems = items.slice(0, 5).filter((item: any) => !!item?.address?.hash);
+    const balHexes = await Promise.all(
+      validItems.map((item: any) => {
+        const addr = item.address.hash;
+        const padAddr = addr.replace("0x", "").padStart(64, "0");
+        return botRpcCall("eth_call", [{ to: tokenAddress, data: `0x70a08231${padAddr}` }, "latest"]);
+      })
+    );
     const holders: { address: string; balance: string; percent: number }[] = [];
-    for (const item of items.slice(0, 5)) {
-      const addr = item?.address?.hash ?? "";
-      if (!addr) continue;
-      const padAddr = addr.replace("0x", "").padStart(64, "0");
-      const balHex = await botRpcCall("eth_call", [{ to: tokenAddress, data: `0x70a08231${padAddr}` }, "latest"]);
-      const bal = balHex ? BigInt(balHex) : BigInt(0);
+    for (let i = 0; i < validItems.length; i++) {
+      const addr = validItems[i].address.hash;
+      const bal = balHexes[i] ? BigInt(balHexes[i]) : BigInt(0);
       const pct = totalSupply > 0 ? Number((bal * BigInt(10000)) / totalSupply) / 100 : 0;
       const balStr = (Number(bal) / Math.pow(10, decimals)).toLocaleString("en-US", { maximumFractionDigits: 2 });
       holders.push({ address: addr, balance: balStr, percent: pct });
@@ -1829,7 +1835,7 @@ export function createBot(): Telegraf | null {
           botGetTokenInfo(address),
         ]);
         const elapsed = Date.now() - t0;
-        if (elapsed < 2000 && hasV3Pool && tokenInfo && loadingMsg) {
+        if (elapsed < 4000 && hasV3Pool && tokenInfo && loadingMsg) {
           const quickMsg =
             `🔍 *APOL AGENT — QUICK SCAN*\n\n` +
             `📍 \`${shortAddr(address)}\`\n` +
