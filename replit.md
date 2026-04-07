@@ -93,23 +93,26 @@ shared/
 - **Bot async scanning**: All scan commands (`/scan`, `/checkwallet`, `/scanagent`, `/scanx`) use edit-message pattern — send "Analyzing..." immediately, then edit with results. 60s timeout. On edit failure, deletes loading message and sends reply.
 - **Used in**: `/api/detective/analyze`, `/api/agent/analyze` (contractScan), `/api/admin/audit`, `/api/verify/:address`, `bot.ts`
 
-## Forensic First Security Engine
-- **Architecture**: Alchemy RPC → Internal Whitelist → Blockscout → GoPlus → Honeypot.is (strict priority order for token security)
-- **Exception**: GoPlus `address_security` (malicious address check) runs first for ALL addresses — this is a wallet-level safety check, not token-specific
-- **Whitelisted tokens return IMMEDIATELY**: GoPlus and Honeypot.is are NEVER called for whitelisted factory tokens
+## Alchemy-First Security Engine
+- **Architecture**: Alchemy RPC (V3 pool + bytecode + whitelist) → Blockscout (deployer trace + holders) → GoPlus → Honeypot.is
+- **Alchemy is the FIRST call**: For ALL Base scans, Alchemy `eth_getCode`, `rpcGetDeployer`, and `rpcCheckUniV3Pool` run in parallel as the very first step, before any whitelist check or third-party API
+- **Live Reporting**: If Alchemy finds a Uniswap V3 pool → `liveStatus: "Live (Direct-to-V3) ✅"` is set IMMEDIATELY, before Blockscout or GoPlus
+- **Two distinct status lines in all responses**:
+  - `liveStatus`: "Live (Direct-to-V3) ✅" (proves liquidity exists via Alchemy) — or `null` if no pool
+  - `lpStatus`: "[Platform Name] Managed ✅" (proves security via Alchemy Whitelist) — or "Secured ✅"/"Unlocked ⚠️"
+- **Whitelist Supremacy**: If Alchemy `getCode` + deployer match whitelist → INSTANTLY return Clean + Protocol Managed. GoPlus/Honeypot.is NEVER called for whitelisted tokens
+- **Holder count fallback with Alchemy balanceOf**: If Blockscout returns 0 holders for whitelisted token, Alchemy `balanceOf` is called for top 5 addresses. If balances exist → "Scanning (High Activity)". If no activity → "Awaiting Indexer"
 - **2-hop deployer tracing**: Blockscout traces token → deployer → deployer's deployer to match factory origins
-- **Factory bytecode verification**: Alchemy `eth_getCode` logs deployer type (contract vs EOA) — deployer EOAs are accepted by design since platform deployer EOAs (e.g., ApeStore, Clanker) are in the whitelist
+- **Factory bytecode verification**: Alchemy `eth_getCode` logs deployer type (contract vs EOA)
 - **Whitelisted factory tokens** (matched via `PLATFORM_LOCKERS` + `PLATFORM_DEPLOYERS`):
   - All data sourced from Alchemy RPC + Blockscout only
   - `isHoneypot: false`, `protocolSecured: true`, `isKnownFactory: true`
-  - LP Status forced to "[Platform] Managed"
+  - LP Status forced to "[Platform] Managed ✅"
   - No red flags, no admin threats
-- **Non-whitelisted tokens**: GoPlus + Honeypot.is used as before, but holder count is Blockscout-first (GoPlus fallback)
-- **Top holders always via RPC**: Blockscout holder addresses + Alchemy `balanceOf` verification runs unconditionally for ALL tokens
-- **ApeStore/Flaunch listing**: If Alchemy confirms Uniswap V3 pool exists (`rpcCheckUniV3Pool`), `isInDex` forced TRUE
-- **Tax override**: Factory tokens with simulated tax > 50% → tax forced to 0% (Direct-to-V3 simulation failure)
-- **Uniswap V3 pool detection**: Queries Base Uniswap V3 Factory (`0x3312...FDfD`) for `getPool(tokenA, WETH, fee)` across 4 fee tiers (500, 3000, 10000, 100)
-- **Bot timeout fix**: Whitelisted tokens skip GoPlus/Honeypot.is in both `directGoPlus` and `buildAgentScan`, eliminating 10-15s timeouts
+- **Non-whitelisted tokens**: GoPlus + Honeypot.is used, but V3 pool check still runs via Alchemy; holder count is Blockscout-first
+- **Uniswap V3 pool detection**: Queries Base V3 Factory (`0x3312...FDfD`) for `getPool(tokenA, WETH, fee)` across 4 fee tiers (500, 3000, 10000, 100)
+- **Bot async pre-check**: `/scan` command sends "🔍 Analyzing..." immediately, fires Alchemy V3+tokenInfo pre-check as fire-and-forget. If Alchemy completes in <2s, updates the loading message with quick "Live (Direct-to-V3)" status while full scan continues
+- **Tax override**: Factory tokens with simulated tax > 50% → tax forced to 0%
 
 ## Data Sources (Priority Order)
 1. **Alchemy RPC** (`BASE_RPC_URL`) — `eth_call` for contract detection, token info, balanceOf, totalSupply, pool detection, bytecode verification

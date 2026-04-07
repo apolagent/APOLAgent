@@ -78,6 +78,10 @@ type DetectiveResult = {
   protocolSecured?: boolean;
   isKnownFactory?: boolean;
   lpEscrow?: { name: string; address: string; percent: number } | null;
+  liveStatus?: string | null;
+  lpStatus?: string | null;
+  holderCountLabel?: string;
+  platformName?: string | null;
 };
 
 type TestResult = { scored: boolean; score: number; maxScore: number; label: string; detail: string; timingPattern?: string[]; isContract?: boolean };
@@ -891,7 +895,7 @@ export default function AgentScanner() {
                 {checkResult.addressType === "contract" ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                     {(checkResult.tokenName || checkResult.tokenSymbol) && (
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace" }}>
                         <span style={{ color: "rgba(255,255,255,0.5)", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700 }}>Token</span>
                         <span style={{ color: "#fff", fontWeight: 700 }}>
                           {checkResult.tokenName}
@@ -899,6 +903,23 @@ export default function AgentScanner() {
                         </span>
                         {checkResult.isInDex && (
                           <span style={{ fontSize: "10px", padding: "2px 8px", border: `1px solid rgba(0,255,0,0.3)`, color: G, fontWeight: 700, letterSpacing: "0.05em" }}>DEX LISTED</span>
+                        )}
+                      </div>
+                    )}
+
+                    {(checkResult.liveStatus || checkResult.lpStatus) && (
+                      <div data-testid="div-alchemy-status" style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "12px 16px", border: `1px solid rgba(0,255,0,0.2)`, background: "rgba(0,255,0,0.03)" }}>
+                        {checkResult.liveStatus && (
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace" }}>
+                            <span style={{ color: "rgba(255,255,255,0.5)", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700 }}>Status</span>
+                            <span data-testid="text-live-status" style={{ color: G, fontWeight: 700 }}>{checkResult.liveStatus}</span>
+                          </div>
+                        )}
+                        {checkResult.lpStatus && (
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace" }}>
+                            <span style={{ color: "rgba(255,255,255,0.5)", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700 }}>LP Status</span>
+                            <span data-testid="text-lp-status" style={{ color: G, fontWeight: 700 }}>{checkResult.lpStatus}</span>
+                          </div>
                         )}
                       </div>
                     )}

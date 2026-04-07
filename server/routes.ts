@@ -657,12 +657,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         malicious = j.result || {};
       } catch { /* non-fatal */ }
 
-      // 2. FORENSIC FIRST: Check internal whitelist BEFORE any 3rd-party API calls
+      // 2. ALCHEMY-FIRST: Alchemy RPC is the FIRST call for EVERY scan on Base
       if (chain === "base") {
-        const [earlyRpcIsCtx, earlyDeployer] = await Promise.all([
+        const alchemyT0 = Date.now();
+        const [earlyRpcIsCtx, earlyDeployer, hasV3Pool] = await Promise.all([
           rpcIsContract(address as string),
           rpcGetDeployer(address as string),
+          rpcCheckUniV3Pool(address as string),
         ]);
+        const liveStatus = hasV3Pool ? "Live (Direct-to-V3) ✅" : null;
+        console.log(`[alchemy-first] V3 pool check: ${hasV3Pool ? "FOUND" : "NONE"} for ${(address as string).slice(0,10)} in ${Date.now() - alchemyT0}ms`);
 
         if (earlyRpcIsCtx) {
           const addrLower = (address as string).toLowerCase();
@@ -687,19 +691,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
               console.log(`[forensics] WHITELIST HIT: ${addrLower.slice(0,10)} → ${fastPlatform}`);
             }
 
-            const [rpcToken, holderCountFb, topHolders, hasV3Pool] = await Promise.all([
+            const [rpcToken, holderCountFb, topHolders] = await Promise.all([
               rpcGetTokenInfo(address as string),
               fetchHolderCountFallback(address as string),
               rpcGetTopHolders(address as string),
-              rpcCheckUniV3Pool(address as string),
             ]);
 
             const tName = rpcToken?.name || "Unknown";
             const tSymbol = rpcToken?.symbol || "???";
-            const holderCount = holderCountFb !== null && holderCountFb > 0 ? holderCountFb : 0;
-            const holderCountLabel = holderCount > 0
-              ? holderCount.toLocaleString()
-              : "Scanning (High Activity)";
+            let holderCount = holderCountFb !== null && holderCountFb > 0 ? holderCountFb : 0;
+            let holderCountLabel: string;
+
+            if (holderCount > 0) {
+              holderCountLabel = holderCount.toLocaleString();
+            } else {
+              const BALANCE_SIG = "0x70a08231";
+              const TOP_ADDRS = [
+                "0x0000000000000000000000000000000000000001",
+                earlyDeployer || addrLower,
+                "0x4200000000000000000000000000000000000006",
+                addrLower,
+                "0x33128a8fC17869897dcE68Ed026d694621f6FDfD",
+              ];
+              let hasActivity = false;
+              for (const chkAddr of TOP_ADDRS) {
+                if (!chkAddr) continue;
+                const padAddr = chkAddr.replace("0x", "").toLowerCase().padStart(64, "0");
+                const balHex = await rpcCall("eth_call", [{ to: address, data: `${BALANCE_SIG}${padAddr}` }, "latest"]);
+                if (balHex && balHex !== "0x" && balHex !== "0x" + "0".repeat(64)) {
+                  const bal = BigInt(balHex);
+                  if (bal > BigInt(0)) { hasActivity = true; break; }
+                }
+              }
+              holderCountLabel = hasActivity ? "Scanning (High Activity)" : "Awaiting Indexer";
+              console.log(`[alchemy-first] Blockscout returned 0 holders for ${addrLower.slice(0,10)} — Alchemy balanceOf activity: ${hasActivity}`);
+            }
+
             const isInDex = hasV3Pool;
 
             const scannedName = tName.toLowerCase().trim();
@@ -712,6 +739,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 tokenName: tName, tokenSymbol: tSymbol, isHoneypot: false,
                 buyTax: "0", sellTax: "0", isMintable: false, isOpenSource: true,
                 holderCount, holderCountLabel, greenBadge: true, redFlags: [], malicious: {}, lookupCount, authenticityScore: 100,
+                liveStatus,
+                lpStatus: `${fastPlatform} Managed ✅`,
               });
             }
 
@@ -761,6 +790,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               topHolders: topHolders.length > 0 ? topHolders : undefined,
               isWhitelistedFactory: true,
               platformName: fastPlatform,
+              liveStatus,
+              lpStatus: `${fastPlatform} Managed ✅`,
             });
           }
         }
@@ -861,6 +892,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           malicious: {},
           lookupCount,
           authenticityScore: 100,
+          liveStatus: null,
+          lpStatus: null,
         });
       }
 
@@ -887,10 +920,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const isOpenSource = tokenData.is_open_source === "1" || tokenData.is_open_source === 1;
         let isInDex = tokenData.is_in_dex === "1" || tokenData.is_in_dex === 1;
 
+        let nonWhitelistV3Pool = false;
         if (!isInDex && chain === "base") {
           const hasPool = await rpcCheckUniV3Pool(address as string);
           if (hasPool) {
             isInDex = true;
+            nonWhitelistV3Pool = true;
             console.log(`[forensics] Alchemy override: Uniswap V3 pool confirmed for ${(address as string).slice(0,10)} — isInDex forced TRUE`);
           }
         }
@@ -1136,6 +1171,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           topHolders: topHolders.length > 0 ? topHolders : undefined,
           isWhitelistedFactory,
           platformName: earlyPlatform || lpEscrowName || null,
+          liveStatus: (isInDex || nonWhitelistV3Pool) ? "Live (Direct-to-V3) ✅" : null,
+          lpStatus: isKnownFactory ? `${lpEscrowName || "Protocol"} Managed ✅` : (lpSecure ? "Secured ✅" : "Unlocked ⚠️"),
         });
       }
 

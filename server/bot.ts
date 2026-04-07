@@ -256,11 +256,40 @@ async function directGoPlus(address: string): Promise<any> {
         botFetchHolderCount(address),
       ]);
 
+      let holderCount = holderCountFb || 0;
+      let holderCountLabel: string;
+      if (holderCount > 0) {
+        holderCountLabel = holderCount.toLocaleString();
+      } else {
+        const BALANCE_SIG = "0x70a08231";
+        const TOP_ADDRS = [
+          "0x0000000000000000000000000000000000000001",
+          addrLower,
+          WETH_BASE,
+          UNISWAP_V3_FACTORY,
+          "0x4200000000000000000000000000000000000006",
+        ];
+        let hasActivity = false;
+        for (const chkAddr of TOP_ADDRS) {
+          const padAddr = chkAddr.replace("0x", "").toLowerCase().padStart(64, "0");
+          const balHex = await botRpcCall("eth_call", [{ to: address, data: `${BALANCE_SIG}${padAddr}` }, "latest"]);
+          if (balHex && balHex !== "0x" && balHex !== "0x" + "0".repeat(64)) {
+            const bal = BigInt(balHex);
+            if (bal > BigInt(0)) { hasActivity = true; break; }
+          }
+        }
+        holderCountLabel = hasActivity ? "Scanning (High Activity)" : "Awaiting Indexer";
+        console.log(`[bot] Blockscout 0 holders for ${address.slice(0,10)} — Alchemy balanceOf activity: ${hasActivity}`);
+      }
+
+      const liveStatus = hasV3Pool ? "Live (Direct-to-V3) ✅" : null;
+
       return {
         riskLevel: "Clean",
         isKnownFactory: true,
         protocolSecured: true,
-        holderCount: holderCountFb || 0,
+        holderCount,
+        holderCountLabel,
         isOwnershipRenounced: true,
         isHoneypot: false,
         buyTax: 0,
@@ -275,6 +304,8 @@ async function directGoPlus(address: string): Promise<any> {
         isInDex: hasV3Pool,
         platformName: fastPlatform,
         isWhitelistedFactory: true,
+        liveStatus,
+        lpStatus: `${fastPlatform} Managed ✅`,
       };
     }
 
@@ -314,10 +345,12 @@ async function directGoPlus(address: string): Promise<any> {
     }
 
     let isInDex = flagFn(token.is_in_dex);
+    let gpV3Pool = false;
     if (!isInDex) {
       const hasPool = await botCheckUniV3Pool(address);
       if (hasPool) {
         isInDex = true;
+        gpV3Pool = true;
         console.log(`[bot] Alchemy override: Uniswap V3 pool confirmed for ${address.slice(0,10)}`);
       }
     }
@@ -351,6 +384,8 @@ async function directGoPlus(address: string): Promise<any> {
       isInDex,
       platformName,
       isWhitelistedFactory: isKnownFactory,
+      liveStatus: (isInDex || gpV3Pool) ? "Live (Direct-to-V3) ✅" : null,
+      lpStatus: isKnownFactory ? `${lpEscrowName || "Protocol"} Managed ✅` : null,
     };
   } catch (err: any) {
     console.error("[bot] directGoPlus fallback failed:", err?.message);
@@ -476,8 +511,11 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const redFlags: string[] = api?.redFlags ?? [];
     const adminThreats: any[] = api?.adminThreats ?? [];
 
+    const liveStatus: string | null = api?.liveStatus || (isInDex ? "Live (Direct-to-V3) ✅" : null);
+
     let lpStatus: string;
-    if (isKnownFactory && lpEscrowName) lpStatus = `${lpEscrowName} Managed ✅`;
+    if (api?.lpStatus)                  lpStatus = api.lpStatus;
+    else if (isKnownFactory && lpEscrowName) lpStatus = `${lpEscrowName} Managed ✅`;
     else if (isProtocolEscrow)          lpStatus = `Protocol Managed ✅`;
     else if (api?.riskLevel)            lpStatus = redFlags.some(f => f.toLowerCase().includes("lp not locked")) ? `Unlocked ⚠️` : `Secured ✅`;
     else                                lpStatus = `Data Pending`;
@@ -522,6 +560,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     msg += `💲 Price: *${priceStr}*\n`;
     msg += `📊 Market Cap: *${mcapStr}*\n`;
     msg += `💧 Liquidity: *${liqFormatted}*\n`;
+    if (liveStatus) msg += `📡 Status: *${liveStatus}*\n`;
     msg += `🔒 LP Status: *${lpStatus}*\n`;
     msg += `👥 Holders: *${holderCount}*\n`;
     msg += `💰 Buy Tax: *${buyTaxFmt}*  |  Sell Tax: *${sellTaxFmt}*\n`;
@@ -1782,10 +1821,38 @@ export function createBot(): Telegraf | null {
       );
     } catch { /* non-fatal */ }
 
+    const alchemyPreCheck = (async () => {
+      try {
+        const t0 = Date.now();
+        const [hasV3Pool, tokenInfo] = await Promise.all([
+          botCheckUniV3Pool(address),
+          botGetTokenInfo(address),
+        ]);
+        const elapsed = Date.now() - t0;
+        if (elapsed < 2000 && hasV3Pool && tokenInfo && loadingMsg) {
+          const quickMsg =
+            `🔍 *APOL AGENT — QUICK SCAN*\n\n` +
+            `📍 \`${shortAddr(address)}\`\n` +
+            `⛓️ Base Mainnet\n\n` +
+            `*${tokenInfo.name}* ($${tokenInfo.symbol})\n` +
+            `📡 Status: *Live (Direct-to-V3) ✅*\n` +
+            `_Full forensic report loading..._`;
+          try {
+            await ctx.telegram.editMessageText(
+              loadingMsg.chat.id, loadingMsg.message_id, undefined,
+              quickMsg, { parse_mode: "Markdown", disable_web_page_preview: true } as any,
+            );
+            console.log(`[bot] Alchemy pre-check completed in ${elapsed}ms — quick status sent for ${address.slice(0,10)}`);
+          } catch { /* non-fatal */ }
+        }
+      } catch { /* non-fatal */ }
+    })();
+
     const SCAN_TIMEOUT_MSG =
       `⚠️ *Scan Timeout*\n\n` +
       `The scan is taking longer than expected. External APIs may be slow.\n\n` +
       `Try the full scanner at [${site}](${site}/agent-scanner) for faster results.`;
+
     const snapshot = await withTimeout(buildSnapshot(address, site), 60_000, SCAN_TIMEOUT_MSG);
 
     if (loadingMsg) {
