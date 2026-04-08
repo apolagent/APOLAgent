@@ -110,11 +110,14 @@ app.use((req, res, next) => {
 
     const forceClosePolling = async () => {
       try {
+        await fetch(`https://api.telegram.org/bot${tkn}/close`,
+          { method: "POST", signal: AbortSignal.timeout(3000) }).catch(() => {});
+        await new Promise(r => setTimeout(r, 500));
         await fetch(`https://api.telegram.org/bot${tkn}/deleteWebhook?drop_pending_updates=true`,
           { signal: AbortSignal.timeout(3000) });
         await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&limit=1&timeout=0`,
           { signal: AbortSignal.timeout(5000) });
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 1000));
         await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&limit=1&timeout=0`,
           { signal: AbortSignal.timeout(5000) });
         log("Cleared old polling session", "bot");
