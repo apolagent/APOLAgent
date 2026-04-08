@@ -906,7 +906,7 @@ async function buildWalletCheck(address: string): Promise<string> {
     const encodedAddr = encodeURIComponent(address);
     const addrLow = address.toLowerCase();
 
-    const [baseChainsR, allChainsR, threatR, bsAddrR, baseTxR, alchemyBalR] = await Promise.allSettled([
+    const [baseChainsR, allChainsR, threatR, bsAddrR, baseTxR, alchemyBalR, bsTxR] = await Promise.allSettled([
       fetch(`${MORALIS}/wallets/${encodedAddr}/chains?chains[]=base`,
         { headers: mHdrs, signal: AbortSignal.timeout(8_000) }).then(r => r.json()),
       fetch(`${MORALIS}/wallets/${encodedAddr}/chains`,
@@ -916,10 +916,12 @@ async function buildWalletCheck(address: string): Promise<string> {
       fetch(`https://base.blockscout.com/api/v2/addresses/${encodedAddr}`,
         { signal: AbortSignal.timeout(8_000) }).then(r => r.json()),
       fetch(`${MORALIS}/${encodedAddr}?chain=0x2105&order=ASC&limit=100`,
-        { headers: mHdrs, signal: AbortSignal.timeout(5_000) }).then(r => r.json()),
+        { headers: mHdrs, signal: AbortSignal.timeout(12_000) }).then(r => r.json()),
       BOT_RPC_URL
         ? botRpcCall("eth_getBalance", [address, "latest"])
         : Promise.resolve(null),
+      fetch(`https://base.blockscout.com/api/v2/addresses/${encodedAddr}/transactions?sort=asc&filter=to%7Cfrom`,
+        { signal: AbortSignal.timeout(12_000) }).then(r => r.json()),
     ]);
 
     const baseChainsData = baseChainsR.status === "fulfilled" ? baseChainsR.value : {};
@@ -935,12 +937,28 @@ async function buildWalletCheck(address: string): Promise<string> {
       try { alchemyBalEth = Number(BigInt(alchemyBalHex)) / 1e18; } catch {}
     }
 
+    const bsTxItems: any[] = bsTxR.status === "fulfilled" && Array.isArray(bsTxR.value?.items)
+      ? bsTxR.value.items : [];
+
+    let baseTxs: any[] = baseTxData?.result ?? [];
+    let txSource = baseTxs.length > 0 ? "moralis" : "none";
+
+    if (baseTxs.length === 0 && bsTxItems.length > 0) {
+      baseTxs = bsTxItems.map((tx: any) => ({
+        hash: tx.hash,
+        from_address: tx.from?.hash ?? null,
+        to_address: tx.to?.hash ?? null,
+        value: tx.value ?? "0",
+        block_timestamp: tx.timestamp ?? null,
+      }));
+      txSource = "blockscout";
+    }
+
     const baseChainEntry = (baseChainsData?.active_chains ?? [])
       .find((c: any) => c.chain === "base" || c.chain_id === "0x2105");
     let genesisTxHash    = baseChainEntry?.first_transaction?.transaction_hash ?? null;
     let genesisTimestamp = baseChainEntry?.first_transaction?.block_timestamp ?? null;
 
-    const baseTxs: any[] = baseTxData?.result ?? [];
     if (!genesisTxHash && baseTxs.length > 0) {
       genesisTxHash    = baseTxs[0].hash;
       genesisTimestamp = baseTxs[0].block_timestamp;
@@ -1025,9 +1043,11 @@ async function buildWalletCheck(address: string): Promise<string> {
       }
     }
 
-    const baseTxLoaded = baseTxR.status === "fulfilled";
-    const hasMoreBase     = !!baseTxData?.cursor;
+    const hasMoreBase = txSource === "moralis"
+      ? !!baseTxData?.cursor
+      : (bsTxR.status === "fulfilled" && bsTxR.value?.next_page_params != null);
     const baseTxCount     = baseTxs.length;
+    const anyTxSourceLoaded = baseTxR.status === "fulfilled" || bsTxR.status === "fulfilled";
 
     let inf  = BigInt(0);
     let outf = BigInt(0);
@@ -1041,7 +1061,7 @@ async function buildWalletCheck(address: string): Promise<string> {
 
     let txCountDisplay: string;
     let activityLevel: string;
-    if (!baseTxLoaded) {
+    if (!anyTxSourceLoaded) {
       txCountDisplay = "History Loading...";
       activityLevel  = "History Loading...";
     } else if (baseTxCount === 0) {
