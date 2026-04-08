@@ -55,9 +55,13 @@ function requireAdmin(req: Request & { adminAddress?: string }, res: Response, n
 }
 
 const BASE_RPC_URL = process.env.BASE_RPC_URL || "";
+const ALCHEMY_BASE_URL = BASE_RPC_URL;
 const CHAINABUSE_API_KEY = process.env.CHAINABUSE_API_KEY;
 const CHAINABUSE_BASE = "https://api.chainabuse.com/v0";
 const GOPLUS_BASE = "https://api.gopluslabs.io/api/v1";
+
+const OFFICIAL_APOL_CA = "0x0d521b604a25c2825b7131acf243f4b296c64aab";
+const OFFICIAL_APOL_TWITTER = "@ApolAgent_";
 
 async function rpcCall(method: string, params: any[]): Promise<any> {
   if (!BASE_RPC_URL) return null;
@@ -806,6 +810,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const scannedName = tName.toLowerCase().trim();
             const scannedSymbol = tSymbol.toLowerCase().trim();
             if (APOL_SELF_NAMES.includes(scannedName) || APOL_SELF_NAMES.includes(scannedSymbol)) {
+              const isOfficialApol = addrLower === OFFICIAL_APOL_CA;
+              if (!isOfficialApol) {
+                const lookupCount = await storage.incrementLookup(address as string, tName, tSymbol);
+                return res.json({
+                  addressType: "contract", riskLevel: "High Risk",
+                  apolVerdict: `⚠️ POTENTIAL CLONE / SCAM — This token uses the name "${tName}" (${tSymbol}) but does NOT match the Official APOL CA (${OFFICIAL_APOL_CA}). Official Twitter: ${OFFICIAL_APOL_TWITTER}. Do NOT interact. 🚨`,
+                  tokenName: tName, tokenSymbol: tSymbol, isHoneypot: false,
+                  buyTax: "0", sellTax: "0", isMintable: false, isOpenSource: true,
+                  holderCount, holderCountLabel, greenBadge: false, redFlags: ["⚠️ POTENTIAL CLONE / SCAM — Address does not match Official APOL CA"], malicious: {}, lookupCount, authenticityScore: 0,
+                  liveStatus,
+                  lpStatus: lpLabel,
+                  dexVersion: dexVersion,
+                  isClone: true,
+                });
+              }
               const lookupCount = await storage.incrementLookup(address as string, tName, tSymbol);
               return res.json({
                 addressType: "contract", riskLevel: "SAFE",
@@ -950,6 +969,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const scannedName = (tokenData?.token_name || "").toLowerCase().trim();
       const scannedSymbol = (tokenData?.token_symbol || "").toLowerCase().trim();
       if (APOL_SELF_NAMES.includes(scannedName) || APOL_SELF_NAMES.includes(scannedSymbol)) {
+        const isOfficialApol = (address as string).toLowerCase() === OFFICIAL_APOL_CA;
+        if (!isOfficialApol) {
+          const lookupCount = await storage.incrementLookup(address as string, tokenData?.token_name, tokenData?.token_symbol);
+          return res.json({
+            addressType: "contract",
+            riskLevel: "High Risk",
+            apolVerdict: `⚠️ POTENTIAL CLONE / SCAM — This token uses the name "${tokenData?.token_name}" (${tokenData?.token_symbol}) but does NOT match the Official APOL CA (${OFFICIAL_APOL_CA}). Official Twitter: ${OFFICIAL_APOL_TWITTER}. Do NOT interact. 🚨`,
+            tokenName: tokenData?.token_name,
+            tokenSymbol: tokenData?.token_symbol,
+            isHoneypot: false,
+            buyTax: "0",
+            sellTax: "0",
+            isMintable: false,
+            isOpenSource: true,
+            holderCount: parseInt(tokenData?.holder_count ?? "0"),
+            greenBadge: false,
+            redFlags: ["⚠️ POTENTIAL CLONE / SCAM — Address does not match Official APOL CA"],
+            malicious: {},
+            lookupCount,
+            authenticityScore: 0,
+            liveStatus: null,
+            lpStatus: null,
+            isClone: true,
+          });
+        }
         const lookupCount = await storage.incrementLookup(address as string, tokenData?.token_name, tokenData?.token_symbol);
         return res.json({
           addressType: "contract",
@@ -1255,7 +1299,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Wallet analysis
+      // Wallet analysis — Parallelized forensic calls (Balance, Genesis, Funding, Activity)
+      const addrLower = (address as string).toLowerCase();
+
       const FLAG_MAP: Record<string, string> = {
         sanctioned: "Sanctioned",
         stealing_attack: "Theft/Stealing",
@@ -1282,6 +1328,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (CRITICAL.has(key)) hasCritical = true;
         }
       }
+
+      const toEthStr = (wei: bigint) => {
+        const whole = wei / BigInt(1e18);
+        const frac = wei % BigInt(1e18);
+        const fracStr = frac.toString().padStart(18, "0").slice(0, 4);
+        return `${whole}.${fracStr}`;
+      };
+
+      const balancePromise = (async () => {
+        try {
+          const balHex = await rpcCall("eth_getBalance", [address, "latest"]);
+          if (balHex) return toEthStr(BigInt(balHex));
+        } catch { /* non-fatal */ }
+        return "N/A";
+      })();
+
+      const genesisPromise = (async () => {
+        try {
+          const r = await fetch(
+            `https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(address as string)}`,
+            { signal: AbortSignal.timeout(8000) }
+          );
+          if (r.ok) {
+            const d = await r.json() as any;
+            return {
+              creationTx: d.creation_tx_hash || null,
+              creator: d.creator_address_hash || null,
+            };
+          }
+        } catch { /* non-fatal */ }
+        return { creationTx: null, creator: null };
+      })();
+
+      const activityPromise = (async (): Promise<{ txCount: number; level: string; inflow: string; outflow: string }> => {
+        try {
+          const activityController = new AbortController();
+          const activityTimeout = setTimeout(() => activityController.abort(), 15000);
+          const txListRes = await fetch(
+            `https://base.blockscout.com/api?module=account&action=txlist&address=${addrLower}&sort=desc&offset=200&page=1`,
+            { signal: activityController.signal }
+          );
+          clearTimeout(activityTimeout);
+          const txListJson = await txListRes.json() as any;
+
+          if (txListJson.status === "1" && Array.isArray(txListJson.result)) {
+            const txs = txListJson.result;
+            const txCount = txs.length;
+            let inflowWei = BigInt(0);
+            let outflowWei = BigInt(0);
+
+            for (const tx of txs) {
+              const value = BigInt(tx.value || "0");
+              if (value === BigInt(0)) continue;
+              const to = (tx.to || "").toLowerCase();
+              const from = (tx.from || "").toLowerCase();
+              if (to === addrLower) inflowWei += value;
+              if (from === addrLower) outflowWei += value;
+            }
+
+            const level = txCount > 50 ? "High" : txCount >= 10 ? "Moderate" : "Low";
+            return { txCount, level, inflow: toEthStr(inflowWei), outflow: toEthStr(outflowWei) };
+          }
+          return { txCount: 0, level: "Low", inflow: "0.0000", outflow: "0.0000" };
+        } catch {
+          return { txCount: 0, level: "Scanning (High Activity)", inflow: "N/A", outflow: "N/A" };
+        }
+      })();
+
+      const fundingPromise = (async () => {
+        try {
+          const r = await fetch(
+            `https://base.blockscout.com/api?module=account&action=txlist&address=${addrLower}&sort=asc&offset=1&page=1`,
+            { signal: AbortSignal.timeout(8000) }
+          );
+          const d = await r.json() as any;
+          if (d.status === "1" && Array.isArray(d.result) && d.result.length > 0) {
+            const firstTx = d.result[0];
+            return {
+              fundingSource: firstTx.from || null,
+              fundingTxHash: firstTx.hash || null,
+              fundingValue: firstTx.value ? toEthStr(BigInt(firstTx.value)) : "0",
+            };
+          }
+        } catch { /* non-fatal */ }
+        return { fundingSource: null, fundingTxHash: null, fundingValue: "0" };
+      })();
+
+      const [currentBalance, genesisData, activityData, fundingData] = await Promise.all([
+        balancePromise,
+        genesisPromise,
+        activityPromise,
+        fundingPromise,
+      ]);
 
       const internalFlag = walletFlags.length === 0 ? await storage.checkInternalReports(address as string) : false;
       const riskLevel = hasCritical || walletFlags.length > 2 ? "High Risk"
@@ -1312,6 +1451,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         walletFlags,
         totalFlags: walletFlags.length,
         lookupCount,
+        currentBalance,
+        activity: activityData,
+        genesis: genesisData,
+        funding: fundingData,
       });
 
     } catch (error) {

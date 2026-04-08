@@ -115,10 +115,28 @@ shared/
 - **Bot async pre-check**: `/scan` fires dual-DEX + tokenInfo as IIFE. If completes in <4s, updates loading message with quick V3/V4 status
 - **Tax override**: Factory tokens with simulated tax > 50% → tax forced to 0%
 
+## Brand Protection (Strict Identity)
+- Official APOL CA: `0x0d521b604a25c2825b7131acf243f4b296c64aab` (hardcoded in routes.ts + bot.ts)
+- Official Twitter: `@ApolAgent_`
+- If a token name matches APOL but address differs from official CA → flagged as "⚠️ POTENTIAL CLONE / SCAM", Risk = HIGH
+- Both web API and Telegram bot enforce this check
+
+## Wallet Forensics (Enhanced)
+- **Current Balance**: Direct `eth_getBalance` via Alchemy RPC (real-time, not indexed)
+- **Activity Math**: Fetches txlist from Blockscout, loops to calculate:
+  - Inflow: Sum of tx `value` where `to` = scanned wallet
+  - Outflow: Sum of tx `value` where `from` = scanned wallet
+  - Level: >50 txs = High, 10-50 = Moderate, <10 = Low
+- **Funding Source**: First transaction trace (who funded the wallet)
+- **Genesis Data**: Creation tx hash and creator address from Blockscout
+- All 4 forensic calls (Balance, Genesis, Funding, Activity) run in parallel via `Promise.all`
+- Activity fetch has strict 15-second timeout; falls back to "Scanning (High Activity)" on timeout
+- UI displays: Balance, Activity (txs/level/inflow/outflow), Funding Source, then APOL Verdict
+
 ## Data Sources (Priority Order)
-1. **Alchemy RPC** (`BASE_RPC_URL`) — `eth_call` for contract detection, token info, balanceOf, totalSupply, pool detection, bytecode verification
+1. **Alchemy RPC** (`BASE_RPC_URL`) — `eth_getBalance` for wallet balance, `eth_call` for contract detection, token info, balanceOf, totalSupply, pool detection, bytecode verification
 2. **Internal Whitelist** — `PLATFORM_LOCKERS` + `PLATFORM_DEPLOYERS` maps (both routes.ts and bot.ts maintain copies)
-3. **Blockscout API** — Deployer tracing (2-hop), holder counts (PRIMARY), top holder addresses
+3. **Blockscout API** — Deployer tracing (2-hop), holder counts (PRIMARY), top holder addresses, wallet tx history (inflow/outflow)
 4. **GoPlus API** — Token security data (non-whitelisted tokens only); wallet `address_security` checks (always)
 5. **Honeypot.is** — Secondary honeypot simulation (non-whitelisted tokens only)
 6. **DexScreener** — Price, market cap, liquidity data

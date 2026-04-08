@@ -82,6 +82,11 @@ type DetectiveResult = {
   lpStatus?: string | null;
   holderCountLabel?: string;
   platformName?: string | null;
+  isClone?: boolean;
+  currentBalance?: string;
+  activity?: { txCount: number; level: string; inflow: string; outflow: string };
+  genesis?: { creationTx: string | null; creator: string | null };
+  funding?: { fundingSource: string | null; fundingTxHash: string | null; fundingValue: string };
 };
 
 type TestResult = { scored: boolean; score: number; maxScore: number; label: string; detail: string; timingPattern?: string[]; isContract?: boolean };
@@ -1032,8 +1037,8 @@ export default function AgentScanner() {
                         { label: "Proxy", value: checkResult.isProxy, bad: true },
                         { label: "Blacklist", value: checkResult.hasBlacklist, bad: true },
                         { label: "Pausable", value: checkResult.canPause, bad: true },
-                        { label: checkResult.taxOverride ? `Buy Tax: Protocol Managed (${checkResult.taxOverride})` : `Buy Tax ${checkResult.buyTax != null ? checkResult.buyTax.toFixed(1) + "%" : ""}`, value: checkResult.taxOverride ? false : (checkResult.buyTax ?? 0) > 10, bad: true },
-                        { label: checkResult.taxOverride ? `Sell Tax: Protocol Managed (${checkResult.taxOverride})` : `Sell Tax ${checkResult.sellTax != null ? checkResult.sellTax.toFixed(1) + "%" : ""}`, value: checkResult.taxOverride ? false : (checkResult.sellTax ?? 0) > 10, bad: true },
+                        { label: checkResult.taxOverride ? `Buy Tax: Protocol Managed (${checkResult.taxOverride})` : `Buy Tax ${checkResult.buyTax != null ? Number(checkResult.buyTax).toFixed(1) + "%" : ""}`, value: checkResult.taxOverride ? false : (Number(checkResult.buyTax) || 0) > 10, bad: true },
+                        { label: checkResult.taxOverride ? `Sell Tax: Protocol Managed (${checkResult.taxOverride})` : `Sell Tax ${checkResult.sellTax != null ? Number(checkResult.sellTax).toFixed(1) + "%" : ""}`, value: checkResult.taxOverride ? false : (Number(checkResult.sellTax) || 0) > 10, bad: true },
                         { label: "On DEX", value: checkResult.isInDex, bad: false },
                       ].map((item, i) => {
                         const isWarning = item.bad ? item.value : !item.value;
@@ -1131,6 +1136,55 @@ export default function AgentScanner() {
                               {flag}
                             </span>
                           ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {checkResult.currentBalance && (
+                      <div data-testid="div-wallet-balance" style={{ padding: "14px", border: "1px solid rgba(0,255,0,0.2)", background: "rgba(0,255,0,0.03)" }}>
+                        <div style={{ fontSize: "10px", fontWeight: 900, color: G, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "8px", fontFamily: "'JetBrains Mono', monospace" }}>CURRENT BALANCE</div>
+                        <div style={{ fontSize: "16px", fontWeight: 900, color: "#fff", fontFamily: "'JetBrains Mono', monospace" }}>{checkResult.currentBalance} ETH</div>
+                      </div>
+                    )}
+
+                    {checkResult.activity && (
+                      <div data-testid="div-wallet-activity" style={{ padding: "14px", border: "1px solid rgba(0,255,0,0.2)", background: "rgba(0,255,0,0.03)" }}>
+                        <div style={{ fontSize: "10px", fontWeight: 900, color: G, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "10px", fontFamily: "'JetBrains Mono', monospace" }}>📊 ACTIVITY (Base Mainnet)</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontFamily: "'JetBrains Mono', monospace", fontSize: "12px", color: "rgba(255,255,255,0.8)" }}>
+                          <div data-testid="text-tx-count">Transactions: {checkResult.activity.txCount} txs</div>
+                          <div data-testid="text-tx-level">Level: <span style={{ color: checkResult.activity.level === "High" ? "#f87171" : checkResult.activity.level === "Moderate" ? "#facc15" : G, fontWeight: 700 }}>{checkResult.activity.level}</span></div>
+                          <div style={{ display: "flex", gap: "24px", marginTop: "4px" }}>
+                            <div data-testid="text-inflow">Inflow: <span style={{ color: G, fontWeight: 700 }}>{checkResult.activity.inflow} ETH</span></div>
+                            <div data-testid="text-outflow">Outflow: <span style={{ color: "#f87171", fontWeight: 700 }}>{checkResult.activity.outflow} ETH</span></div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {checkResult.genesis && (checkResult.genesis.creator || checkResult.genesis.creationTx) && (
+                      <div data-testid="div-wallet-genesis" style={{ padding: "14px", border: "1px solid rgba(0,255,0,0.2)", background: "rgba(0,255,0,0.03)" }}>
+                        <div style={{ fontSize: "10px", fontWeight: 900, color: G, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "8px", fontFamily: "'JetBrains Mono', monospace" }}>GENESIS</div>
+                        {checkResult.genesis.creator && (
+                          <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.7)", fontFamily: "'JetBrains Mono', monospace", wordBreak: "break-all" }}>
+                            Creator: {checkResult.genesis.creator}
+                          </div>
+                        )}
+                        {checkResult.genesis.creationTx && (
+                          <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", fontFamily: "'JetBrains Mono', monospace", marginTop: "4px", wordBreak: "break-all" }}>
+                            Tx: {checkResult.genesis.creationTx}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {checkResult.funding && checkResult.funding.fundingSource && (
+                      <div data-testid="div-wallet-funding" style={{ padding: "14px", border: "1px solid rgba(0,255,0,0.2)", background: "rgba(0,255,0,0.03)" }}>
+                        <div style={{ fontSize: "10px", fontWeight: 900, color: G, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "8px", fontFamily: "'JetBrains Mono', monospace" }}>FUNDING SOURCE</div>
+                        <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.7)", fontFamily: "'JetBrains Mono', monospace", wordBreak: "break-all" }}>
+                          From: {checkResult.funding.fundingSource}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", fontFamily: "'JetBrains Mono', monospace", marginTop: "4px" }}>
+                          Value: {checkResult.funding.fundingValue} ETH
                         </div>
                       </div>
                     )}
