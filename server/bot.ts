@@ -903,14 +903,10 @@ async function buildWalletCheck(address: string): Promise<string> {
       return `❌ *Configuration Error*\n\nMORALIS_API_KEY is not set. Contact the bot administrator.`;
     }
 
-    // ── Step 1: Fetch 5 sources in parallel ─────────────────────────────────
-    //    A) Moralis getWalletActiveChains WITH ?chains[]=base (gets Base-specific genesis)
-    //    B) Moralis getWalletActiveChains unfiltered (gets all-chain genesis)
-    //    C) Threat intelligence — blacklist/sanctions check
-    //    D) Blockscout — Base balance + contract type
-    //    E) Moralis Base transactions (ASC) — inflow/outflow
     const encodedAddr = encodeURIComponent(address);
-    const [baseChainsR, allChainsR, threatR, bsAddrR, baseTxR] = await Promise.allSettled([
+    const addrLow = address.toLowerCase();
+
+    const [baseChainsR, allChainsR, threatR, bsAddrR, baseTxR, alchemyBalR] = await Promise.allSettled([
       fetch(`${MORALIS}/wallets/${encodedAddr}/chains?chains[]=base`,
         { headers: mHdrs, signal: AbortSignal.timeout(8_000) }).then(r => r.json()),
       fetch(`${MORALIS}/wallets/${encodedAddr}/chains`,
@@ -920,7 +916,10 @@ async function buildWalletCheck(address: string): Promise<string> {
       fetch(`https://base.blockscout.com/api/v2/addresses/${encodedAddr}`,
         { signal: AbortSignal.timeout(8_000) }).then(r => r.json()),
       fetch(`${MORALIS}/${encodedAddr}?chain=0x2105&order=ASC&limit=100`,
-        { headers: mHdrs, signal: AbortSignal.timeout(8_000) }).then(r => r.json()),
+        { headers: mHdrs, signal: AbortSignal.timeout(5_000) }).then(r => r.json()),
+      BOT_RPC_URL
+        ? botRpcCall("eth_getBalance", [address, "latest"])
+        : Promise.resolve(null),
     ]);
 
     const baseChainsData = baseChainsR.status === "fulfilled" ? baseChainsR.value : {};
@@ -930,20 +929,23 @@ async function buildWalletCheck(address: string): Promise<string> {
     const baseTxData     = baseTxR.status === "fulfilled" ? baseTxR.value : {};
     const gpResult       = threatData?.result ?? null;
 
-    // ── Step 2: Find BASE-SPECIFIC genesis (first tx on Base chain) ──────────
+    const alchemyBalHex = alchemyBalR.status === "fulfilled" ? alchemyBalR.value : null;
+    let alchemyBalEth: number | null = null;
+    if (alchemyBalHex && typeof alchemyBalHex === "string" && alchemyBalHex.startsWith("0x")) {
+      try { alchemyBalEth = Number(BigInt(alchemyBalHex)) / 1e18; } catch {}
+    }
+
     const baseChainEntry = (baseChainsData?.active_chains ?? [])
       .find((c: any) => c.chain === "base" || c.chain_id === "0x2105");
     let genesisTxHash    = baseChainEntry?.first_transaction?.transaction_hash ?? null;
     let genesisTimestamp = baseChainEntry?.first_transaction?.block_timestamp ?? null;
 
-    // Fallback: Moralis Base tx list (ASC order — first entry is oldest)
     const baseTxs: any[] = baseTxData?.result ?? [];
     if (!genesisTxHash && baseTxs.length > 0) {
       genesisTxHash    = baseTxs[0].hash;
       genesisTimestamp = baseTxs[0].block_timestamp;
     }
 
-    // Last resort: Blockscout pagination
     if (!genesisTimestamp) {
       const oldestTx = await fetchOldestTx(address);
       if (oldestTx?.timestamp) {
@@ -951,8 +953,6 @@ async function buildWalletCheck(address: string): Promise<string> {
       }
     }
 
-    // ── Step 2b: Find BASE funder — first INCOMING tx on Base ─────────────────
-    const addrLow = address.toLowerCase();
     const firstIncoming = baseTxs.find(
       (tx: any) => (tx.to_address ?? "").toLowerCase() === addrLow
     );
@@ -960,12 +960,11 @@ async function buildWalletCheck(address: string): Promise<string> {
     let funderAddr    = firstIncoming?.from_address ?? null;
     let funderTs      = firstIncoming?.block_timestamp ?? null;
 
-    // If no incoming in baseTxs, check genesis tx details
     if (!funderAddr && genesisTxHash) {
       try {
         const txRes = await fetch(
           `${MORALIS}/transaction/${encodeURIComponent(genesisTxHash)}?chain=0x2105`,
-          { headers: mHdrs, signal: AbortSignal.timeout(6_000) }
+          { headers: mHdrs, signal: AbortSignal.timeout(5_000) }
         );
         if (txRes.ok) {
           const txData = await txRes.json() as any;
@@ -978,41 +977,29 @@ async function buildWalletCheck(address: string): Promise<string> {
       } catch { /* non-fatal */ }
     }
 
-    // ── Step 3: Resolve funder identity (Moralis label + Blockscout ENS) ──────
     let moralisLabel: string | null = null;
     let moralisEntity: string | null = null;
     let funderEns: string | null = null;
 
     if (funderAddr) {
-      // Fetch Moralis tx details for label (if we have the funding tx hash)
-      if (funderTxHash) {
-        try {
-          const txRes = await fetch(
-            `${MORALIS}/transaction/${encodeURIComponent(funderTxHash)}?chain=0x2105`,
-            { headers: mHdrs, signal: AbortSignal.timeout(6_000) }
-          );
-          if (txRes.ok) {
-            const txData = await txRes.json() as any;
-            moralisLabel  = txData.from_address_label  ?? null;
-            moralisEntity = txData.from_address_entity ?? null;
-          }
-        } catch { /* non-fatal */ }
-      }
+      const [labelR, ensR] = await Promise.allSettled([
+        funderTxHash
+          ? fetch(`${MORALIS}/transaction/${encodeURIComponent(funderTxHash)}?chain=0x2105`,
+              { headers: mHdrs, signal: AbortSignal.timeout(5_000) }).then(r => r.json())
+          : Promise.resolve(null),
+        fetch(`https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(funderAddr)}`,
+          { signal: AbortSignal.timeout(5_000) }).then(r => r.json()),
+      ]);
 
-      // Also check Blockscout for ENS name of funder
-      try {
-        const ensRes = await fetch(
-          `https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(funderAddr)}`,
-          { signal: AbortSignal.timeout(8_000) }
-        );
-        if (ensRes.ok) {
-          const ensData = await ensRes.json() as any;
-          funderEns = ensData?.ens_domain_name ?? null;
-        }
-      } catch { /* non-fatal */ }
+      if (labelR.status === "fulfilled" && labelR.value) {
+        moralisLabel  = labelR.value.from_address_label  ?? null;
+        moralisEntity = labelR.value.from_address_entity ?? null;
+      }
+      if (ensR.status === "fulfilled" && ensR.value) {
+        funderEns = ensR.value?.ens_domain_name ?? null;
+      }
     }
 
-    // Build display label — prefer ENS name, then Moralis label, then classify
     const funderDisplayName = funderEns || moralisLabel || moralisEntity || null;
     const { display: fundingDisplay, risk: fundingRisk } = funderAddr
       ? (funderDisplayName
@@ -1020,12 +1007,10 @@ async function buildWalletCheck(address: string): Promise<string> {
           : classifyFundingSource(funderAddr, moralisLabel, moralisEntity))
       : { display: "⚠️ Unknown", risk: "unknown" as const };
 
-    // Override display if we have ENS and classifyFundingSource returned Unknown
     const finalFundingDisplay = (funderEns && fundingDisplay.includes("Unknown"))
       ? `🏦 FUNDED BY: ${funderEns}`
       : fundingDisplay;
 
-    // ── Step 4: Base wallet age from genesis ─────────────────────────────────
     let firstSeenDate  = "ERROR: API TIMEOUT";
     let walletAgeDays  = "ERROR: API TIMEOUT";
     let walletAgeLabel = "ERROR: API TIMEOUT";
@@ -1040,7 +1025,7 @@ async function buildWalletCheck(address: string): Promise<string> {
       }
     }
 
-    // ── Step 6: Base Mainnet activity + inflow / outflow ─────────────────────
+    const baseTxLoaded = baseTxR.status === "fulfilled";
     const hasMoreBase     = !!baseTxData?.cursor;
     const baseTxCount     = baseTxs.length;
 
@@ -1054,20 +1039,27 @@ async function buildWalletCheck(address: string): Promise<string> {
     const inflowEth  = inf  > 0n ? (Number(inf)  / 1e18) : null;
     const outflowEth = outf > 0n ? (Number(outf) / 1e18) : null;
 
-    const txCountDisplay = baseTxCount > 0
-      ? (hasMoreBase ? `${baseTxCount}+ txs` : `${baseTxCount} txs`)
-      : "No Base activity found";
-
+    let txCountDisplay: string;
     let activityLevel: string;
-    if (baseTxCount === 0)    activityLevel = "No Base activity";
-    else if (baseTxCount < 5)  activityLevel = "⚠️ Very Low — Fresh Profile";
-    else if (baseTxCount < 20) activityLevel = "Low";
-    else if (baseTxCount < 100)activityLevel = "Moderate";
-    else                       activityLevel = "High (Established Wallet)";
+    if (!baseTxLoaded) {
+      txCountDisplay = "History Loading...";
+      activityLevel  = "History Loading...";
+    } else if (baseTxCount === 0) {
+      txCountDisplay = "No Base activity found";
+      activityLevel  = "No Base activity";
+    } else {
+      txCountDisplay = hasMoreBase ? `${baseTxCount}+ txs` : `${baseTxCount} txs`;
+      if (baseTxCount < 5)       activityLevel = "⚠️ Very Low — Fresh Profile";
+      else if (baseTxCount < 20) activityLevel = "Low";
+      else if (baseTxCount < 100)activityLevel = "Moderate";
+      else                       activityLevel = "High (Established Wallet)";
+    }
 
-    // ── Step 7: Balance from Blockscout ──────────────────────────────────────
     const isContract   = bsAddr?.is_contract ?? false;
-    const coinBalance  = bsAddr?.coin_balance ? parseFloat(bsAddr.coin_balance) / 1e18 : null;
+
+    const coinBalance = alchemyBalEth !== null
+      ? alchemyBalEth
+      : (bsAddr?.coin_balance ? parseFloat(bsAddr.coin_balance) / 1e18 : null);
     const exchangeRate = bsAddr?.exchange_rate ? parseFloat(bsAddr.exchange_rate) : null;
     const ethBal       = coinBalance !== null ? `${coinBalance.toFixed(4)} ETH` : "N/A";
     const usdBal       = coinBalance !== null && exchangeRate
