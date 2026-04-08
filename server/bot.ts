@@ -29,6 +29,14 @@ function shortAddr(addr: string): string {
   return `${addr.slice(0, 8)}...${addr.slice(-6)}`;
 }
 
+function esc(text: string): string {
+  return text.replace(/[_*`\[\]]/g, "");
+}
+
+function stripMd(text: string): string {
+  return text.replace(/[_*`]/g, "");
+}
+
 function pct(raw: string | undefined): string {
   const n = parseFloat(raw || "0");
   return isNaN(n) ? "0%" : `${(n * 100).toFixed(1)}%`;
@@ -555,14 +563,14 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       const wFlags: string[] = api.walletFlags ?? [];
       const wRisk = api.riskLevel ?? "Clean";
       const wVerdict = api.apolVerdict ?? "No flags detected.";
-      const flagsText = wFlags.length > 0 ? wFlags.map((f: string) => `• ${f}`).join("\n") : "• No flags detected on Base chain.";
+      const flagsText = wFlags.length > 0 ? wFlags.map((f: string) => `• ${esc(f)}`).join("\n") : "• No flags detected on Base chain.";
       return (
         `🔍 *APOL AGENT — WALLET SCAN*\n\n` +
         `📍 Address: \`${address.slice(0,6)}...${address.slice(-4)}\`\n` +
         `🌐 Chain: Base Mainnet\n\n` +
-        `RISK LEVEL: ${wRisk === "Clean" ? "🟢" : wRisk === "High Risk" ? "🔴" : "🟡"} *${wRisk.toUpperCase()}*\n\n` +
+        `RISK LEVEL: ${wRisk === "Clean" ? "🟢" : wRisk === "High Risk" ? "🔴" : "🟡"} *${esc(wRisk).toUpperCase()}*\n\n` +
         `${flagsText}\n\n` +
-        `_${wVerdict}_`
+        `${esc(wVerdict)}`
       );
     }
 
@@ -574,8 +582,8 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       );
     }
 
-    const tokenName   = api?.tokenName   ?? topPair?.baseToken?.name   ?? "Unknown";
-    const tokenSymbol = `$${api?.tokenSymbol ?? topPair?.baseToken?.symbol ?? "?"}`;
+    const tokenName   = esc(api?.tokenName   ?? topPair?.baseToken?.name   ?? "Unknown");
+    const tokenSymbol = `$${esc(api?.tokenSymbol ?? topPair?.baseToken?.symbol ?? "?")}`;
 
     const apolSelfNames = ["apol", "apol agent", "active onchain intelligence", "$apol"];
     if (apolSelfNames.includes(tokenName.toLowerCase().trim()) || apolSelfNames.includes((api?.tokenSymbol ?? "").toLowerCase().trim())) {
@@ -629,8 +637,8 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const liveStatus: string | null = api?.liveStatus || (isInDex ? botDexLiveStatus(api?.dexVersion || null) : null);
 
     let lpStatus: string;
-    if (api?.lpStatus)                  lpStatus = api.lpStatus;
-    else if (isKnownFactory && lpEscrowName) lpStatus = `${lpEscrowName} Managed ✅`;
+    if (api?.lpStatus)                  lpStatus = esc(api.lpStatus);
+    else if (isKnownFactory && lpEscrowName) lpStatus = `${esc(lpEscrowName)} Managed ✅`;
     else if (isProtocolEscrow)          lpStatus = `Protocol Managed ✅`;
     else if (api?.riskLevel)            lpStatus = redFlags.some(f => f.toLowerCase().includes("lp not locked")) ? `Unlocked ⚠️` : `Secured ✅`;
     else                                lpStatus = `Data Pending`;
@@ -639,19 +647,20 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const adminAlerts: string[] = [];
     if (api) {
       for (const rf of redFlags) {
-        if (rf.includes("buy tax"))       flags.push(`💸 ${rf}`);
-        else if (rf.includes("sell tax")) flags.push(`💸 ${rf}`);
-        else if (rf.toLowerCase().includes("honeypot")) flags.push(`⛔ ${rf}`);
-        else if (rf.includes("mint"))      flags.push(`🖨️ ${rf}`);
-        else if (rf.includes("blacklist")) flags.push(`🚫 ${rf}`);
-        else if (rf.includes("proxy"))     flags.push(`🔄 ${rf}`);
-        else if (rf.includes("LP not"))    flags.push(`🔓 ${rf}`);
-        else if (rf.includes("holder"))    flags.push(`👥 ${rf}`);
-        else if (rf.includes("verified"))  flags.push(`👁️ ${rf}`);
-        else flags.push(`⚠️ ${rf}`);
+        const srf = esc(rf);
+        if (rf.includes("buy tax"))       flags.push(`💸 ${srf}`);
+        else if (rf.includes("sell tax")) flags.push(`💸 ${srf}`);
+        else if (rf.toLowerCase().includes("honeypot")) flags.push(`⛔ ${srf}`);
+        else if (rf.includes("mint"))      flags.push(`🖨️ ${srf}`);
+        else if (rf.includes("blacklist")) flags.push(`🚫 ${srf}`);
+        else if (rf.includes("proxy"))     flags.push(`🔄 ${srf}`);
+        else if (rf.includes("LP not"))    flags.push(`🔓 ${srf}`);
+        else if (rf.includes("holder"))    flags.push(`👥 ${srf}`);
+        else if (rf.includes("verified"))  flags.push(`👁️ ${srf}`);
+        else flags.push(`⚠️ ${srf}`);
       }
       for (const at of adminThreats) {
-        adminAlerts.push(`🔑 ${at.label} — ${at.detail.split(".")[0]}`);
+        adminAlerts.push(`🔑 ${esc(at.label)} — ${esc(at.detail.split(".")[0])}`);
       }
       if (liqUsd !== null && liqUsd < 5000 && !flags.some(f => f.includes("Liquidity"))) {
         flags.push("💧 Very Low Liquidity");
@@ -1177,7 +1186,7 @@ async function buildWalletCheck(address: string): Promise<string> {
     msg += `Hash: ${genesisTxLink}\n\n`;
 
     msg += `💰 *FUNDING SOURCE (Base)*\n`;
-    msg += `${finalFundingDisplay}\n`;
+    msg += `${esc(finalFundingDisplay)}\n`;
     if (funderAddr) msg += `From: \`${shortAddr(funderAddr)}\`\n`;
     msg += `\n`;
 
@@ -1199,7 +1208,7 @@ async function buildWalletCheck(address: string): Promise<string> {
       msg += `✅ *No threat flags on record.*\n\n`;
     }
 
-    msg += `🛡️ *VERDICT:* _${verdict}_\n\n`;
+    msg += `🛡️ *VERDICT:* _${esc(verdict)}_\n\n`;
     msg += `🔗 [View on Basescan](https://basescan.org/address/${address})`;
 
     return msg;
@@ -1260,7 +1269,7 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     if (!resolved) {
       return (
         `⚠️ *AGENT NOT FOUND*\n\n` +
-        `No agent matching _"${input}"_ found on Base Mainnet.\n` +
+        `No agent matching "${esc(input)}" found on Base Mainnet.\n` +
         `Try using the contract address directly.`
       );
     }
@@ -1345,8 +1354,8 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
       const rpcInfo = await botGetTokenInfo(address);
       if (rpcInfo) agentFastTokenInfo = rpcInfo;
     }
-    const agentName   = resolved.name   || token?.token_name   || agentFastTokenInfo?.name   || topPair?.baseToken?.name   || "Unknown Agent";
-    const agentSymbol = resolved.symbol || token?.token_symbol || agentFastTokenInfo?.symbol || topPair?.baseToken?.symbol || "?";
+    const agentName   = esc(resolved.name   || token?.token_name   || agentFastTokenInfo?.name   || topPair?.baseToken?.name   || "Unknown Agent");
+    const agentSymbol = esc(resolved.symbol || token?.token_symbol || agentFastTokenInfo?.symbol || topPair?.baseToken?.symbol || "?");
 
     // ── Market data ───────────────────────────────────────────────────────────
     const liqUsd     = topPair?.liquidity?.usd ?? null;
@@ -1563,9 +1572,9 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
 
     msg += `🧠 *AI THREAT ASSESSMENT*\n`;
     msg += `Prompt Injection Risk: ${riskEmoji(promptRisk)}\n`;
-    msg += `_${promptDetail}_\n\n`;
+    msg += `_${esc(promptDetail)}_\n\n`;
     msg += `Data Exfiltration Risk: ${riskEmoji(exfilRisk)}\n`;
-    msg += `_${exfilDetail}_\n\n`;
+    msg += `_${esc(exfilDetail)}_\n\n`;
 
     msg += `💧 *MARKET INTEL*\n`;
     msg += `Liquidity: ${liqFmt}\n`;
@@ -1581,7 +1590,7 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     }
 
     msg += `\n*VERDICT: ${verdict}*\n`;
-    msg += `_${verdictLine}_\n\n`;
+    msg += `_${esc(verdictLine)}_\n\n`;
     msg += `🔍 [Full Deep Dive](${siteUrl}/agent-scanner)`;
 
     return msg;
@@ -1650,7 +1659,7 @@ async function buildSocialScan(input: string, siteUrl: string): Promise<string> 
     if (!legacy?.followers_count && !core?.name) {
       return (
         `⚠️ *Account Not Found*\n\n` +
-        `No X profile found for _"${username}"_.\n` +
+        `No X profile found for "${esc(username)}".\n` +
         `Ensure the handle is correct and the account is public.`
       );
     }
@@ -1793,7 +1802,7 @@ async function buildSocialScan(input: string, siteUrl: string): Promise<string> 
         )
       );
       if (match) {
-        linkedCA = `${match.baseToken.symbol} — \`${match.baseToken.address}\``;
+        linkedCA = `${esc(match.baseToken.symbol)} — \`${match.baseToken.address}\``;
         linkedWallet = match.baseToken.address;
       }
     } catch { /* non-fatal */ }
@@ -1824,9 +1833,9 @@ async function buildSocialScan(input: string, siteUrl: string): Promise<string> 
 
     // ── Build message ─────────────────────────────────────────────────────────
     let msg = "";
-    msg += `🐦 *X INVESTIGATION: @${username}*\n\n`;
-    msg += `👤 *Name:* ${displayName}\n`;
-    if (bio) msg += `📝 *Bio:* _${bio.replace(/\n/g, " ").slice(0, 120)}_\n`;
+    msg += `🐦 *X INVESTIGATION: @${esc(username)}*\n\n`;
+    msg += `👤 *Name:* ${esc(displayName)}\n`;
+    if (bio) msg += `📝 *Bio:* _${esc(bio.replace(/\n/g, " ").slice(0, 120))}_\n`;
     msg += `📅 *Joined:* ${joinedDate} (${ageDays} days ago)\n`;
     msg += `✅ *Blue Check:* ${isVerified ? "Verified ✅" : "Not Verified"}\n\n`;
 
@@ -2006,12 +2015,25 @@ export function createBot(): Telegraf | null {
           snapshot, { parse_mode: "Markdown", disable_web_page_preview: true } as any,
         );
         return;
-      } catch {
+      } catch (e: any) {
+        if (e?.response?.error_code === 400 && e?.response?.description?.includes("parse entities")) {
+          try {
+            await ctx.telegram.editMessageText(
+              loadingMsg.chat.id, loadingMsg.message_id, undefined,
+              stripMd(snapshot), { disable_web_page_preview: true } as any,
+            );
+            return;
+          } catch { /* fall through */ }
+        }
         try { await ctx.telegram.deleteMessage(loadingMsg.chat.id, loadingMsg.message_id); } catch { /* non-fatal */ }
       }
     }
 
-    return ctx.replyWithMarkdown(snapshot, { disable_web_page_preview: true });
+    try {
+      return await ctx.replyWithMarkdown(snapshot, { disable_web_page_preview: true });
+    } catch {
+      return ctx.reply(stripMd(snapshot), { disable_web_page_preview: true } as any);
+    }
   });
 
   // ── /checkwallet [address] ────────────────────────────────────────────────
@@ -2052,12 +2074,25 @@ export function createBot(): Telegraf | null {
           report, { parse_mode: "Markdown", disable_web_page_preview: true } as any,
         );
         return;
-      } catch {
+      } catch (e: any) {
+        if (e?.response?.error_code === 400 && e?.response?.description?.includes("parse entities")) {
+          try {
+            await ctx.telegram.editMessageText(
+              loadingMsg.chat.id, loadingMsg.message_id, undefined,
+              stripMd(report), { disable_web_page_preview: true } as any,
+            );
+            return;
+          } catch { /* fall through */ }
+        }
         try { await ctx.telegram.deleteMessage(loadingMsg.chat.id, loadingMsg.message_id); } catch { /* non-fatal */ }
       }
     }
 
-    return ctx.replyWithMarkdown(report, { disable_web_page_preview: true });
+    try {
+      return await ctx.replyWithMarkdown(report, { disable_web_page_preview: true });
+    } catch {
+      return ctx.reply(stripMd(report), { disable_web_page_preview: true } as any);
+    }
   });
 
   // ── /scanagent ────────────────────────────────────────────────────────────
@@ -2079,7 +2114,7 @@ export function createBot(): Telegraf | null {
     try {
       loadingMsg = await ctx.replyWithMarkdown(
         `🔍 *Analyzing Forensic Data...*\n\n` +
-        `🤖 _${input}_\n` +
+        `🤖 _${esc(input)}_\n` +
         `_Running APOL AgentGuard intelligence. This may take a moment..._`
       );
     } catch { /* non-fatal */ }
@@ -2097,12 +2132,25 @@ export function createBot(): Telegraf | null {
           report, { parse_mode: "Markdown", disable_web_page_preview: true } as any,
         );
         return;
-      } catch {
+      } catch (e: any) {
+        if (e?.response?.error_code === 400 && e?.response?.description?.includes("parse entities")) {
+          try {
+            await ctx.telegram.editMessageText(
+              loadingMsg.chat.id, loadingMsg.message_id, undefined,
+              stripMd(report), { disable_web_page_preview: true } as any,
+            );
+            return;
+          } catch { /* fall through */ }
+        }
         try { await ctx.telegram.deleteMessage(loadingMsg.chat.id, loadingMsg.message_id); } catch { /* non-fatal */ }
       }
     }
 
-    return ctx.replyWithMarkdown(report, { disable_web_page_preview: true });
+    try {
+      return await ctx.replyWithMarkdown(report, { disable_web_page_preview: true });
+    } catch {
+      return ctx.reply(stripMd(report), { disable_web_page_preview: true } as any);
+    }
   });
 
   // ── /scanx ────────────────────────────────────────────────────────────────
@@ -2125,7 +2173,7 @@ export function createBot(): Telegraf | null {
       const preview = parseXUsername(input);
       loadingMsg = await ctx.replyWithMarkdown(
         `🔍 *Analyzing Forensic Data...*\n\n` +
-        `🐦 _@${preview}_\n` +
+        `🐦 _@${esc(preview)}_\n` +
         `_Running APOL social forensics..._`
       );
     } catch { /* non-fatal */ }
@@ -2142,12 +2190,25 @@ export function createBot(): Telegraf | null {
           report, { parse_mode: "Markdown", disable_web_page_preview: true } as any,
         );
         return;
-      } catch {
+      } catch (e: any) {
+        if (e?.response?.error_code === 400 && e?.response?.description?.includes("parse entities")) {
+          try {
+            await ctx.telegram.editMessageText(
+              loadingMsg.chat.id, loadingMsg.message_id, undefined,
+              stripMd(report), { disable_web_page_preview: true } as any,
+            );
+            return;
+          } catch { /* fall through */ }
+        }
         try { await ctx.telegram.deleteMessage(loadingMsg.chat.id, loadingMsg.message_id); } catch { /* non-fatal */ }
       }
     }
 
-    return ctx.replyWithMarkdown(report, { disable_web_page_preview: true });
+    try {
+      return await ctx.replyWithMarkdown(report, { disable_web_page_preview: true });
+    } catch {
+      return ctx.reply(stripMd(report), { disable_web_page_preview: true } as any);
+    }
   });
 
   // ── /report ───────────────────────────────────────────────────────────────
