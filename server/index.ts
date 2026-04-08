@@ -70,8 +70,19 @@ app.use((req, res, next) => {
     const tkn = process.env.APOL_BOT_TOKEN!;
     const WEBHOOK_PATH = `/bot-webhook-${tkn.slice(-10)}`;
 
+    try {
+      bot.botInfo = await bot.telegram.getMe();
+      log(`Bot initialized: @${bot.botInfo.username}`, "bot");
+    } catch (e: any) {
+      log(`Bot getMe failed: ${e?.message}`, "bot");
+    }
+
     app.post(WEBHOOK_PATH, (req, res) => {
-      bot.handleUpdate(req.body, res).catch(() => {
+      const update = req.body;
+      const msgText = update?.message?.text || "(no text)";
+      log(`Webhook received: ${msgText.slice(0, 60)}`, "bot");
+      bot.handleUpdate(update, res).catch((err: any) => {
+        log(`handleUpdate error: ${err?.message || err}`, "bot");
         if (!res.headersSent) res.sendStatus(200);
       });
     });
