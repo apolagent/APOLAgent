@@ -62,6 +62,22 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
+  const isProduction = process.env.NODE_ENV === "production" || !!process.env.REPL_DEPLOYMENT;
+  const bot = createBot();
+
+  // ── Telegram Bot webhook route — MUST be before static/vite catch-all ──────
+  if (bot && isProduction) {
+    const tkn = process.env.APOL_BOT_TOKEN!;
+    const WEBHOOK_PATH = `/bot-webhook-${tkn.slice(-10)}`;
+
+    app.post(WEBHOOK_PATH, (req, res) => {
+      bot.handleUpdate(req.body, res).catch(() => {
+        if (!res.headersSent) res.sendStatus(200);
+      });
+    });
+  }
+
+  // ── Error handler ──────────────────────────────────────────────────────────
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
@@ -86,9 +102,6 @@ app.use((req, res, next) => {
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
   server.listen(
     {
@@ -101,20 +114,12 @@ app.use((req, res, next) => {
     },
   );
 
-  // ── Telegram Bot (Webhook Mode — zero 409 conflicts) ────────────────────────
-  const isProduction = process.env.NODE_ENV === "production" || !!process.env.REPL_DEPLOYMENT;
-  const bot = createBot();
+  // ── Telegram Bot webhook registration (after server is listening) ──────────
   if (bot && isProduction) {
     const tkn = process.env.APOL_BOT_TOKEN!;
     const WEBHOOK_DOMAIN = process.env.WEBHOOK_DOMAIN || "apolagent.online";
     const WEBHOOK_PATH = `/bot-webhook-${tkn.slice(-10)}`;
     const WEBHOOK_URL = `https://${WEBHOOK_DOMAIN}${WEBHOOK_PATH}`;
-
-    app.post(WEBHOOK_PATH, (req, res) => {
-      bot.handleUpdate(req.body, res).catch(() => {
-        if (!res.headersSent) res.sendStatus(200);
-      });
-    });
 
     const setupWebhook = async (attempt = 1): Promise<void> => {
       if (attempt > 5) {
@@ -135,14 +140,13 @@ app.use((req, res, next) => {
             url: WEBHOOK_URL,
             drop_pending_updates: true,
             allowed_updates: ["message", "callback_query"],
-            secret_token: tkn.slice(-20),
           }),
           signal: AbortSignal.timeout(10000),
         });
         const setData = await setRes.json() as any;
 
         if (setData.ok) {
-          log(`Webhook set successfully → ${WEBHOOK_DOMAIN}${WEBHOOK_PATH.slice(0, 15)}...`, "bot");
+          log(`Webhook active → ${WEBHOOK_URL}`, "bot");
 
           bot.telegram.setMyCommands([
             { command: "scan",        description: "Detailed CA investigation (Taxes, Liquidity, Honeypot)" },
