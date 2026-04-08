@@ -62,15 +62,12 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
-  const isProduction = process.env.NODE_ENV === "production" || !!process.env.REPL_DEPLOYMENT;
   const bot = createBot();
 
-  // ── Telegram Bot — webhook only, zero polling ──────────────────────────────
-  if (bot && isProduction) {
+  if (bot) {
     const tkn = process.env.APOL_BOT_TOKEN!;
-    const WEBHOOK_DOMAIN = process.env.WEBHOOK_DOMAIN || "apolagent.online";
-    const WEBHOOK_PATH = `/bot-webhook-${tkn.slice(-10)}`;
-    const WEBHOOK_URL = `https://${WEBHOOK_DOMAIN}${WEBHOOK_PATH}`;
+    const WEBHOOK_PATH = `/bot-webhook-${tkn}`;
+    const WEBHOOK_URL = `https://apolagent.online${WEBHOOK_PATH}`;
 
     try {
       bot.botInfo = await bot.telegram.getMe();
@@ -128,12 +125,10 @@ app.use((req, res, next) => {
     },
   );
 
-  // ── Telegram Bot webhook HARD RESET (after server is listening) ─────────
-  if (bot && isProduction) {
+  if (bot) {
     const tkn = process.env.APOL_BOT_TOKEN!;
-    const WEBHOOK_DOMAIN = process.env.WEBHOOK_DOMAIN || "apolagent.online";
-    const WEBHOOK_PATH = `/bot-webhook-${tkn.slice(-10)}`;
-    const WEBHOOK_URL = `https://${WEBHOOK_DOMAIN}${WEBHOOK_PATH}`;
+    const WEBHOOK_PATH = `/bot-webhook-${tkn}`;
+    const WEBHOOK_URL = `https://apolagent.online${WEBHOOK_PATH}`;
 
     const hardResetWebhook = async (attempt = 1): Promise<void> => {
       if (attempt > 5) {
@@ -212,11 +207,9 @@ app.use((req, res, next) => {
     };
 
     setTimeout(() => hardResetWebhook(), 2000);
-  } else if (bot) {
-    log("Bot skipped in dev — only runs in production to avoid conflicts", "bot");
   }
 
-  // ── Scheduled Tweet Poster (production only) ────────────────────────────────
+  const isProduction = process.env.NODE_ENV === "production" || !!process.env.REPL_DEPLOYMENT;
   if (isProduction) {
     const CHECK_INTERVAL = 10 * 60 * 1000;
     const INITIAL_DELAY = 2 * 60 * 1000;
