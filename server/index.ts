@@ -108,29 +108,27 @@ app.use((req, res, next) => {
     const tkn = process.env.APOL_BOT_TOKEN!;
     const myId = `${process.pid}-${Date.now()}`;
 
+    const forceClosePolling = async () => {
+      try {
+        await fetch(`https://api.telegram.org/bot${tkn}/deleteWebhook?drop_pending_updates=true`,
+          { signal: AbortSignal.timeout(3000) });
+        await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&limit=1&timeout=0`,
+          { signal: AbortSignal.timeout(5000) });
+        log("Cleared old polling session", "bot");
+      } catch { /* non-fatal */ }
+    };
+
     const launchBot = async (attempt = 1): Promise<void> => {
+      if (attempt > 5) {
+        log("Max bot launch attempts reached. Bot will not start.", "bot");
+        return;
+      }
       try {
         log(`[${myId}] Bot launch attempt ${attempt}...`, "bot");
 
-        const meRes = await fetch(`https://api.telegram.org/bot${tkn}/getMe`, { signal: AbortSignal.timeout(5000) });
-        const meData = await meRes.json() as any;
-        if (!meData.ok) {
-          log(`Bot token error: ${meData.description}. Waiting 2 min...`, "bot");
-          await new Promise(r => setTimeout(r, 120_000));
-          return launchBot(attempt);
-        }
+        await forceClosePolling();
+        await new Promise(r => setTimeout(r, 2000));
 
-        await fetch(`https://api.telegram.org/bot${tkn}/deleteWebhook?drop_pending_updates=true`, { signal: AbortSignal.timeout(5000) }).catch(() => {});
-
-        const updRes = await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&limit=1&timeout=0`, { signal: AbortSignal.timeout(10000) });
-        const updData = await updRes.json() as any;
-        if (!updData.ok && updData.error_code === 409) {
-          log(`Another polling session active. Waiting 30s...`, "bot");
-          await new Promise(r => setTimeout(r, 30_000));
-          return launchBot(attempt + 1);
-        }
-
-        await new Promise(r => setTimeout(r, 1500));
         await bot.launch({ dropPendingUpdates: true, allowedUpdates: ["message", "callback_query"] });
         log("Telegram bot polling started successfully ✓", "bot");
 
@@ -146,21 +144,23 @@ app.use((req, res, next) => {
         const msg = err?.message ?? String(err);
         log(`Bot start failed (attempt ${attempt}): ${msg}`, "bot");
         if (msg.includes("409") || msg.includes("Conflict")) {
-          const delay = Math.min(20_000 + attempt * 10_000, 90_000);
-          log(`409 conflict — waiting ${delay / 1000}s...`, "bot");
-          await new Promise(r => setTimeout(r, delay));
+          log(`409 conflict — force-clearing and retrying in 5s...`, "bot");
+          await forceClosePolling();
+          await new Promise(r => setTimeout(r, 5000));
           return launchBot(attempt + 1);
         }
-        log(`Retrying in 30s...`, "bot");
-        await new Promise(r => setTimeout(r, 30_000));
+        log(`Retrying in 10s...`, "bot");
+        await new Promise(r => setTimeout(r, 10_000));
         return launchBot(attempt + 1);
       }
     };
 
-    const jitter = Math.floor(Math.random() * 5000) + 8000;
-    setTimeout(() => launchBot(), jitter);
+    setTimeout(() => launchBot(), 3000);
 
-    const shutdown = () => { try { bot.stop("SIGTERM"); } catch {} };
+    const shutdown = () => {
+      try { bot.stop("SIGTERM"); } catch {}
+      forceClosePolling().catch(() => {});
+    };
     process.once("SIGTERM", shutdown);
     process.once("SIGINT", shutdown);
   } else if (bot) {
