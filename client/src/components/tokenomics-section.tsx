@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Copy, Check, ExternalLink } from "lucide-react";
 
-const CONTRACT_ADDRESS = "TBA";
+const CONTRACT_ADDRESS = "0x0d521b604a25c2825b7131acf243f4b296c64aab";
 const CHAIN = "Base";
 
 const rows = [
