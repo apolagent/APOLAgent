@@ -907,13 +907,30 @@ async function buildWalletCheck(address: string): Promise<string> {
     const addrLow = address.toLowerCase();
 
     const moralisTxP = fetch(`${MORALIS}/${encodedAddr}?chain=0x2105&order=ASC&limit=100`,
-      { headers: mHdrs, signal: AbortSignal.timeout(8_000) }).then(r => r.json())
-      .then((d: any) => ({ source: "moralis" as const, data: d }));
+      { headers: mHdrs, signal: AbortSignal.timeout(8_000) })
+      .then(r => r.json())
+      .then((d: any) => {
+        const txs = d?.result ?? [];
+        if (txs.length === 0) throw new Error("moralis-empty");
+        return { source: "moralis" as const, data: d, txs };
+      });
 
     const blockscoutTxP = fetch(
       `https://base.blockscout.com/api/v2/addresses/${encodedAddr}/transactions?sort=asc&filter=to%7Cfrom`,
-      { signal: AbortSignal.timeout(8_000) }).then(r => r.json())
-      .then((d: any) => ({ source: "blockscout" as const, data: d }));
+      { signal: AbortSignal.timeout(8_000) })
+      .then(r => r.json())
+      .then((d: any) => {
+        const items: any[] = Array.isArray(d?.items) ? d.items : [];
+        if (items.length === 0) throw new Error("blockscout-empty");
+        const txs = items.map((tx: any) => ({
+          hash: tx.hash,
+          from_address: tx.from?.hash ?? null,
+          to_address: tx.to?.hash ?? null,
+          value: tx.value ?? "0",
+          block_timestamp: tx.timestamp ?? null,
+        }));
+        return { source: "blockscout" as const, data: d, txs };
+      });
 
     const txHistoryP = Promise.any([moralisTxP, blockscoutTxP]).catch(() => null);
 
@@ -945,28 +962,9 @@ async function buildWalletCheck(address: string): Promise<string> {
     }
 
     const txResult = txHistoryR.status === "fulfilled" ? txHistoryR.value : null;
-    let baseTxs: any[] = [];
-    let txSource = "none";
-    let baseTxData: any = {};
-
-    if (txResult?.source === "moralis") {
-      baseTxData = txResult.data;
-      baseTxs = baseTxData?.result ?? [];
-      txSource = baseTxs.length > 0 ? "moralis" : "none";
-    } else if (txResult?.source === "blockscout") {
-      const bsTxItems: any[] = Array.isArray(txResult.data?.items) ? txResult.data.items : [];
-      if (bsTxItems.length > 0) {
-        baseTxs = bsTxItems.map((tx: any) => ({
-          hash: tx.hash,
-          from_address: tx.from?.hash ?? null,
-          to_address: tx.to?.hash ?? null,
-          value: tx.value ?? "0",
-          block_timestamp: tx.timestamp ?? null,
-        }));
-        baseTxData = txResult.data;
-        txSource = "blockscout";
-      }
-    }
+    let baseTxs: any[] = txResult?.txs ?? [];
+    let txSource = txResult?.source ?? "none";
+    let baseTxData: any = txResult?.data ?? {};
 
     const baseChainEntry = (baseChainsData?.active_chains ?? [])
       .find((c: any) => c.chain === "base" || c.chain_id === "0x2105");
@@ -1083,10 +1081,9 @@ async function buildWalletCheck(address: string): Promise<string> {
       activityLevel  = "No Base activity";
     } else {
       txCountDisplay = hasMoreBase ? `${baseTxCount}+ txs` : `${baseTxCount} txs`;
-      if (baseTxCount < 5)       activityLevel = "⚠️ Very Low — Fresh Profile";
-      else if (baseTxCount < 20) activityLevel = "Low";
-      else if (baseTxCount < 100)activityLevel = "Moderate";
-      else                       activityLevel = "High (Established Wallet)";
+      if (baseTxCount > 50)       activityLevel = "High (Established Wallet)";
+      else if (baseTxCount >= 10) activityLevel = "Moderate";
+      else                        activityLevel = "⚠️ Low — Fresh Profile";
     }
 
     const isContract   = bsAddr?.is_contract ?? false;
