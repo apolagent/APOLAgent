@@ -114,12 +114,15 @@ app.use((req, res, next) => {
           { signal: AbortSignal.timeout(3000) });
         await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&limit=1&timeout=0`,
           { signal: AbortSignal.timeout(5000) });
+        await new Promise(r => setTimeout(r, 500));
+        await fetch(`https://api.telegram.org/bot${tkn}/getUpdates?offset=-1&limit=1&timeout=0`,
+          { signal: AbortSignal.timeout(5000) });
         log("Cleared old polling session", "bot");
       } catch { /* non-fatal */ }
     };
 
     const launchBot = async (attempt = 1): Promise<void> => {
-      if (attempt > 5) {
+      if (attempt > 8) {
         log("Max bot launch attempts reached. Bot will not start.", "bot");
         return;
       }
@@ -127,7 +130,8 @@ app.use((req, res, next) => {
         log(`[${myId}] Bot launch attempt ${attempt}...`, "bot");
 
         await forceClosePolling();
-        await new Promise(r => setTimeout(r, 2000));
+        const preDelay = Math.min(2000 + (attempt - 1) * 2000, 15000);
+        await new Promise(r => setTimeout(r, preDelay));
 
         await bot.launch({ dropPendingUpdates: true, allowedUpdates: ["message", "callback_query"] });
         log("Telegram bot polling started successfully ✓", "bot");
@@ -144,9 +148,10 @@ app.use((req, res, next) => {
         const msg = err?.message ?? String(err);
         log(`Bot start failed (attempt ${attempt}): ${msg}`, "bot");
         if (msg.includes("409") || msg.includes("Conflict")) {
-          log(`409 conflict — force-clearing and retrying in 5s...`, "bot");
+          const backoff = Math.min(5000 + (attempt - 1) * 3000, 20000);
+          log(`409 conflict — force-clearing and retrying in ${backoff / 1000}s...`, "bot");
           await forceClosePolling();
-          await new Promise(r => setTimeout(r, 5000));
+          await new Promise(r => setTimeout(r, backoff));
           return launchBot(attempt + 1);
         }
         log(`Retrying in 10s...`, "bot");
@@ -155,7 +160,7 @@ app.use((req, res, next) => {
       }
     };
 
-    setTimeout(() => launchBot(), 3000);
+    setTimeout(() => launchBot(), 5000);
 
     const shutdown = () => {
       try { bot.stop("SIGTERM"); } catch {}
