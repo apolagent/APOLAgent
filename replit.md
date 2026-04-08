@@ -7,7 +7,7 @@ APOL Agent is an autonomous on-chain forensics protocol on Base blockchain. It f
 - **Frontend**: React + TypeScript with Vite, Tailwind CSS, shadcn/ui components
 - **Backend**: Express.js with TypeScript
 - **Database**: PostgreSQL with Drizzle ORM
-- **Telegram Bot**: Telegraf — runs only in production to avoid conflicts
+- **Telegram Bot**: Telegraf in **webhook mode** (not polling) — eliminates 409 conflicts during deployments. Webhook endpoint: `/bot-webhook-{token_suffix}` on `apolagent.online`
 - **Routing**: wouter (frontend), Express routes (backend)
 - **State Management**: TanStack React Query
 
