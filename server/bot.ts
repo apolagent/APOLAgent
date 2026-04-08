@@ -907,7 +907,7 @@ async function buildWalletCheck(address: string): Promise<string> {
     const addrLow = address.toLowerCase();
 
     const moralisTxP = fetch(`${MORALIS}/${encodedAddr}?chain=0x2105&order=ASC&limit=100`,
-      { headers: mHdrs, signal: AbortSignal.timeout(8_000) })
+      { headers: mHdrs, signal: AbortSignal.timeout(7_000) })
       .then(r => r.json())
       .then((d: any) => {
         const txs = d?.result ?? [];
@@ -917,7 +917,7 @@ async function buildWalletCheck(address: string): Promise<string> {
 
     const blockscoutTxP = fetch(
       `https://base.blockscout.com/api/v2/addresses/${encodedAddr}/transactions?sort=asc&filter=to%7Cfrom`,
-      { signal: AbortSignal.timeout(8_000) })
+      { signal: AbortSignal.timeout(7_000) })
       .then(r => r.json())
       .then((d: any) => {
         const items: any[] = Array.isArray(d?.items) ? d.items : [];
@@ -936,13 +936,13 @@ async function buildWalletCheck(address: string): Promise<string> {
 
     const [baseChainsR, allChainsR, threatR, bsAddrR, alchemyBalR, txHistoryR] = await Promise.allSettled([
       fetch(`${MORALIS}/wallets/${encodedAddr}/chains?chains[]=base`,
-        { headers: mHdrs, signal: AbortSignal.timeout(8_000) }).then(r => r.json()),
+        { headers: mHdrs, signal: AbortSignal.timeout(6_000) }).then(r => r.json()),
       fetch(`${MORALIS}/wallets/${encodedAddr}/chains`,
-        { headers: mHdrs, signal: AbortSignal.timeout(8_000) }).then(r => r.json()),
+        { headers: mHdrs, signal: AbortSignal.timeout(6_000) }).then(r => r.json()),
       fetch(`${GOPLUS_BASE}/address_security/${encodedAddr}?chain_id=${BASE_CHAIN_ID}`,
-        { signal: AbortSignal.timeout(8_000) }).then(r => r.json()),
+        { signal: AbortSignal.timeout(6_000) }).then(r => r.json()),
       fetch(`https://base.blockscout.com/api/v2/addresses/${encodedAddr}`,
-        { signal: AbortSignal.timeout(8_000) }).then(r => r.json()),
+        { signal: AbortSignal.timeout(6_000) }).then(r => r.json()),
       BOT_RPC_URL
         ? botRpcCall("eth_getBalance", [address, "latest"])
         : Promise.resolve(null),
@@ -977,10 +977,15 @@ async function buildWalletCheck(address: string): Promise<string> {
     }
 
     if (!genesisTimestamp) {
-      const oldestTx = await fetchOldestTx(address);
-      if (oldestTx?.timestamp) {
-        genesisTimestamp = oldestTx.timestamp;
-      }
+      try {
+        const bsRes = await fetch(
+          `https://base.blockscout.com/api/v2/addresses/${encodedAddr}/transactions?sort=asc`,
+          { signal: AbortSignal.timeout(4_000) }
+        );
+        const bsData = await bsRes.json() as any;
+        const oldest = (bsData?.items ?? [])[0];
+        if (oldest?.timestamp) genesisTimestamp = oldest.timestamp;
+      } catch { /* non-fatal */ }
     }
 
     const firstIncoming = baseTxs.find(
@@ -994,7 +999,7 @@ async function buildWalletCheck(address: string): Promise<string> {
       try {
         const txRes = await fetch(
           `${MORALIS}/transaction/${encodeURIComponent(genesisTxHash)}?chain=0x2105`,
-          { headers: mHdrs, signal: AbortSignal.timeout(5_000) }
+          { headers: mHdrs, signal: AbortSignal.timeout(4_000) }
         );
         if (txRes.ok) {
           const txData = await txRes.json() as any;
@@ -1015,10 +1020,10 @@ async function buildWalletCheck(address: string): Promise<string> {
       const [labelR, ensR] = await Promise.allSettled([
         funderTxHash
           ? fetch(`${MORALIS}/transaction/${encodeURIComponent(funderTxHash)}?chain=0x2105`,
-              { headers: mHdrs, signal: AbortSignal.timeout(5_000) }).then(r => r.json())
+              { headers: mHdrs, signal: AbortSignal.timeout(4_000) }).then(r => r.json())
           : Promise.resolve(null),
         fetch(`https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(funderAddr)}`,
-          { signal: AbortSignal.timeout(5_000) }).then(r => r.json()),
+          { signal: AbortSignal.timeout(4_000) }).then(r => r.json()),
       ]);
 
       if (labelR.status === "fulfilled" && labelR.value) {
@@ -2023,7 +2028,7 @@ export function createBot(): Telegraf | null {
     const WALLET_TIMEOUT_MSG =
       `⚠️ *Wallet Check Timeout*\n\n` +
       `The investigation is taking longer than expected. Try again in a moment.`;
-    const report = await withTimeout(buildWalletCheck(address), 60_000, WALLET_TIMEOUT_MSG);
+    const report = await withTimeout(buildWalletCheck(address), 20_000, WALLET_TIMEOUT_MSG);
 
     if (loadingMsg) {
       try {
