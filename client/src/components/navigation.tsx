@@ -253,15 +253,12 @@ export default function Navigation() {
               </span>
             </Link>
             <WalletButton />
-            <a
-              href="https://app.uniswap.org/explore/tokens/base/0x0d521b604a25c2825b7131acf243f4b296c64aab"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ ...actionBtnStyle, background: G, border: `1px solid ${G}`, color: "#000", padding: "5px 14px", fontWeight: 900, textDecoration: "none" }}
+            <button
+              style={{ ...actionBtnStyle, background: G, border: `1px solid ${G}`, color: "#000", padding: "5px 14px", fontWeight: 900 }}
               data-testid="link-buy-apol"
             >
               Buy $APOL
-            </a>
+            </button>
           </div>
         </div>
 
@@ -319,15 +316,12 @@ export default function Navigation() {
               </Link>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 <WalletButton />
-                <a
-                  href="https://app.uniswap.org/explore/tokens/base/0x0d521b604a25c2825b7131acf243f4b296c64aab"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ ...actionBtnStyle, background: G, border: `1px solid ${G}`, color: "#000", padding: "7px 16px", fontWeight: 900, textDecoration: "none" }}
+                <button
+                  style={{ ...actionBtnStyle, background: G, border: `1px solid ${G}`, color: "#000", padding: "7px 16px", fontWeight: 900 }}
                   data-testid="link-buy-apol-mobile"
                 >
                   Buy $APOL
-                </a>
+                </button>
               </div>
             </div>
           </div>

@@ -12,7 +12,7 @@ const WETH_BASE = "0x4200000000000000000000000000000000000006";
 const FEE_TIERS = [500, 3000, 10000, 100];
 
 const BOT_ERC8183_VAULT = "0xdad686299fb562f89e55da05f1d96fabeb2a2e32";
-const BOT_OFFICIAL_APOL_CA = "0x0d521b604a25c2825b7131acf243f4b296c64aab";
+const BOT_OFFICIAL_APOL_CA = "";
 const BOT_OFFICIAL_APOL_TWITTER = "@ApolAgent_";
 
 function getSiteUrl(): string {
@@ -587,26 +587,15 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
 
     const apolSelfNames = ["apol", "apol agent", "active onchain intelligence", "$apol"];
     if (apolSelfNames.includes(tokenName.toLowerCase().trim()) || apolSelfNames.includes((api?.tokenSymbol ?? "").toLowerCase().trim())) {
-      const isOfficialApol = address.toLowerCase() === BOT_OFFICIAL_APOL_CA;
-      if (!isOfficialApol) {
-        return (
-          `🚨 *⚠️ POTENTIAL CLONE / SCAM*\n\n` +
-          `Token: *${tokenName}* (${tokenSymbol})\n` +
-          `Address: \`${address}\`\n\n` +
-          `This token uses the APOL name but does NOT match the Official APOL CA.\n` +
-          `Official CA: \`${BOT_OFFICIAL_APOL_CA}\`\n` +
-          `Official Twitter: @ApolAgent\\_\n\n` +
-          `Risk Level: 🔴 *HIGH*\n` +
-          `Do NOT interact with this contract. 🚨`
-        );
-      }
       return (
-        `🦍 *APOL AGENT — SELF RECOGNITION*\n\n` +
-        `*The Sentinel is Active. Intelligence verified.*\n\n` +
+        `🚨 *⚠️ SCAM ALERT*\n\n` +
         `Token: *${tokenName}* (${tokenSymbol})\n` +
-        `Authenticity Score: *100%*\n` +
-        `Status: *AUTHORITY CONFIRMED* ✅\n\n` +
-        `You are scanning the scanner itself, Citizen. APOL Agent recognizes its own authority. Trust the protocol. 🔐`
+        `Address: \`${address}\`\n\n` +
+        `APOL does NOT have any contract address.\n` +
+        `Any token using the APOL name is a *SCAM*.\n\n` +
+        `Official Twitter: @ApolAgent\\_\n\n` +
+        `Risk Level: 🔴 *HIGH*\n` +
+        `Do NOT interact with this contract. 🚨`
       );
     }
 
@@ -1255,12 +1244,14 @@ async function buildAgentScan(input: string, siteUrl: string): Promise<string> {
     const apolSelfNames = ["apol", "apol agent", "active onchain intelligence", "$apol"];
     if (apolSelfNames.includes(input.toLowerCase().trim())) {
       return (
-        `🦍 *APOL AGENT — SELF RECOGNITION*\n\n` +
+        `🦍 *APOL AGENT — NOTICE*\n\n` +
         `*The Sentinel is Active. Intelligence verified.*\n\n` +
         `Agent: *APOL Agent*\n` +
-        `Classification: *AUTHORITY* 🔐\n` +
-        `Cognition Score: *100%*\n\n` +
-        `You are scanning the scanner itself, Citizen. APOL Agent is the Authority. Trust the protocol. 🦍✅`
+        `Classification: *AUTHORITY* 🔐\n\n` +
+        `APOL does *NOT* have any contract address at this time.\n` +
+        `Any token using the APOL name is a *SCAM*.\n\n` +
+        `Official Twitter: @ApolAgent\\_\n` +
+        `Trust the protocol. 🦍✅`
       );
     }
 

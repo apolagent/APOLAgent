@@ -60,7 +60,7 @@ const CHAINABUSE_API_KEY = process.env.CHAINABUSE_API_KEY;
 const CHAINABUSE_BASE = "https://api.chainabuse.com/v0";
 const GOPLUS_BASE = "https://api.gopluslabs.io/api/v1";
 
-const OFFICIAL_APOL_CA = "0x0d521b604a25c2825b7131acf243f4b296c64aab";
+const OFFICIAL_APOL_CA = "";
 const OFFICIAL_APOL_TWITTER = "@ApolAgent_";
 
 async function rpcCall(method: string, params: any[]): Promise<any> {
@@ -810,31 +810,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const scannedName = tName.toLowerCase().trim();
             const scannedSymbol = tSymbol.toLowerCase().trim();
             if (APOL_SELF_NAMES.includes(scannedName) || APOL_SELF_NAMES.includes(scannedSymbol)) {
-              const isOfficialApol = addrLower === OFFICIAL_APOL_CA;
-              if (!isOfficialApol) {
-                const lookupCount = await storage.incrementLookup(address as string, tName, tSymbol);
-                return res.json({
-                  addressType: "contract", riskLevel: "High Risk",
-                  apolVerdict: `⚠️ POTENTIAL CLONE / SCAM — This token uses the name "${tName}" (${tSymbol}) but does NOT match the Official APOL CA (${OFFICIAL_APOL_CA}). Official Twitter: ${OFFICIAL_APOL_TWITTER}. Do NOT interact. 🚨`,
-                  tokenName: tName, tokenSymbol: tSymbol, isHoneypot: false,
-                  buyTax: "0", sellTax: "0", isMintable: false, isOpenSource: true,
-                  holderCount, holderCountLabel, greenBadge: false, redFlags: ["⚠️ POTENTIAL CLONE / SCAM — Address does not match Official APOL CA"], malicious: {}, lookupCount, authenticityScore: 0,
-                  liveStatus,
-                  lpStatus: lpLabel,
-                  dexVersion: dexVersion,
-                  isClone: true,
-                });
-              }
               const lookupCount = await storage.incrementLookup(address as string, tName, tSymbol);
               return res.json({
-                addressType: "contract", riskLevel: "SAFE",
-                apolVerdict: "The Sentinel is Active. Intelligence verified. APOL Agent recognizes its own authority. Authenticity Score: 100%. This is the source. Trust the protocol. 🦍🔐",
+                addressType: "contract", riskLevel: "High Risk",
+                apolVerdict: `🚨 SCAM ALERT — APOL does NOT have any contract address. Any token using the APOL name is a SCAM. Official Twitter: ${OFFICIAL_APOL_TWITTER}. Do NOT interact. 🚨`,
                 tokenName: tName, tokenSymbol: tSymbol, isHoneypot: false,
                 buyTax: "0", sellTax: "0", isMintable: false, isOpenSource: true,
-                holderCount, holderCountLabel, greenBadge: true, redFlags: [], malicious: {}, lookupCount, authenticityScore: 100,
+                holderCount, holderCountLabel, greenBadge: false, redFlags: ["🚨 SCAM — APOL does not have any contract address"], malicious: {}, lookupCount, authenticityScore: 0,
                 liveStatus,
                 lpStatus: lpLabel,
                 dexVersion: dexVersion,
+                isClone: true,
               });
             }
 
@@ -969,36 +955,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const scannedName = (tokenData?.token_name || "").toLowerCase().trim();
       const scannedSymbol = (tokenData?.token_symbol || "").toLowerCase().trim();
       if (APOL_SELF_NAMES.includes(scannedName) || APOL_SELF_NAMES.includes(scannedSymbol)) {
-        const isOfficialApol = (address as string).toLowerCase() === OFFICIAL_APOL_CA;
-        if (!isOfficialApol) {
-          const lookupCount = await storage.incrementLookup(address as string, tokenData?.token_name, tokenData?.token_symbol);
-          return res.json({
-            addressType: "contract",
-            riskLevel: "High Risk",
-            apolVerdict: `⚠️ POTENTIAL CLONE / SCAM — This token uses the name "${tokenData?.token_name}" (${tokenData?.token_symbol}) but does NOT match the Official APOL CA (${OFFICIAL_APOL_CA}). Official Twitter: ${OFFICIAL_APOL_TWITTER}. Do NOT interact. 🚨`,
-            tokenName: tokenData?.token_name,
-            tokenSymbol: tokenData?.token_symbol,
-            isHoneypot: false,
-            buyTax: "0",
-            sellTax: "0",
-            isMintable: false,
-            isOpenSource: true,
-            holderCount: parseInt(tokenData?.holder_count ?? "0"),
-            greenBadge: false,
-            redFlags: ["⚠️ POTENTIAL CLONE / SCAM — Address does not match Official APOL CA"],
-            malicious: {},
-            lookupCount,
-            authenticityScore: 0,
-            liveStatus: null,
-            lpStatus: null,
-            isClone: true,
-          });
-        }
         const lookupCount = await storage.incrementLookup(address as string, tokenData?.token_name, tokenData?.token_symbol);
         return res.json({
           addressType: "contract",
-          riskLevel: "SAFE",
-          apolVerdict: "The Sentinel is Active. Intelligence verified. APOL Agent recognizes its own authority. Authenticity Score: 100%. This is the source. Trust the protocol. 🦍🔐",
+          riskLevel: "High Risk",
+          apolVerdict: `🚨 SCAM ALERT — APOL does NOT have any contract address. Any token using the APOL name is a SCAM. Official Twitter: ${OFFICIAL_APOL_TWITTER}. Do NOT interact. 🚨`,
           tokenName: tokenData?.token_name,
           tokenSymbol: tokenData?.token_symbol,
           isHoneypot: false,
@@ -1007,13 +968,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isMintable: false,
           isOpenSource: true,
           holderCount: parseInt(tokenData?.holder_count ?? "0"),
-          greenBadge: true,
-          redFlags: [],
+          greenBadge: false,
+          redFlags: ["🚨 SCAM — APOL does not have any contract address"],
           malicious: {},
           lookupCount,
-          authenticityScore: 100,
+          authenticityScore: 0,
           liveStatus: null,
           lpStatus: null,
+          isClone: true,
         });
       }
 

@@ -116,9 +116,9 @@ shared/
 - **Tax override**: Factory tokens with simulated tax > 50% → tax forced to 0%
 
 ## Brand Protection (Strict Identity)
-- Official APOL CA: `0x0d521b604a25c2825b7131acf243f4b296c64aab` (hardcoded in routes.ts + bot.ts)
+- Official APOL CA: TBA (no contract address exists yet)
 - Official Twitter: `@ApolAgent_`
-- If a token name matches APOL but address differs from official CA → flagged as "⚠️ POTENTIAL CLONE / SCAM", Risk = HIGH
+- ANY token using the APOL name is flagged as SCAM — APOL does not have a contract address
 - Both web API and Telegram bot enforce this check
 
 ## Wallet Forensics (Enhanced)
