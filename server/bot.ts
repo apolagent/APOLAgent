@@ -595,7 +595,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
           `Address: \`${address}\`\n\n` +
           `This token uses the APOL name but does NOT match the Official APOL CA.\n` +
           `Official CA: \`${BOT_OFFICIAL_APOL_CA}\`\n` +
-          `Official Twitter: ${BOT_OFFICIAL_APOL_TWITTER}\n\n` +
+          `Official Twitter: @ApolAgent\\_\n\n` +
           `Risk Level: 🔴 *HIGH*\n` +
           `Do NOT interact with this contract. 🚨`
         );
