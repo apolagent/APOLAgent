@@ -216,27 +216,65 @@ async function searchDexScreener(query: string): Promise<{ address: string; name
   } catch { return null; }
 }
 
-async function getWalletInfo(addr: string): Promise<{ balance: string; txCount: number; isContract: boolean; firstTx: string | null }> {
+interface WalletInfo {
+  balance: string;
+  txCount: number;
+  isContract: boolean;
+  firstTx: string | null;
+  firstTxHash: string | null;
+  firstTxFrom: string | null;
+  firstTxFromName: string | null;
+  inflow: number;
+  outflow: number;
+}
+
+async function getWalletInfo(addr: string): Promise<WalletInfo> {
   try {
-    const [balResult, txCountResult] = await rpcBatch([
+    const [balResult] = await rpcBatch([
       { method: "eth_getBalance", params: [addr, "latest"] },
-      { method: "eth_getTransactionCount", params: [addr, "latest"] },
     ]);
     const balWei = balResult ? BigInt(balResult) : BigInt(0);
     const balEth = Number(balWei) / 1e18;
-    const txCount = txCountResult ? Number(BigInt(txCountResult)) : 0;
 
-    const addrData = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
+    const addrData = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
     const isContract = addrData?.is_contract || false;
 
+    let txCount = 0;
     let firstTx: string | null = null;
+    let firstTxHash: string | null = null;
+    let firstTxFrom: string | null = null;
+    let firstTxFromName: string | null = null;
+    let inflow = 0;
+    let outflow = 0;
+
     try {
-      const txData = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}/transactions?limit=1&sort=asc`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
-      firstTx = txData?.items?.[0]?.timestamp || null;
+      const txData = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}/transactions?limit=50&sort=asc`, { signal: AbortSignal.timeout(6000) }).then((r) => r.ok ? r.json() as any : null);
+      const items = txData?.items || [];
+      if (items.length > 0) {
+        firstTx = items[0]?.timestamp || null;
+        firstTxHash = items[0]?.hash || null;
+        const fromAddr = items[0]?.from?.hash || null;
+        firstTxFrom = fromAddr;
+        firstTxFromName = items[0]?.from?.name || items[0]?.from?.ens_domain_name || null;
+      }
+
+      const lowerAddr = addr.toLowerCase();
+      for (const tx of items) {
+        const val = tx.value ? Number(BigInt(tx.value)) / 1e18 : 0;
+        if (val > 0) {
+          if (tx.to?.hash?.toLowerCase() === lowerAddr) inflow += val;
+          if (tx.from?.hash?.toLowerCase() === lowerAddr) outflow += val;
+        }
+      }
     } catch {}
 
-    return { balance: balEth.toFixed(4), txCount, isContract, firstTx };
-  } catch { return { balance: "0", txCount: 0, isContract: false, firstTx: null }; }
+    try {
+      const countData = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}/counters`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
+      txCount = countData?.transactions_count ? parseInt(countData.transactions_count) : 0;
+    } catch {}
+
+    return { balance: balEth.toFixed(4), txCount, isContract, firstTx, firstTxHash, firstTxFrom, firstTxFromName, inflow, outflow };
+  } catch { return { balance: "0", txCount: 0, isContract: false, firstTx: null, firstTxHash: null, firstTxFrom: null, firstTxFromName: null, inflow: 0, outflow: 0 }; }
 }
 
 function detectPlatform(addr: string, deployer: string | null, holders: { address: string }[]): string | null {
@@ -451,44 +489,90 @@ async function handleCheckWallet(ctx: any, address: string): Promise<void> {
     const balUsd = parseFloat(walletInfo.balance) * ethUsd;
 
     let walletAge = "Unknown";
+    let ageDays = 0;
+    let ageLabel = "";
     if (walletInfo.firstTx) {
       const firstDate = new Date(walletInfo.firstTx);
-      const days = Math.floor((Date.now() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (days < 1) walletAge = "< 1 day ⚠️";
-      else if (days < 7) walletAge = `${days} days ⚠️`;
-      else if (days < 30) walletAge = `${days} days`;
-      else walletAge = `${Math.floor(days / 30)} months`;
+      ageDays = Math.floor((Date.now() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (ageDays < 1) { walletAge = "< 1 day"; ageLabel = "⚠️"; }
+      else if (ageDays < 30) { walletAge = `${ageDays} days`; ageLabel = ageDays < 7 ? "⚠️" : ""; }
+      else if (ageDays < 365) { walletAge = `${ageDays} days (~${Math.floor(ageDays / 30)}mo)`; }
+      else { const yrs = Math.floor(ageDays / 365); const mo = Math.floor((ageDays % 365) / 30); walletAge = `${ageDays} days (~${yrs}y ${mo}m)`; }
     }
 
     const flags: string[] = [];
     if (parseFloat(walletInfo.balance) < 0.001) flags.push("💸 Very low ETH balance");
     if (walletInfo.txCount < 5) flags.push("📉 Very few transactions");
     if (walletInfo.firstTx) {
-      const days = Math.floor((Date.now() - new Date(walletInfo.firstTx).getTime()) / (1000 * 60 * 60 * 24));
-      if (days < 7) flags.push("🆕 New wallet (< 7 days)");
+      if (ageDays < 7) flags.push("🆕 New wallet (< 7 days)");
     }
 
-    const riskLevel = flags.length >= 2 ? "🔴 HIGH RISK" : flags.length === 1 ? "🟡 CAUTION" : "🟢 LOW RISK";
+    const statusIcon = flags.length >= 2 ? "🔴" : flags.length === 1 ? "🟡" : "✅";
+    const statusLabel = flags.length >= 2 ? "HIGH RISK" : flags.length === 1 ? "CAUTION" : "CLEAN";
     const shortAddr = address.slice(0, 8) + "..." + address.slice(-6);
 
+    let activityLevel = "Unknown";
+    if (walletInfo.txCount >= 100) activityLevel = "High (Established Wallet)";
+    else if (walletInfo.txCount >= 20) activityLevel = "Medium";
+    else if (walletInfo.txCount >= 5) activityLevel = "Low";
+    else activityLevel = "Very Low ⚠️";
+
+    const firstDate = walletInfo.firstTx ? new Date(walletInfo.firstTx) : null;
+    const firstDateStr = firstDate ? firstDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Unknown";
+    const shortHash = walletInfo.firstTxHash ? walletInfo.firstTxHash.slice(0, 12) + "..." + walletInfo.firstTxHash.slice(-6) : "Unknown";
+    const fundingFrom = walletInfo.firstTxFrom ? walletInfo.firstTxFrom.slice(0, 8) + "..." + walletInfo.firstTxFrom.slice(-6) : null;
+    const fundingLabel = walletInfo.firstTxFromName || "Unknown";
+
     const lines = [
-      `🏛 *APOL AGENT — WALLET AUDIT*`,
+      `🏛 *APOL AGENT — WALLET FORENSICS*`,
       ``,
-      `📍 *Address:* \`${shortAddr}\``,
-      `⛓ *Chain:* Base Mainnet`,
+      `📌 *Address:* \`${shortAddr}\``,
+      `📦 *Type:* ${walletInfo.isContract ? "Contract" : "EOA (Wallet)"}`,
+      `📊 *Status:* ${statusIcon} ${statusLabel}`,
       ``,
-      `💰 *Balance:* ${walletInfo.balance} ETH (~${formatUsd(balUsd)})`,
-      `📊 *Transactions:* ${walletInfo.txCount.toLocaleString()}`,
-      `📅 *Wallet Age:* ${walletAge}`,
-      `🏷 *Type:* ${walletInfo.isContract ? "Contract" : "EOA (Wallet)"}`,
-      ``,
-      `*RISK LEVEL:* ${riskLevel}`,
+      `⛓ *GENESIS (First Base Transaction)*`,
+      `   Date: ${firstDateStr}`,
+      `   Age: ${walletAge} ${ageLabel}`.trimEnd(),
+      `   Chain: BASE`,
+      `   Hash: \`${shortHash}\``,
     ];
 
-    if (flags.length > 0) {
+    if (walletInfo.firstTxFrom) {
       lines.push(``);
+      lines.push(`💰 *FUNDING SOURCE (Base)*`);
+      if (walletInfo.firstTxFromName) {
+        lines.push(`   FUNDED BY: ${fundingLabel}`);
+      }
+      lines.push(`   From: \`${fundingFrom}\``);
+    }
+
+    lines.push(``);
+    lines.push(`📊 *ACTIVITY (Base Mainnet)*`);
+    lines.push(`   Transactions: ${walletInfo.txCount.toLocaleString()} txs`);
+    lines.push(`   Level: ${activityLevel}`);
+    if (walletInfo.inflow > 0 || walletInfo.outflow > 0) {
+      lines.push(`   Inflow: ${walletInfo.inflow.toFixed(4)} ETH   Outflow: ${walletInfo.outflow.toFixed(4)} ETH`);
+    }
+
+    lines.push(``);
+    lines.push(`💰 *CURRENT BALANCE*`);
+    lines.push(`   ${walletInfo.balance} ETH (~${formatUsd(balUsd)})`);
+
+    lines.push(``);
+    if (flags.length > 0) {
       lines.push(`🚩 *FLAGS DETECTED:*`);
       for (const f of flags) lines.push(`   ${f}`);
+    } else {
+      lines.push(`✅ No threat flags on record.`);
+    }
+
+    lines.push(``);
+    if (flags.length === 0) {
+      lines.push(`🏛 *VERDICT:* _No malicious activity detected. Wallet appears clean._`);
+    } else if (flags.length === 1) {
+      lines.push(`🏛 *VERDICT:* _Minor concerns detected. Exercise caution._`);
+    } else {
+      lines.push(`🏛 *VERDICT:* _Multiple risk indicators found. Proceed with extreme caution._`);
     }
 
     lines.push(``);
@@ -498,7 +582,7 @@ async function handleCheckWallet(ctx: any, address: string): Promise<void> {
   } catch (e: any) {
     log(`CheckWallet error: ${e?.message}`, "bot");
     await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
-      `🏛 *APOL AGENT — WALLET AUDIT*\n\n⚠️ Error: ${e?.message?.slice(0, 80) || "Unknown"}`,
+      `🏛 *APOL AGENT — WALLET FORENSICS*\n\n⚠️ Error: ${e?.message?.slice(0, 80) || "Unknown"}`,
       { parse_mode: "Markdown" }).catch(() => {});
   }
 }
