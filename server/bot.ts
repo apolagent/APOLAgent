@@ -7,7 +7,6 @@ const QUOTER_V2 = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a";
 const V3_FACTORY = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD";
 const SIM_AMOUNT = BigInt("100000000000000000");
 const BURN_ADDRS = new Set(["0x0000000000000000000000000000000000000000", "0x000000000000000000000000000000000000dead"]);
-const HARD_TIMEOUT = 10000;
 
 const PLATFORM_MAP: Record<string, string> = {
   "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
@@ -38,6 +37,7 @@ interface SimResult {
   simulationSuccess: boolean;
   feeTier: number | null;
   tokensReceived: bigint;
+  failReason: string | null;
 }
 
 function pad32(hex: string): string {
@@ -72,10 +72,10 @@ async function rpcBatch(calls: { method: string; params: any[] }[]): Promise<any
   return results.map((r: any) => (r.error ? null : r.result));
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+function softTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Timeout: ${label} (${ms}ms)`)), ms)),
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
   ]);
 }
 
@@ -89,57 +89,54 @@ async function findBestPool(token: string): Promise<{ pool: string; fee: number 
     params: [{ to: V3_FACTORY, data: selector + pad32(t0) + pad32(t1) + uint256Hex(BigInt(fee)) }, "latest"],
   }));
   const results = await rpcBatch(calls);
-  let bestPool: string | null = null;
-  let bestFee = 0;
   for (let i = 0; i < results.length; i++) {
     const r = results[i];
     if (!r || r === "0x" || r === "0x" + "0".repeat(64)) continue;
     const poolAddr = "0x" + r.slice(26, 66);
     if (poolAddr === "0x0000000000000000000000000000000000000000") continue;
-    bestPool = poolAddr;
-    bestFee = fees[i];
-    break;
+    return { pool: poolAddr, fee: fees[i] };
   }
-  if (!bestPool) return null;
-  return { pool: bestPool, fee: bestFee };
+  return null;
 }
 
 async function botAlchemySimulate(tokenAddress: string): Promise<SimResult> {
   const addr = tokenAddress.toLowerCase();
+  const fail = (reason: string): SimResult => ({ isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: reason });
 
   const poolInfo = await findBestPool(addr);
-  if (!poolInfo) {
-    return { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0) };
-  }
+  if (!poolInfo) return fail("No Uniswap V3 pool found");
 
   const { fee } = poolInfo;
   const selector = "0xc6a5026a";
   const buyData = selector + pad32(WETH) + pad32(addr) + uint256Hex(SIM_AMOUNT) + uint256Hex(BigInt(fee)) + uint256Hex(BigInt(0));
-  const buyResult = await rpcCall("eth_call", [{ to: QUOTER_V2, data: buyData }, "latest"]);
-  if (!buyResult || buyResult === "0x") {
-    return { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: fee, tokensReceived: BigInt(0) };
+
+  let buyResult: string;
+  try {
+    buyResult = await rpcCall("eth_call", [{ to: QUOTER_V2, data: buyData }, "latest"]);
+  } catch (e: any) {
+    return fail(e?.message?.includes("revert") ? "Insufficient liquidity" : "Buy simulation failed");
   }
 
+  if (!buyResult || buyResult === "0x") return fail("Insufficient liquidity");
+
   const tokensReceived = BigInt("0x" + buyResult.slice(2, 66));
-  if (tokensReceived === BigInt(0)) {
-    return { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: fee, tokensReceived: BigInt(0) };
-  }
+  if (tokensReceived === BigInt(0)) return fail("Insufficient liquidity");
 
   let sellResult: string;
   try {
     const sellData = selector + pad32(addr) + pad32(WETH) + uint256Hex(tokensReceived) + uint256Hex(BigInt(fee)) + uint256Hex(BigInt(0));
     sellResult = await rpcCall("eth_call", [{ to: QUOTER_V2, data: sellData }, "latest"]);
   } catch {
-    return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, tokensReceived };
+    return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, tokensReceived, failReason: null };
   }
 
   if (!sellResult || sellResult === "0x") {
-    return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, tokensReceived };
+    return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, tokensReceived, failReason: null };
   }
 
   const ethBack = BigInt("0x" + sellResult.slice(2, 66));
   if (ethBack === BigInt(0)) {
-    return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, tokensReceived };
+    return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, tokensReceived, failReason: null };
   }
 
   const ethIn = Number(SIM_AMOUNT) / 1e18;
@@ -152,10 +149,10 @@ async function botAlchemySimulate(tokenAddress: string): Promise<SimResult> {
 
   console.log(`[sim] fee=${fee}: roundTrip=${roundTripLoss.toFixed(2)}%, netTax=${netTax.toFixed(2)}%`);
 
-  return { isHoneypot: false, buyTax, sellTax, simulationSuccess: true, feeTier: fee, tokensReceived };
+  return { isHoneypot: false, buyTax, sellTax, simulationSuccess: true, feeTier: fee, tokensReceived, failReason: null };
 }
 
-async function getTokenInfo(addr: string): Promise<{ name: string; symbol: string; totalSupply: bigint; decimals: number; rawSupply: bigint }> {
+async function getTokenInfo(addr: string): Promise<{ name: string; symbol: string; totalSupply: bigint; decimals: number }> {
   const results = await rpcBatch([
     { method: "eth_call", params: [{ to: addr, data: "0x06fdde03" }, "latest"] },
     { method: "eth_call", params: [{ to: addr, data: "0x95d89b41" }, "latest"] },
@@ -170,77 +167,53 @@ async function getTokenInfo(addr: string): Promise<{ name: string; symbol: strin
       const len = parseInt(hex.slice(2 + offset, 2 + offset + 64), 16);
       const raw = hex.slice(2 + offset + 64, 2 + offset + 64 + len * 2);
       return Buffer.from(raw, "hex").toString("utf8");
-    } catch {
-      return "";
-    }
+    } catch { return ""; }
   };
 
   const rawSupply = results[2] ? BigInt(results[2]) : BigInt(0);
   const decimals = results[3] ? Number(BigInt(results[3])) : 18;
   const divisor = BigInt(10) ** BigInt(decimals);
-  const totalSupply = divisor > 0 ? rawSupply / divisor : BigInt(0);
-
-  return {
-    name: decodeName(results[0]) || "Unknown",
-    symbol: decodeName(results[1]) || "???",
-    totalSupply,
-    decimals,
-    rawSupply,
-  };
+  return { name: decodeName(results[0]) || "Unknown", symbol: decodeName(results[1]) || "???", totalSupply: divisor > 0 ? rawSupply / divisor : BigInt(0), decimals };
 }
 
 async function getDeployer(addr: string): Promise<string | null> {
   try {
-    const data = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(6000) })
+    const data = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(4000) })
       .then((r) => (r.ok ? (r.json() as any) : null));
     return data?.creator_address_hash?.toLowerCase() || null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 async function getHolderCount(addr: string): Promise<number> {
   try {
-    const data = await fetch(`https://base.blockscout.com/api/v2/tokens/${addr}/counters`, { signal: AbortSignal.timeout(6000) })
+    const data = await fetch(`https://base.blockscout.com/api/v2/tokens/${addr}/counters`, { signal: AbortSignal.timeout(2000) })
       .then((r) => (r.ok ? (r.json() as any) : null));
     return parseInt(data?.token_holders_count || "0", 10);
-  } catch {
-    return 0;
-  }
+  } catch { return 0; }
 }
 
 async function getTopHolders(addr: string): Promise<{ address: string; percent: number }[]> {
   try {
-    const data = await fetch(`https://base.blockscout.com/api/v2/tokens/${addr}/holders?limit=10`, { signal: AbortSignal.timeout(6000) })
+    const data = await fetch(`https://base.blockscout.com/api/v2/tokens/${addr}/holders?limit=10`, { signal: AbortSignal.timeout(2000) })
       .then((r) => (r.ok ? (r.json() as any) : null));
     if (!data?.items) return [];
-    return data.items.map((h: any) => ({
-      address: (h.address?.hash || "").toLowerCase(),
-      percent: parseFloat(h.percentage || "0"),
-    }));
-  } catch {
-    return [];
-  }
+    return data.items.map((h: any) => ({ address: (h.address?.hash || "").toLowerCase(), percent: parseFloat(h.percentage || "0") }));
+  } catch { return []; }
 }
 
 async function getEthUsdPrice(): Promise<number> {
   try {
-    const data = await fetch("https://api.dexscreener.com/latest/dex/tokens/0x4200000000000000000000000000000000000006", { signal: AbortSignal.timeout(5000) })
+    const data = await fetch("https://api.dexscreener.com/latest/dex/tokens/0x4200000000000000000000000000000000000006", { signal: AbortSignal.timeout(2000) })
       .then((r) => (r.ok ? (r.json() as any) : null));
-    const pair = data?.pairs?.[0];
-    return parseFloat(pair?.priceUsd || "0") || 0;
-  } catch {
-    return 0;
-  }
+    return parseFloat(data?.pairs?.[0]?.priceUsd || "0") || 0;
+  } catch { return 0; }
 }
 
 function detectPlatform(addr: string, deployer: string | null, holders: { address: string }[]): string | null {
   const a = addr.toLowerCase();
   if (PLATFORM_MAP[a]) return PLATFORM_MAP[a];
   if (deployer && PLATFORM_MAP[deployer]) return PLATFORM_MAP[deployer];
-  for (const h of holders) {
-    if (PLATFORM_MAP[h.address]) return PLATFORM_MAP[h.address];
-  }
+  for (const h of holders) { if (PLATFORM_MAP[h.address]) return PLATFORM_MAP[h.address]; }
   return null;
 }
 
@@ -293,25 +266,23 @@ export function createBot(): Telegraf | null {
     const loadingMsg = await ctx.reply("⏳ Running APOL forensic simulation...");
 
     try {
-      const results = await withTimeout(
-        Promise.allSettled([
-          botAlchemySimulate(input),
-          getTokenInfo(input),
-          getDeployer(input),
-          getHolderCount(input),
-          getTopHolders(input),
-          getEthUsdPrice(),
-        ]),
-        HARD_TIMEOUT,
-        "forensic-scan",
-      );
+      const [simR, tokenR, deployerR] = await Promise.allSettled([
+        botAlchemySimulate(input),
+        getTokenInfo(input),
+        getDeployer(input),
+      ]);
 
-      const sim: SimResult = results[0].status === "fulfilled" ? results[0].value : { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0) };
-      const tokenInfo = results[1].status === "fulfilled" ? results[1].value : { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18, rawSupply: BigInt(0) };
-      const deployer: string | null = results[2].status === "fulfilled" ? results[2].value : null;
-      const holderCount: number = results[3].status === "fulfilled" ? results[3].value : 0;
-      const topHolders = results[4].status === "fulfilled" ? results[4].value : [];
-      const ethUsd: number = results[5].status === "fulfilled" ? results[5].value : 0;
+      const sim: SimResult = simR.status === "fulfilled" ? simR.value
+        : { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: "Simulation error" };
+      const tokenInfo = tokenR.status === "fulfilled" ? tokenR.value
+        : { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18 };
+      const deployer = deployerR.status === "fulfilled" ? deployerR.value : null;
+
+      const [holderCount, topHolders, ethUsd] = await Promise.all([
+        softTimeout(getHolderCount(input), 2000, 0),
+        softTimeout(getTopHolders(input), 2000, []),
+        softTimeout(getEthUsdPrice(), 2000, 0),
+      ]);
 
       const scanCount = await storage.incrementLookup(input, tokenInfo.name, tokenInfo.symbol);
 
@@ -323,9 +294,8 @@ export function createBot(): Telegraf | null {
       const sellTax = isVirtuals ? 0 : sim.sellTax;
       const isHoneypot = isVirtuals ? false : sim.isHoneypot;
 
-      const ethSpent = 0.1;
       const tokensWholeUnits = Number(sim.tokensReceived) / (10 ** tokenInfo.decimals);
-      const tokenPriceEth = tokensWholeUnits > 0 ? ethSpent / tokensWholeUnits : 0;
+      const tokenPriceEth = tokensWholeUnits > 0 ? 0.1 / tokensWholeUnits : 0;
       const tokenPriceUsd = tokenPriceEth * ethUsd;
       const mcap = Number(tokenInfo.totalSupply) * tokenPriceUsd;
 
@@ -343,7 +313,7 @@ export function createBot(): Telegraf | null {
 
       let honeypotLine: string;
       if (!sim.simulationSuccess && !isVirtuals) {
-        honeypotLine = "⚠️ UNABLE TO TEST";
+        honeypotLine = `⚠️ ${sim.failReason || "Unable to test"}`;
       } else if (isHoneypot) {
         honeypotLine = "🚨 YES — SELL BLOCKED";
       } else {
@@ -356,8 +326,13 @@ export function createBot(): Telegraf | null {
           ? "0% / 0% ✅"
           : `${buyTax}% / ${sellTax}% ⚠️`;
 
+      const holdersStr = holderCount > 0 ? holderCount.toLocaleString() : "Scanning...";
+      const priceStr = ethUsd > 0 && tokenPriceUsd > 0 ? formatPrice(tokenPriceUsd) : "Scanning...";
+      const mcapStr = mcap > 0 ? formatMcap(mcap) : "N/A";
+
       const lines = [
         `🛡️ *APOL FORENSIC REPORT*`,
+        `${riskBadge}`,
         `${"─".repeat(28)}`,
         ``,
         `🏷 *${tokenInfo.name}* ($${tokenInfo.symbol}) 👁️ ${scanCount}`,
@@ -367,11 +342,10 @@ export function createBot(): Telegraf | null {
         `🍯 *Honeypot:* ${honeypotLine}`,
         `💰 *Tax:* Buy ${taxLine}`,
         `💧 *Liquidity:* ${lpStatus}`,
-        `👥 *Holders:* ${holderCount > 0 ? holderCount.toLocaleString() : "Scanning..."}`,
-        `💵 *Price:* ${formatPrice(tokenPriceUsd)}`,
-        `📊 *MCap:* ${mcap > 0 ? formatMcap(mcap) : "N/A"}`,
+        `👥 *Holders:* ${holdersStr}`,
+        `💵 *Price:* ${priceStr}`,
+        `📊 *MCap:* ${mcapStr}`,
         ``,
-        `${riskBadge}`,
         `⚡ ${elapsed}s · Alchemy Simulation Engine`,
       ];
 
@@ -381,10 +355,29 @@ export function createBot(): Telegraf | null {
         { parse_mode: "Markdown" },
       );
     } catch (e: any) {
-      const msg = e?.message?.includes("Timeout")
-        ? "⏱ Timeout Error — scan took too long. Try again."
-        : `❌ Scan failed: ${e?.message?.slice(0, 100) || "Unknown error"}`;
-      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, msg);
+      const scanCount = await storage.incrementLookup(input).catch(() => 0);
+      const shortAddr = input.slice(0, 6) + "..." + input.slice(-4);
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+      const reason = e?.message?.includes("revert") ? "Insufficient liquidity"
+        : e?.message?.includes("timeout") || e?.message?.includes("Timeout") ? "RPC timeout — try again"
+        : e?.message?.slice(0, 80) || "Unknown error";
+
+      const lines = [
+        `🛡️ *APOL FORENSIC REPORT*`,
+        `${"─".repeat(28)}`,
+        `📍 \`${shortAddr}\` · Base`,
+        ``,
+        `⚠️ *Simulation failed:* ${reason}`,
+        `👁️ Scan count: ${scanCount}`,
+        ``,
+        `⚡ ${elapsed}s · Alchemy Simulation Engine`,
+      ];
+
+      await ctx.telegram.editMessageText(
+        ctx.chat.id, loadingMsg.message_id, undefined,
+        lines.join("\n"),
+        { parse_mode: "Markdown" },
+      ).catch(() => {});
     }
   });
 
