@@ -6,7 +6,7 @@ const BASE_RPC = process.env.BASE_RPC_URL || "";
 const WETH = "0x4200000000000000000000000000000000000006";
 const QUOTER_V2 = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a";
 const V3_FACTORY = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD";
-const SIM_AMOUNT = BigInt("100000000000000000");
+const SIM_AMOUNT = BigInt("1000000000000000");
 const BURN_ADDRS = new Set(["0x0000000000000000000000000000000000000000", "0x000000000000000000000000000000000000dead"]);
 const HARD_TIMEOUT = 10000;
 
@@ -252,7 +252,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sellTax = isVirtuals ? 0 : sim.sellTax;
       const isHoneypot = isVirtuals ? false : sim.isHoneypot;
       const tokensWholeUnits = Number(sim.tokensReceived) / (10 ** tokenInfo.decimals);
-      const tokenPriceEth = tokensWholeUnits > 0 ? 0.1 / tokensWholeUnits : 0;
+      const tokenPriceEth = tokensWholeUnits > 0 ? 0.001 / tokensWholeUnits : 0;
       const tokenPriceUsd = tokenPriceEth * ethUsd;
       const mcap = Number(tokenInfo.totalSupply) * tokenPriceUsd;
 
