@@ -441,6 +441,31 @@ async function handleScan(ctx: any, address: string): Promise<void> {
   }
 }
 
+async function fetchXProfile(handle: string): Promise<{
+  name: string; screen_name: string; bio: string; joined: string;
+  followers: number; following: number; verified: boolean;
+  tweets: number; avatar: string;
+} | null> {
+  try {
+    const res = await fetch(`https://api.fxtwitter.com/${handle}`, { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) return null;
+    const data = await res.json() as any;
+    const u = data?.user;
+    if (!u) return null;
+    return {
+      name: u.name || handle,
+      screen_name: u.screen_name || handle,
+      bio: u.description || "",
+      joined: u.joined || "",
+      followers: u.followers || 0,
+      following: u.following || 0,
+      verified: u.verified === true,
+      tweets: u.tweets || 0,
+      avatar: u.avatar_url || "",
+    };
+  } catch { return null; }
+}
+
 async function handleScanX(ctx: any, input: string): Promise<void> {
   const loadingMsg = await ctx.reply("🔍 Running X/Twitter social forensics...");
   try {
@@ -462,17 +487,83 @@ async function handleScanX(ctx: any, input: string): Promise<void> {
       return;
     }
 
-    const tokenResult = await softTimeout(searchDexScreener(handle), 5000, null);
+    const [profile, tokenResult] = await Promise.all([
+      softTimeout(fetchXProfile(handle), 7000, null),
+      softTimeout(searchDexScreener(handle), 5000, null),
+    ]);
 
-    if (tokenResult && tokenResult.address) {
-      const report = await runScan(tokenResult.address);
-      const header = `🔍 *APOL AGENT — SCANX RESULTS*\n🐦 *X Handle:* @${esc(handle)}\n📌 *Token Found:* ${esc(tokenResult.name)} ($${esc(tokenResult.symbol)})\n\n`;
-      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, header + report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
-    } else {
+    if (!profile) {
       await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
-        `🔍 *APOL AGENT — SCANX RESULTS*\n\n🐦 *X Handle:* @${esc(handle)}\n\n⚠️ No Base chain token found matching "${esc(handle)}"\n\n💡 Try scanning the contract address directly with /scan`,
-        { parse_mode: "Markdown" });
+        `🔍 *X INVESTIGATION:*\n@${esc(handle)}\n\n⚠️ Could not retrieve profile data for this handle.\n\n💡 The account may not exist or may be suspended.`,
+        { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+      return;
     }
+
+    let joinedStr = "Unknown";
+    let joinedDays = 0;
+    if (profile.joined) {
+      const joinDate = new Date(profile.joined);
+      if (!isNaN(joinDate.getTime())) {
+        joinedStr = joinDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        joinedDays = Math.floor((Date.now() - joinDate.getTime()) / (1000 * 60 * 60 * 24));
+        joinedStr += ` (${joinedDays} days ago)`;
+      }
+    }
+
+    const followRatio = profile.following > 0
+      ? `${(profile.followers / profile.following).toFixed(1)}:1`
+      : profile.followers > 0 ? "∞:1" : "0:0";
+
+    const flags: string[] = [];
+    if (joinedDays > 0 && joinedDays < 30) flags.push("🆕 Account less than 30 days old");
+    if (profile.followers < 10) flags.push("👤 Very few followers");
+    if (profile.following > 0 && profile.followers / profile.following < 0.1) flags.push("📉 Suspicious follow ratio");
+    if (profile.tweets < 5) flags.push("📝 Very few tweets");
+    if (profile.bio && /t\.co|http|\.com|\.xyz|\.io/i.test(profile.bio) && profile.followers < 50) flags.push("🔗 Link-heavy bio with low following");
+
+    let socialVerdict = "";
+    if (flags.length >= 3) socialVerdict = "🔴 _High Risk — Multiple red flags detected_";
+    else if (flags.length >= 1) socialVerdict = "⚠️ _Inconclusive — Insufficient History_";
+    else if (joinedDays > 180 && profile.followers >= 50) socialVerdict = "✅ _Clean — Established Account_";
+    else socialVerdict = "⚠️ _Inconclusive — Insufficient History_";
+
+    const bioDisplay = profile.bio ? profile.bio.slice(0, 120) : "None";
+
+    const linkedCA = tokenResult && tokenResult.address
+      ? `${esc(tokenResult.name)} ($${esc(tokenResult.symbol)})\n   \`${tokenResult.address}\``
+      : "Not Found";
+
+    const lines = [
+      `🔍 *X INVESTIGATION:*`,
+      `@${esc(profile.screen_name)}`,
+      ``,
+      `👤 *Name:* ${esc(profile.name)}`,
+      `📝 *Bio:* ${esc(bioDisplay)}`,
+      `📅 *Joined:* ${joinedStr}`,
+      `☑️ *Blue Check:* ${profile.verified ? "Verified ✅" : "Not Verified"}`,
+      ``,
+      `👥 *Followers:* ${profile.followers.toLocaleString()}`,
+      `➡️ *Following:* ${profile.following.toLocaleString()}`,
+      `📊 *Follow Ratio:* ${followRatio}`,
+      `📈 *Engagement:* ${profile.tweets > 0 ? `${profile.tweets.toLocaleString()} tweets` : "Data Pending"}`,
+      ``,
+    ];
+
+    if (flags.length > 0) {
+      lines.push(`🚩 *FLAGS DETECTED:*`);
+      for (const f of flags) lines.push(`   ${f}`);
+    } else {
+      lines.push(`✅ *No risk flags detected.*`);
+    }
+
+    lines.push(``);
+    lines.push(`⛓ *Linked CA:* ${linkedCA}`);
+    lines.push(``);
+    lines.push(`🚨 *Social Verdict:* ${socialVerdict}`);
+    lines.push(``);
+    lines.push(`🔍 [Full Report](https://x.com/${encodeURIComponent(profile.screen_name)})`);
+
+    await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, lines.join("\n"), { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
   } catch (e: any) {
     log(`ScanX error: ${e?.message}`, "bot");
     await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
