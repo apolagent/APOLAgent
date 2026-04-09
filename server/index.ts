@@ -224,7 +224,8 @@ app.use((req, res, next) => {
         log(`[HEALTH] Check failed: ${e?.message}`, "bot");
       }
     };
-    setInterval(webhookHealthCheck, 60000);
+    setTimeout(webhookHealthCheck, 15000);
+    setInterval(webhookHealthCheck, 30000);
   } else if (bot) {
     log("Bot webhook registration skipped in dev — production only", "bot");
   }
