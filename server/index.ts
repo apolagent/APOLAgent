@@ -78,12 +78,12 @@ app.use((req, res, next) => {
 
     app.post(WEBHOOK_PATH, (req, res) => {
       const update = req.body;
+      res.sendStatus(200);
       console.log("Incoming Webhook:", JSON.stringify(update).slice(0, 300));
       const msgText = update?.message?.text || "(no text)";
       log(`Webhook HIT: "${msgText.slice(0, 80)}" from chat ${update?.message?.chat?.id ?? "?"}`, "bot");
-      bot.handleUpdate(update, res).catch((err: any) => {
+      bot.handleUpdate(update).catch((err: any) => {
         log(`handleUpdate error: ${err?.message || err}`, "bot");
-        if (!res.headersSent) res.sendStatus(200);
       });
     });
   }
