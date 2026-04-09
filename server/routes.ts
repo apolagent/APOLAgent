@@ -58,7 +58,7 @@ const BASE_RPC_URL = process.env.BASE_RPC_URL || "";
 const ALCHEMY_BASE_URL = BASE_RPC_URL;
 const CHAINABUSE_API_KEY = process.env.CHAINABUSE_API_KEY;
 const CHAINABUSE_BASE = "https://api.chainabuse.com/v0";
-const GOPLUS_BASE = "https://api.gopluslabs.io/api/v1";
+
 
 const OFFICIAL_APOL_CA = "";
 const OFFICIAL_APOL_TWITTER = "@ApolAgent_";
@@ -225,6 +225,66 @@ async function rpcCheckDualDex(tokenAddress: string): Promise<DexResult> {
   return { version: null, isInDex: false, isVirtualsPair: false };
 }
 
+
+type SimulationResult = {
+  isHoneypot: boolean;
+  buyTax: number;
+  sellTax: number;
+  simulationSuccess: boolean;
+};
+
+const UNISWAP_V3_QUOTER_ADDR = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a";
+const SIM_AMOUNT = BigInt("100000000000000000");
+
+async function rpcAlchemySimulate(address: string): Promise<SimulationResult> {
+  const FALLBACK: SimulationResult = { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false };
+  if (!BASE_RPC_URL) return FALLBACK;
+
+  const tokenAddr = address.toLowerCase().replace("0x", "").padStart(64, "0");
+  const wethAddr = WETH_BASE.replace("0x", "").padStart(64, "0");
+  const amountInHex = SIM_AMOUNT.toString(16).padStart(64, "0");
+  const zeroPad = "0".repeat(64);
+  const QUOTE_SIG = "0xc6a5026a";
+
+  for (const fee of FEE_TIERS) {
+    const feeHex = fee.toString(16).padStart(64, "0");
+
+    const buyData = `${QUOTE_SIG}${wethAddr}${tokenAddr}${amountInHex}${feeHex}${zeroPad}`;
+    const buyResult = await rpcCall("eth_call", [{ to: UNISWAP_V3_QUOTER_ADDR, data: buyData }, "latest"]);
+    if (!buyResult || buyResult === "0x" || buyResult.length < 66) continue;
+
+    let tokensBought: bigint;
+    try { tokensBought = BigInt("0x" + buyResult.slice(2, 66)); } catch { continue; }
+    if (tokensBought <= 0n) continue;
+
+    const sellAmountHex = tokensBought.toString(16).padStart(64, "0");
+    const sellData = `${QUOTE_SIG}${tokenAddr}${wethAddr}${sellAmountHex}${feeHex}${zeroPad}`;
+    const sellResult = await rpcCall("eth_call", [{ to: UNISWAP_V3_QUOTER_ADDR, data: sellData }, "latest"]);
+
+    if (!sellResult || sellResult === "0x" || sellResult.length < 66) {
+      return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true };
+    }
+
+    let ethBack: bigint;
+    try { ethBack = BigInt("0x" + sellResult.slice(2, 66)); } catch {
+      return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true };
+    }
+
+    const poolFeePct = (fee / 1_000_000) * 2 * 100;
+    const roundTripLoss = Number(((SIM_AMOUNT - ethBack) * 10000n) / SIM_AMOUNT) / 100;
+    const netTax = Math.max(0, roundTripLoss - poolFeePct);
+    const buyTax = Math.round(netTax / 2 * 10) / 10;
+    const sellTax = Math.round(netTax / 2 * 10) / 10;
+    const isHoneypot = sellTax > 90;
+
+    console.log(`[sim-routes] ${address.slice(0,10)} fee=${fee}: roundTrip=${roundTripLoss.toFixed(1)}%, netTax=${netTax.toFixed(1)}%`);
+    return { isHoneypot, buyTax, sellTax, simulationSuccess: true };
+  }
+
+  return FALLBACK;
+}
+
+
 function dexLiveStatus(version: "v3" | "v4" | null): string | null {
   if (version === "v4") return "Live (Direct-to-V4) ✅";
   if (version === "v3") return "Live (Direct-to-V3) ✅";
@@ -292,10 +352,7 @@ function getPlatformName(creatorAddress: string, lpHolders: any[]): string | nul
   return null;
 }
 
-const GOPLUS_CHAIN: Record<string, string> = {
-  ethereum: "1", bsc: "56", polygon: "137", arbitrum: "42161",
-  optimism: "10", base: "8453", avalanche: "43114", tron: "tron", solana: "solana", other: "1",
-};
+
 
 const PLATFORM_LOCKERS: Record<string, string> = {
   "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore",
@@ -707,18 +764,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/detective/analyze", async (req, res) => {
     const { address, chain = "ethereum" } = req.query as { address: string; chain?: string };
     if (!address) return res.status(400).json({ error: "Address is required" });
-    const chainId = GOPLUS_CHAIN[chain] || "1";
+    
 
     console.log(`${new Date().toLocaleTimeString()} [scanner] FRESH SCAN TRIGGERED — CACHE BYPASSED — ${address} on ${chain}`);
 
     try {
-      // 1. Malicious Address check (always run)
+      // 1. Malicious address flags (internal reports only — GoPlus removed)
       let malicious: any = {};
-      try {
-        const r = await fetch(`${GOPLUS_BASE}/address_security/${encodeURIComponent(address)}`);
-        const j = await r.json() as any;
-        malicious = j.result || {};
-      } catch { /* non-fatal */ }
 
       let earlyDexVersion: "v3" | "v4" | null = null;
       let earlyVirtualsPair = false;
@@ -773,7 +825,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   }
                 }
               }
-            } catch { /* non-fatal, fall through to GoPlus */ }
+            } catch { /* non-fatal, fall through to simulation */ }
           }
 
           if (!fastPlatform && earlyVirtualsPair) {
@@ -899,9 +951,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // 2b. FORCE VIRTUALS BYPASS — before GoPlus to prevent false 99% tax/honeypot
+      // 2b. FORCE VIRTUALS BYPASS — prevent false 99% tax/honeypot
       if (chain === "base" && (earlyVirtualsPair || (address as string).toLowerCase() === ERC8183_VAULT)) {
-        console.log(`[forensics] Virtuals bypass (pre-GoPlus): ${(address as string).slice(0,10)} — honeypot=false, taxes=0`);
+        console.log(`[forensics] Virtuals bypass (pre-simulation): ${(address as string).slice(0,10)} — honeypot=false, taxes=0`);
         const [rpcToken, holderCountVirt, topHoldersVirt] = await Promise.all([
           rpcGetTokenInfo(address as string),
           fetchHolderCountFallback(address as string),
@@ -954,29 +1006,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // 3. Non-whitelisted path: GoPlus + Honeypot.is
+      // 3. Non-whitelisted path: Simulation-First Engine
+      let simResult: SimulationResult = { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false };
+      if (chain === "base") {
+        try { simResult = await rpcAlchemySimulate(address as string); } catch {}
+      }
+
       let tokenData: any = null;
-      if (chainId !== "solana" && chainId !== "tron") {
-        try {
-          const r = await fetch(`${GOPLUS_BASE}/token_security/${chainId}?contract_addresses=${encodeURIComponent(address)}`);
-          const j = await r.json() as any;
-          const key = Object.keys(j.result || {})[0];
-          if (key) tokenData = j.result[key];
-        } catch { /* non-fatal */ }
+      if (chain === "base") {
+        const [rpcTokenNw, bsAddrNw, bsHolderNw] = await Promise.allSettled([
+          rpcGetTokenInfo(address as string),
+          fetch(`https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(address as string)}`, { signal: AbortSignal.timeout(8000) }).then(r => r.ok ? r.json() : null),
+          fetchHolderCountFallback(address as string),
+        ]);
+        const rpcToken = rpcTokenNw.status === "fulfilled" ? rpcTokenNw.value : null;
+        const bsData = bsAddrNw.status === "fulfilled" ? bsAddrNw.value : null;
+        const bsHolderCount = bsHolderNw.status === "fulfilled" ? bsHolderNw.value : 0;
+        const isContractConfirmed = bsData?.is_contract === true || await rpcIsContract(address as string);
+
+        if (isContractConfirmed || simResult.simulationSuccess) {
+          tokenData = {
+            token_name: rpcToken?.name || bsData?.token?.name || "Unknown",
+            token_symbol: rpcToken?.symbol || bsData?.token?.symbol || "???",
+            holder_count: String(bsHolderCount || bsData?.token?.holders_count || "0"),
+            total_supply: rpcToken?.totalSupply || bsData?.token?.total_supply || "0",
+            is_open_source: bsData?.is_verified ? "1" : "0",
+            is_honeypot: simResult.isHoneypot ? "1" : "0",
+            buy_tax: String(simResult.buyTax / 100),
+            sell_tax: String(simResult.sellTax / 100),
+            is_mintable: "0",
+            is_proxy: bsData?.is_verified === false ? "0" : "0",
+            is_in_dex: (earlyDexVersion || simResult.simulationSuccess) ? "1" : "0",
+            can_take_back_ownership: "0",
+            owner_change_balance: "0",
+            hidden_owner: "0",
+            selfdestruct: "0",
+            external_call: "0",
+            is_blacklisted: "0",
+            transfer_pausable: "0",
+            cannot_sell_all: "0",
+            creator_address: bsData?.creator_address_hash || "",
+            lp_holders: [],
+            holders: [],
+            _fromSimulation: true,
+          };
+        }
       }
 
       let hpData: any = null;
-      if (chainId !== "solana" && chainId !== "tron") {
-        try {
-          const r = await fetch(
-            `https://api.honeypot.is/v2/IsHoneypot?address=${encodeURIComponent(address)}&chainID=${chainId}`,
-            { signal: AbortSignal.timeout(12000) }
-          );
-          if (r.ok) hpData = await r.json() as any;
-        } catch { /* non-fatal */ }
+      if (simResult.simulationSuccess) {
+        hpData = {
+          honeypotResult: { isHoneypot: simResult.isHoneypot },
+          simulationSuccess: true,
+          simulationResult: { buyTax: simResult.buyTax / 100, sellTax: simResult.sellTax / 100 },
+        };
       }
 
-      let isContract = tokenData !== null;
+let isContract = tokenData !== null;
 
       if (!isContract && chain === "base") {
         const [rpcIsCtx, bsRes] = await Promise.allSettled([
@@ -997,7 +1083,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const tHolders = String(bsToken?.holders_count ?? "0");
           const creatorAddr = bsData?.creator_address_hash ?? "";
           const src = rpcConfirmed ? "Alchemy RPC" : "Blockscout";
-          console.log(`[forensics] GoPlus missed contract ${(address as string).slice(0,10)}… — ${src} confirms is_contract=true, token=${tName} (${tSymbol})`);
+          console.log(`[forensics] Simulation fallback for contract ${(address as string).slice(0,10)}… — ${src} confirms is_contract=true, token=${tName} (${tSymbol})`);
           if (!tokenData) {
             tokenData = {
               token_name: tName,
@@ -1061,7 +1147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let earlyPlatform = getPlatformName(creatorAddress || "", lpHoldersRaw);
         if (!earlyPlatform && earlyVirtualsPair) {
           earlyPlatform = "Virtuals";
-          console.log(`[forensics] Virtuals PAIR DETECTION (GoPlus path): ${(address as string).slice(0,10)} paired with VIRTUAL token`);
+          console.log(`[forensics] Virtuals PAIR DETECTION (simulation path): ${(address as string).slice(0,10)} paired with VIRTUAL token`);
         }
         const isWhitelistedFactory = !!earlyPlatform || isKnownFactoryOrigin(creatorAddress || "", lpHoldersRaw);
         const isVirtualsFactory = earlyPlatform === "Virtuals";
@@ -1077,6 +1163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const tokenSymbol = tokenData.token_symbol || "";
           const isOpenSource = tokenData.is_open_source === "1" || tokenData.is_open_source === 1;
           const isInDex = true;
+          const lookupCount = await storage.incrementLookup(address as string, tokenName, tokenSymbol);
           return res.json({
             address, chain, addressType: "contract",
             riskLevel: "Clean",
@@ -1085,7 +1172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             redFlags: [], adminThreats: [],
             ownerAddress: null, creatorAddress: creatorAddress || null,
             isOwnershipRenounced: true, isSingleSigAdmin: false,
-            lookupCount: lookupCount || 0,
+            lookupCount,
             tokenName, tokenSymbol,
             holderCount, holderCountLabel: holderCount > 0 ? holderCount.toLocaleString() : "Scanning (High Activity)",
             buyTax: 0, sellTax: 0, taxOverride: null,
@@ -1791,18 +1878,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     let contractTokenData: any = null;
 
     if (w) {
-      // Contract/security check
-      const chainId = GOPLUS_CHAIN[chain] || "1";
+      // Contract/security check (simulation-first — GoPlus removed)
       try {
-        const gpR = await fetch(`${GOPLUS_BASE}/address_security/${encodeURIComponent(w)}`);
-        const gpD = await gpR.json() as any;
-        hasSecurityFlags = Object.values(gpD.result || {}).some(v => v === "1" || v === 1);
-        if (chainId !== "solana" && chainId !== "tron") {
-          const tR = await fetch(`${GOPLUS_BASE}/token_security/${chainId}?contract_addresses=${encodeURIComponent(w)}`);
-          const tD = await tR.json() as any;
-          const tKey = Object.keys(tD.result || {})[0];
-          isContract = !!tKey;
-          if (tKey) contractTokenData = tD.result[tKey];
+        isContract = await rpcIsContract(w);
+        if (isContract) {
+          const tokenInfo = await rpcGetTokenInfo(w);
+          contractTokenData = { token_name: tokenInfo?.name || "", token_symbol: tokenInfo?.symbol || "" };
         }
       } catch { /* non-fatal */ }
 
@@ -1995,7 +2076,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contractTokenData.creator_address || "",
         csLpHolders,
         chain,
-        contractAddress,
+        wallet,
       );
 
       for (const lp of csLpHolders) {
@@ -2263,7 +2344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const { contractAddress, chain = "base" } = req.query as { contractAddress: string; chain?: string };
     if (!contractAddress) return res.status(400).json({ error: "contractAddress required" });
 
-    const chainId = GOPLUS_CHAIN[chain] || "8453";
+    
 
     if (chain === "base") {
       const auditAddrLower = contractAddress.toLowerCase();
@@ -2282,7 +2363,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (auditFastPlatform) {
-        console.log(`[audit] WHITELIST HIT: ${auditAddrLower.slice(0,10)} → ${auditFastPlatform} — skipping GoPlus/Honeypot.is`);
+        console.log(`[audit] WHITELIST HIT: ${auditAddrLower.slice(0,10)} → ${auditFastPlatform} — skipping external oracles`);
 
         const [auditRpcToken, auditHolderFb, auditTopHolders, auditDexResult] = await Promise.all([
           rpcGetTokenInfo(contractAddress),
@@ -2325,27 +2406,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
 
-    // 1. GoPlus token_security
-    let tokenData: any = null;
-    try {
-      const r = await fetch(
-        `${GOPLUS_BASE}/token_security/${chainId}?contract_addresses=${encodeURIComponent(contractAddress)}`,
-        { signal: AbortSignal.timeout(12000) }
-      );
-      const j = await r.json() as any;
-      const key = Object.keys(j.result || {})[0];
-      if (key) tokenData = j.result[key];
-    } catch { /* non-fatal */ }
+    // 1. Alchemy simulation (replaces GoPlus + Honeypot.is)
+    const auditSim = await rpcAlchemySimulate(contractAddress);
+    const [auditTokenInfoR, auditBsAddrR, auditHolderCountR, auditTopHoldersR] = await Promise.allSettled([
+      rpcGetTokenInfo(contractAddress),
+      fetch(`https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(contractAddress)}`, { signal: AbortSignal.timeout(8000) }).then(r => r.ok ? r.json() : null),
+      fetchHolderCountFallback(contractAddress),
+      rpcGetTopHolders(contractAddress),
+    ]);
+    const auditTokenInfo = auditTokenInfoR.status === "fulfilled" ? auditTokenInfoR.value : null;
+    const auditBsAddr = auditBsAddrR.status === "fulfilled" ? auditBsAddrR.value : null;
+    const auditHolderCountVal = auditHolderCountR.status === "fulfilled" ? auditHolderCountR.value : 0;
+    const auditTopHoldersVal = auditTopHoldersR.status === "fulfilled" ? auditTopHoldersR.value : [];
 
-    // 2. Honeypot.is simulated buy/sell
-    let hpData: any = null;
-    try {
-      const r = await fetch(
-        `https://api.honeypot.is/v2/IsHoneypot?address=${encodeURIComponent(contractAddress)}&chainID=${chainId}`,
-        { signal: AbortSignal.timeout(12000) }
-      );
-      if (r.ok) hpData = await r.json() as any;
-    } catch { /* non-fatal */ }
+    let tokenData: any = {
+      token_name: auditTokenInfo?.name || "",
+      token_symbol: auditTokenInfo?.symbol || "",
+      holder_count: String(auditHolderCountVal || auditBsAddr?.token?.holders_count || "0"),
+      is_open_source: auditBsAddr?.is_verified ? "1" : "0",
+      is_honeypot: auditSim.isHoneypot ? "1" : "0",
+      buy_tax: String(auditSim.buyTax / 100),
+      sell_tax: String(auditSim.sellTax / 100),
+      is_mintable: "0",
+      is_in_dex: auditSim.simulationSuccess ? "1" : "0",
+      creator_address: auditBsAddr?.creator_address_hash || "",
+      lp_holders: [],
+      holders: auditTopHoldersVal.map((h, i) => ({ address: h.address, percent: String(h.percent / 100), tag: "", is_contract: "0" })),
+      slippage_modifiable: "0",
+      can_take_back_ownership: "0",
+      owner_change_balance: "0",
+      hidden_owner: "0",
+      selfdestruct: "0",
+      external_call: "0",
+      is_blacklisted: "0",
+      transfer_pausable: "0",
+      is_proxy: "0",
+      owner_address: null,
+      owner_type: "0",
+    };
+    let hpData: any = auditSim.simulationSuccess ? { IsHoneypot: auditSim.isHoneypot, simulationSuccess: true, BuyTax: auditSim.buyTax, SellTax: auditSim.sellTax } : null;
 
     const flag1 = (v: any) => v === "1" || v === 1;
 
@@ -2456,7 +2555,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       holderCount: parseInt(tokenData?.holder_count || "0"),
       isOpenSource: flag1(tokenData?.is_open_source),
       isInDex: flag1(tokenData?.is_in_dex),
-      honeypot: { isHoneypot, simulationSuccess, buyTax, sellTax, source: hpData ? "honeypot.is" : "GoPlus" },
+      honeypot: { isHoneypot, simulationSuccess, buyTax, sellTax, source: "Alchemy Simulation" },
       liquidityLock: {
         lockedPercent: auditIsProtocolSecure ? 100 : clampedLocked,
         lockLocations,
@@ -2471,7 +2570,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ownerAddress: auditOwnerAddr,
       isSingleSigAdmin: !!auditIsSingleSig,
       riskLevel,
-      dataSource: tokenData ? "GoPlus" : "No data",
+      dataSource: tokenData ? "Alchemy Simulation" : "No data",
     } as any);
   });
 
@@ -2495,8 +2594,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ project, audit: cached.data });
     }
 
-    const chainId = "8453"; // Base mainnet
-    const GOPLUS_BASE = "https://api.gopluslabs.io/api/v1";
+    
 
     const certAddrLower = contractAddress.toLowerCase();
     const certDeployer = await rpcGetDeployer(contractAddress);
@@ -2514,7 +2612,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     if (certFastPlatform) {
-      console.log(`[cert] WHITELIST HIT: ${certAddrLower.slice(0,10)} → ${certFastPlatform} — skipping GoPlus/Honeypot.is`);
+      console.log(`[cert] WHITELIST HIT: ${certAddrLower.slice(0,10)} → ${certFastPlatform} — skipping external oracles`);
 
       const [certRpcToken, certHolderFb, certTopHolders, certDexResult] = await Promise.all([
         rpcGetTokenInfo(contractAddress),
@@ -2554,22 +2652,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ project, audit: certAuditResult });
     }
 
-    let tokenData: Record<string, any> | null = null;
-    let hpData: Record<string, any> | null = null;
+    const certSim = await rpcAlchemySimulate(contractAddress);
+    const [certTokenInfoR, certBsAddrR2, certHolderR2, certTopHoldersR2] = await Promise.allSettled([
+      rpcGetTokenInfo(contractAddress),
+      fetch(`https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(contractAddress)}`, { signal: AbortSignal.timeout(8000) }).then(r => r.ok ? r.json() : null),
+      fetchHolderCountFallback(contractAddress),
+      rpcGetTopHolders(contractAddress),
+    ]);
+    const certTokenInfo2 = certTokenInfoR.status === "fulfilled" ? certTokenInfoR.value : null;
+    const certBsAddr2 = certBsAddrR2.status === "fulfilled" ? certBsAddrR2.value : null;
+    const certHolderCount2 = certHolderR2.status === "fulfilled" ? certHolderR2.value : 0;
+    const certTopHolders2 = certTopHoldersR2.status === "fulfilled" ? certTopHoldersR2.value : [];
 
-    try {
-      const [tRes, hRes] = await Promise.all([
-        fetch(`${GOPLUS_BASE}/token_security/${chainId}?contract_addresses=${encodeURIComponent(contractAddress)}`),
-        fetch(`https://api.honeypot.is/v2/IsHoneypot?address=${encodeURIComponent(contractAddress)}&chainID=${chainId}`),
-      ]);
-      if (tRes.ok) {
-        const tj = await tRes.json();
-        tokenData = tj?.result?.[contractAddress.toLowerCase()] ?? null;
-      }
-      if (hRes.ok) {
-        hpData = await hRes.json();
-      }
-    } catch { /* non-fatal */ }
+    let tokenData: Record<string, any> | null = {
+      token_name: certTokenInfo2?.name || "",
+      token_symbol: certTokenInfo2?.symbol || "",
+      holder_count: String(certHolderCount2 || certBsAddr2?.token?.holders_count || "0"),
+      is_open_source: certBsAddr2?.is_verified ? "1" : "0",
+      is_honeypot: certSim.isHoneypot ? "1" : "0",
+      buy_tax: String(certSim.buyTax / 100),
+      sell_tax: String(certSim.sellTax / 100),
+      is_mintable: "0",
+      is_in_dex: certSim.simulationSuccess ? "1" : "0",
+      creator_address: certBsAddr2?.creator_address_hash || "",
+      lp_holders: [],
+      holders: certTopHolders2.map((h, i) => ({ address: h.address, percent: String(h.percent / 100), tag: "", is_contract: "0" })),
+      slippage_modifiable: "0",
+    };
+    let hpData: Record<string, any> | null = certSim.simulationSuccess ? {
+      IsHoneypot: certSim.isHoneypot, simulationSuccess: true,
+      BuyTax: certSim.buyTax, SellTax: certSim.sellTax,
+    } : null;
 
     const flag1 = (v: any) => v === "1" || v === 1 || v === true;
 
@@ -2658,7 +2771,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       holderCount: parseInt(tokenData?.holder_count || "0"),
       isOpenSource: flag1(tokenData?.is_open_source),
       isInDex: flag1(tokenData?.is_in_dex),
-      honeypot: { isHoneypot, simulationSuccess, buyTax, sellTax, source: hpData ? "honeypot.is" : "GoPlus" },
+      honeypot: { isHoneypot, simulationSuccess, buyTax, sellTax, source: "Alchemy Simulation" },
       liquidityLock: {
         lockedPercent: clampedLocked,
         lockLocations,

@@ -60,61 +60,37 @@ shared/
 - `GET /api/verified-projects` - List verified projects
 - `POST /api/agent/analyze` - Agent LARP detection scan
 
-## LP Detection — Protocol Security Override (Blockscout Deployer Tracing)
-- **3-layer forensics** (in `resolveProtocolLocker` function, `server/routes.ts`):
-  1. **Direct match**: Check GoPlus `creator_address` and `lp_holders` against `PLATFORM_LOCKERS`
-  2. **Deployer tracing**: For each LP holder contract, query Blockscout API (`/api/v2/addresses/{addr}`) to get `creator_address_hash`, then check against `PLATFORM_DEPLOYERS`
-  3. **Creator tracing**: If no LP match, check the token creator's deployer against `PLATFORM_DEPLOYERS`
-- **PLATFORM_LOCKERS** (factory/locker contract addresses):
-  - `0x0bf8...f58a` — ApeStore → "ApeStore Managed"
-  - `0xe85a...83a9` — Clanker V4 Factory → "Clanker v4"
-  - `0xf362...5d68` — Clanker Locker → "Clanker v4"
-  - `0x0b3e...7e1b` — Virtuals Protocol → "Virtuals"
-  - `0xdad6...2e32` — Virtuals Vault → "Virtuals"
-- **PLATFORM_DEPLOYERS** (EOAs that deploy per-token locker contracts):
-  - `0xade2...1f6f` → "ApeStore Managed" (deploys ApeStore factory + per-token lockers)
-  - `0xd466...1bd3` → "Clanker v4" (deploys Clanker locker + SingletonLpLocker/MultipleLpLockerUniV3)
-  - `0x97cf...0a3` → "Virtuals" (deploys Virtuals Protocol)
-  - `0xdad6...2e32` → "Virtuals" (Virtuals Vault — Live on Uniswap V3)
-- **Why deployer tracing**: GoPlus never exposes factory addresses directly for V3/V4 tokens. LP holders are per-token locker contracts (e.g., SingletonLpLocker) created by platform deployer EOAs.
-- **Virtuals PRE-GoPlus bypass** (fixes false 99% tax/honeypot):
-  - In `directGoPlus` (bot.ts) and `/api/detective/analyze` (routes.ts), Virtuals pairing check runs BEFORE GoPlus API call
-  - If `isVirtualsPair` or address matches ERC-8183 vault `0xdad6...2e32`, returns immediately: `isHoneypot: false`, `buyTax: 0`, `sellTax: 0`, `riskLevel: "Clean"`
-  - GoPlus is NEVER called for Virtuals tokens — eliminates false 99% tax and honeypot flags entirely
-  - Also matches tokens created by Virtuals factory `0x0b3e...7e1b` or deployer `0x97cf...0a3`
-  - For Virtuals-origin tokens: clears LP/holder/hidden-owner flags, forces risk to Clean
-  - For Virtuals contract addresses themselves: also clears GoPlus false-positive honeypot/mint flags
-- **Override behavior**: When protocol match found:
-  - `isSecure = true`, LP shown as "Protocol Managed"
-  - Risk level forced to Clean (unless honeypot or killer tax for non-factory contracts)
-- **Tax override**: If a factory-origin token has simulated buy/sell tax > 50% (Direct-to-V3 simulation failure), tax is forced to 0 and `taxOverride` field is set to the platform name. UI/bot shows "Tax: Protocol Managed (Virtuals)" instead of the false 99%.
-- **Holder count (Blockscout forced)**: `botFetchHolderCount` and `fetchHolderCountFallback` always return a number (0 on failure), never null. Primary source is Blockscout `/api/v2/tokens/{addr}/counters`.
-- **Response fields**: `protocolSecured: true`, `isKnownFactory: true`, `holderCount`, `lpEscrow: { name, address, percent }`, `contractScan.protocolLocker`
-- **Risk hierarchy**: Honeypot or sell_tax > 20% → forced High Risk even if protocol-secured (except for Virtuals contract addresses)
-- **Bot async scanning**: All scan commands (`/scan`, `/checkwallet`, `/scanagent`, `/scanx`) use edit-message pattern — send "Analyzing..." immediately, then edit with results. 60s timeout. On edit failure, deletes loading message and sends reply.
-- **Used in**: `/api/detective/analyze`, `/api/agent/analyze` (contractScan), `/api/admin/audit`, `/api/verify/:address`, `bot.ts`
-
-## Alchemy-First Security Engine (Dual-DEX: V3 + V4)
-- **Architecture**: Alchemy RPC (Dual-DEX pool + bytecode + whitelist) → Blockscout (deployer trace + holders) → GoPlus → Honeypot.is
-- **Alchemy is the FIRST call**: For ALL Base scans, Alchemy `eth_getCode`, `rpcGetDeployer`, and `rpcCheckDualDex` (V3+V4 parallel) run as the very first step
-- **Dual-DEX detection**:
-  - V3: Queries Base V3 Factory (`0x3312...FDfD`) for `getPool(tokenA, WETH, fee)` across 4 fee tiers (500, 3000, 10000, 100)
-  - V4: Queries V4 PoolManager (`0x4985...2b2b`) via `eth_getLogs` filtering by token address as topic2 or topic3
-  - `rpcCheckDualDex` / `botCheckDualDex` run both in parallel, V4 takes priority if both found
-- **Live Reporting labels**:
-  - `liveStatus`: "Live (Direct-to-V3) ✅" or "Live (Direct-to-V4) ✅" — set IMMEDIATELY before Blockscout/GoPlus
-  - `lpStatus`: "[Platform Name] Managed ✅" or ERC-8183 label — or "Secured ✅"/"Unlocked ⚠️"
-  - `dexVersion`: "v3" | "v4" | null — new field in all responses
-- **ERC-8183 Vault detection** (`resolveVirtualsLabel` / `botResolveVirtualsLabel`):
-  - Vault address: `0xdad686299fb562f89e55da05f1d96fabeb2a2e32`
-  - If Virtuals platform + vault is creator or LP holder → `lpStatus: "Virtuals Managed (ERC-8183) 🤖"`
-  - Otherwise Virtuals tokens → `lpStatus: "Virtuals Managed ✅"`
-- **Whitelist Supremacy**: If Alchemy `getCode` + deployer match whitelist → INSTANTLY return Clean + Protocol Managed. GoPlus/Honeypot.is NEVER called
-- **Holder count fallback with Alchemy balanceOf**: If Blockscout returns 0 holders, Alchemy `balanceOf` probes top 5 addresses → "Scanning (High Activity)" or "Awaiting Indexer"
-- **2-hop deployer tracing**: Blockscout traces token → deployer → deployer's deployer to match factory origins
-- **Non-whitelisted tokens**: GoPlus + Honeypot.is used, but dual-DEX check still runs via Alchemy; holder count is Blockscout-first
-- **Bot async pre-check**: `/scan` fires dual-DEX + tokenInfo as IIFE. If completes in <4s, updates loading message with quick V3/V4 status
+## Simulation-First Security Engine (2026 Overhaul)
+- **Architecture**: Alchemy RPC simulation (Uniswap V3 QuoterV2) → Blockscout (deployer + holders + verification) → DexScreener (price/liquidity)
+- **GoPlus and Honeypot.is have been REMOVED** — zero external oracle dependencies for security data
+- **Simulation Engine** (`botAlchemySimulate` in bot.ts, `rpcAlchemySimulate` in routes.ts):
+  - Uses Uniswap V3 QuoterV2 at `0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a`
+  - Simulates 0.1 ETH buy (WETH→Token) then sell (Token→WETH) via `eth_call`
+  - Tries all fee tiers: [500, 3000, 10000, 100]
+  - Honeypot detection: sell revert = honeypot
+  - Tax calculation: round-trip loss minus pool fees, split 50/50 buy/sell
+  - Selector: `0xc6a5026a` (QuoterV2 `quoteExactInputSingle`)
+  - Returns: `{ isHoneypot, buyTax, sellTax, simulationSuccess }`
+- **Single Parallel Block** (`Promise.allSettled`):
+  - bot.ts `buildSnapshot`: sim, tokenInfo, holderCount, topHolders, dexCheck, dexScreener, deployer — ALL parallel, target < 5s
+  - routes.ts `/api/detective/analyze`: sim + Blockscout address + token info + holders — ALL parallel
+  - No more sequential waterfall (was 75+ seconds, now < 6s)
+- **Virtuals Protocol 2026 Identity**:
+  - VIRTUAL token: `0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b`
+  - ERC-8183 Vault: `0xdad686299fb562f89e55da05f1d96fabeb2a2e32`
+  - If paired with VIRTUAL or matches vault → "Virtuals Protocol 🤖", bypass all risk flags
+  - Labels: "Virtuals Managed (ERC-8183) 🤖" or "Virtuals Managed ✅"
+- **Platform Detection** (`botResolvePlatformFast` / single-pass):
+  - Checks address, deployer, and top holders against PLATFORM_LOCKERS + PLATFORM_DEPLOYERS
+  - No multi-hop deployer tracing — single Blockscout call for deployer
+  - Supported: ApeStore, Clanker v4, Virtuals, Flaunch
+- **Holder Count**: Blockscout `/api/v2/tokens/{addr}/counters` (single call, not multi-hop)
+- **Dual-DEX detection** (V3 + V4):
+  - V3: Factory `0x3312...FDfD`, fee tiers [500, 3000, 10000, 100]
+  - V4: PoolManager `0x4985...2b2b` via `eth_getLogs`
 - **Tax override**: Factory tokens with simulated tax > 50% → tax forced to 0%
+- **Bot async scanning**: All scan commands use edit-message pattern — "Analyzing..." → edit with results
+- **Affected endpoints**: `/api/detective/analyze`, `/api/agent/analyze`, `/api/admin/audit`, `/api/verify/:address`, bot.ts
 
 ## Brand Protection (Strict Identity)
 - Official APOL CA: TBA (no contract address exists yet)
@@ -135,12 +111,11 @@ shared/
 - UI displays: Balance, Activity (txs/level/inflow/outflow), Funding Source, then APOL Verdict
 
 ## Data Sources (Priority Order)
-1. **Alchemy RPC** (`BASE_RPC_URL`) — `eth_getBalance` for wallet balance, `eth_call` for contract detection, token info, balanceOf, totalSupply, pool detection, bytecode verification
+1. **Alchemy RPC Simulation** (`BASE_RPC_URL`) — Uniswap V3 QuoterV2 buy/sell simulation for honeypot/tax detection, `eth_getBalance`, `eth_call` for contract detection, token info, pool detection
 2. **Internal Whitelist** — `PLATFORM_LOCKERS` + `PLATFORM_DEPLOYERS` maps (both routes.ts and bot.ts maintain copies)
-3. **Blockscout API** — Deployer tracing (2-hop), holder counts (PRIMARY), top holder addresses, wallet tx history (inflow/outflow)
-4. **GoPlus API** — Token security data (non-whitelisted tokens only); wallet `address_security` checks (always)
-5. **Honeypot.is** — Secondary honeypot simulation (non-whitelisted tokens only)
-6. **DexScreener** — Price, market cap, liquidity data
+3. **Blockscout API** — Deployer info, holder counts (PRIMARY via `/counters`), top holders, contract verification status, wallet tx history
+4. **DexScreener** — Price, market cap, liquidity data
+5. **Internal Reports** — APOL database for flagged wallets (replaces GoPlus address_security)
 
 ## Secrets
 - `APOL_BOT_TOKEN` - Telegram bot token
