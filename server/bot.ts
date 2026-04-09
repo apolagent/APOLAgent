@@ -317,9 +317,9 @@ async function runScan(address: string): Promise<string> {
   const t0 = Date.now();
 
   const [simR, tokenR, deployerR] = await Promise.allSettled([
-    simulateToken(address),
-    getTokenInfo(address),
-    getDeployer(address),
+    softTimeout(simulateToken(address), 10000, { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: "Timeout" } as SimResult),
+    softTimeout(getTokenInfo(address), 8000, { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18 }),
+    softTimeout(getDeployer(address), 6000, null),
   ]);
 
   const sim: SimResult = simR.status === "fulfilled" ? simR.value
@@ -495,9 +495,9 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
   const t0 = Date.now();
 
   const [simR, tokenR, deployerR] = await Promise.allSettled([
-    simulateToken(address),
-    getTokenInfo(address),
-    getDeployer(address),
+    softTimeout(simulateToken(address), 10000, { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: "Timeout" } as SimResult),
+    softTimeout(getTokenInfo(address), 8000, { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18 }),
+    softTimeout(getDeployer(address), 6000, null),
   ]);
 
   const sim: SimResult = simR.status === "fulfilled" ? simR.value
@@ -662,8 +662,16 @@ function esc(s: string): string {
 async function handleScan(ctx: any, address: string): Promise<void> {
   const loadingMsg = await ctx.reply("⏳ Running APOL forensic simulation...");
   try {
-    const report = await runScan(address);
-    await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+    const report = await softTimeout(runScan(address), 25000, null);
+    if (report) {
+      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+    } else {
+      const scanCount = await storage.incrementLookup(address).catch(() => 0);
+      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
+        `🏛 *APOL AGENT — CONTRACT SNAPSHOT*\n\n📍 \`${address.slice(0, 8)}...${address.slice(-6)}\`\n\n⚠️ Scan timed out. Network may be congested. Try again.\n👁 Scan count: ${scanCount}`,
+        { parse_mode: "Markdown" },
+      ).catch(() => {});
+    }
   } catch (e: any) {
     log(`Scan error for ${address}: ${e?.message}`, "bot");
     const scanCount = await storage.incrementLookup(address).catch(() => 0);
@@ -808,7 +816,7 @@ async function handleScanX(ctx: any, input: string): Promise<void> {
 async function handleCheckWallet(ctx: any, address: string): Promise<void> {
   const loadingMsg = await ctx.reply("🔍 Running forensic wallet audit...");
   try {
-    const walletInfo = await getWalletInfo(address);
+    const walletInfo = await softTimeout(getWalletInfo(address), 15000, { balance: "0", txCount: 0, isContract: false, firstTx: null, firstTxHash: null, firstTxFrom: null, firstTxFromName: null, inflow: 0, outflow: 0 } as WalletInfo);
     const ethUsd = await softTimeout(getEthUsdPrice(), 3000, 0);
     const balUsd = parseFloat(walletInfo.balance) * ethUsd;
 
@@ -982,8 +990,14 @@ export function createBot(): Telegraf | null {
         searchedName = found.name;
       }
 
-      const report = await runAgentScan(address, searchedName);
-      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+      const report = await softTimeout(runAgentScan(address, searchedName), 30000, null);
+      if (report) {
+        await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+      } else {
+        await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
+          `🤖 *APOL AGENT — LARP DETECTOR*\n\n⚠️ Scan timed out. Network may be congested. Try again.`,
+          { parse_mode: "Markdown" }).catch(() => {});
+      }
     } catch (e: any) {
       log(`ScanAgent error: ${e?.message}`, "bot");
       await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
