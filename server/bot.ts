@@ -25,6 +25,8 @@ const PLATFORM_MAP: Record<string, string> = {
   "0xade20c0cc8482c404a57da404ed1f3f2a1f6fe6f": "ApeStore",
   "0x070c1626e110c8776cdbeb5439257c69a8d35523": "ApeStore",
   "0x7e89e29f2b3d95e4e8aec0a751427015c8fbe966": "ApeStore",
+  "0xb3bea12afc263318c16dc16dbfd5ab3a0261dabf": "ApeStore",
+  "0x5c934383f3e7b5e13fb5e4832ca049334b526cf7": "ApeStore",
   "0x6a53961a5bc81e8b1e02aa84445e07a4e8057957": "Flaunch",
   "0xce0e4e4d2dc0033ce2dd0ec79abe6186106f0462": "Flaunch",
 };
@@ -39,6 +41,8 @@ const LOCKER_MAP: Record<string, string> = {
   "0x0bf85e6f2ff0ed5c4a76b1dbbd3f2f65c05a4f58": "ApeStore",
   "0x070c1626e110c8776cdbeb5439257c69a8d35523": "ApeStore",
   "0x7e89e29f2b3d95e4e8aec0a751427015c8fbe966": "ApeStore",
+  "0xb3bea12afc263318c16dc16dbfd5ab3a0261dabf": "ApeStore",
+  "0x5c934383f3e7b5e13fb5e4832ca049334b526cf7": "ApeStore",
   "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
   "0x6a53961a5bc81e8b1e02aa84445e07a4e8057957": "Flaunch",
   "0xce0e4e4d2dc0033ce2dd0ec79abe6186106f0462": "Flaunch",
@@ -169,6 +173,35 @@ async function getDeployer(addr: string): Promise<string | null> {
     const data = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
     if (data?.creator_address_hash) return data.creator_address_hash.toLowerCase();
   } catch {}
+
+  if (BASE_RPC) {
+    try {
+      const resp = await fetch(BASE_RPC, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0", id: 1, method: "alchemy_getAssetTransfers",
+          params: [{ fromBlock: "0x0", toBlock: "latest", contractAddresses: [addr], category: ["erc20"], maxCount: "0x1", order: "asc" }]
+        }),
+        signal: AbortSignal.timeout(6000),
+      });
+      const data = await resp.json() as any;
+      const firstTx = data?.result?.transfers?.[0];
+      if (firstTx?.hash) {
+        const receipt = await fetch(BASE_RPC, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "eth_getTransactionReceipt", params: [firstTx.hash] }),
+          signal: AbortSignal.timeout(4000),
+        }).then(r => r.json()) as any;
+        const txTo = receipt?.result?.to?.toLowerCase();
+        const txFrom = receipt?.result?.from?.toLowerCase();
+        if (txTo && txTo !== addr.toLowerCase()) return txTo;
+        if (txFrom) return txFrom;
+      }
+    } catch {}
+  }
+
   try {
     const data = await fetch(`https://base.blockscout.com/api?module=account&action=txlist&address=${addr}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
     const firstFrom = data?.result?.[0]?.from;
@@ -230,14 +263,18 @@ interface WalletInfo {
 
 async function getWalletInfo(addr: string): Promise<WalletInfo> {
   try {
+    const lowerAddr = addr.toLowerCase();
     const [balResult] = await rpcBatch([
       { method: "eth_getBalance", params: [addr, "latest"] },
     ]);
     const balWei = balResult ? BigInt(balResult) : BigInt(0);
     const balEth = Number(balWei) / 1e18;
 
-    const addrData = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
-    const isContract = addrData?.is_contract || false;
+    const [addrData, codeResult] = await Promise.all([
+      fetch(`https://base.blockscout.com/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null).catch(() => null),
+      rpcBatch([{ method: "eth_getCode", params: [addr, "latest"] }]).then(r => r[0]).catch(() => "0x"),
+    ]);
+    const isContract = addrData?.is_contract || (codeResult && codeResult !== "0x" && codeResult.length > 2);
 
     let txCount = 0;
     let firstTx: string | null = null;
@@ -253,12 +290,9 @@ async function getWalletInfo(addr: string): Promise<WalletInfo> {
       if (items.length > 0) {
         firstTx = items[0]?.timestamp || null;
         firstTxHash = items[0]?.hash || null;
-        const fromAddr = items[0]?.from?.hash || null;
-        firstTxFrom = fromAddr;
+        firstTxFrom = items[0]?.from?.hash || null;
         firstTxFromName = items[0]?.from?.name || items[0]?.from?.ens_domain_name || null;
       }
-
-      const lowerAddr = addr.toLowerCase();
       for (const tx of items) {
         const val = tx.value ? Number(BigInt(tx.value)) / 1e18 : 0;
         if (val > 0) {
@@ -268,28 +302,74 @@ async function getWalletInfo(addr: string): Promise<WalletInfo> {
       }
     } catch {}
 
-    if (!firstTx) {
+    if (BASE_RPC && (!firstTx || txCount === 0)) {
       try {
-        const fallbackData = await fetch(`https://base.blockscout.com/api?module=account&action=txlist&address=${addr}&sort=asc&offset=1&page=1`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
-        const fbItems = fallbackData?.result || [];
-        if (fbItems.length > 0 && fbItems[0]?.timeStamp) {
-          firstTx = new Date(parseInt(fbItems[0].timeStamp) * 1000).toISOString();
-          firstTxHash = firstTxHash || fbItems[0]?.hash || null;
-          firstTxFrom = firstTxFrom || fbItems[0]?.from || null;
+        const [inResp, outResp] = await Promise.all([
+          fetch(BASE_RPC, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jsonrpc: "2.0", id: 10, method: "alchemy_getAssetTransfers",
+              params: [{ fromBlock: "0x0", toBlock: "latest", toAddress: addr, category: ["external", "internal", "erc20", "erc721", "erc1155"], maxCount: "0x32", order: "asc" }] }),
+            signal: AbortSignal.timeout(8000),
+          }).then(r => r.json() as any),
+          fetch(BASE_RPC, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jsonrpc: "2.0", id: 11, method: "alchemy_getAssetTransfers",
+              params: [{ fromBlock: "0x0", toBlock: "latest", fromAddress: addr, category: ["external", "internal", "erc20", "erc721", "erc1155"], maxCount: "0x32", order: "asc" }] }),
+            signal: AbortSignal.timeout(8000),
+          }).then(r => r.json() as any),
+        ]);
+
+        const inTransfers = inResp?.result?.transfers || [];
+        const outTransfers = outResp?.result?.transfers || [];
+
+        const allTransfers = [...inTransfers, ...outTransfers].sort((a, b) => {
+          const ba = parseInt(a.blockNum, 16);
+          const bb = parseInt(b.blockNum, 16);
+          return ba - bb;
+        });
+
+        const uniqueHashes = new Set<string>();
+        for (const t of allTransfers) uniqueHashes.add(t.hash);
+        if (uniqueHashes.size > txCount) txCount = uniqueHashes.size;
+
+        if (!firstTx && allTransfers.length > 0) {
+          const first = allTransfers[0];
+          firstTxHash = first.hash;
+          const blockHex = first.blockNum;
+          try {
+            const [blockData] = await rpcBatch([{ method: "eth_getBlockByNumber", params: [blockHex, false] }]);
+            if (blockData?.timestamp) {
+              firstTx = new Date(parseInt(blockData.timestamp, 16) * 1000).toISOString();
+            }
+          } catch {}
+
+          if (first.from?.toLowerCase() !== lowerAddr) {
+            firstTxFrom = first.from;
+          } else if (first.to) {
+            firstTxFrom = first.to;
+          }
+        }
+
+        for (const t of inTransfers) {
+          if (t.value && t.asset === "ETH") inflow += t.value;
+        }
+        for (const t of outTransfers) {
+          if (t.value && t.asset === "ETH") outflow += t.value;
         }
       } catch {}
     }
 
-    try {
-      const countData = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}/counters`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
-      txCount = countData?.transactions_count ? parseInt(countData.transactions_count) : 0;
-    } catch {}
+    if (txCount === 0) {
+      try {
+        const countData = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}/counters`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
+        const parsed = countData?.transactions_count ? parseInt(countData.transactions_count) : 0;
+        if (parsed > txCount) txCount = parsed;
+      } catch {}
+    }
 
     if (txCount === 0) {
       try {
-        const [nonceResult] = await rpcBatch([
-          { method: "eth_getTransactionCount", params: [addr, "latest"] },
-        ]);
+        const [nonceResult] = await rpcBatch([{ method: "eth_getTransactionCount", params: [addr, "latest"] }]);
         if (nonceResult) {
           const nonce = parseInt(nonceResult, 16);
           if (nonce > txCount) txCount = nonce;

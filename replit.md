@@ -37,9 +37,16 @@ shared/
 ## Platform Detection
 - **Virtuals**: token `0x0b3e...7e1b`, vault `0xdad6...2e32`, deployer `0x97cf...0a3` → taxes forced to 0
 - **Clanker**: factory `0xe85a...83a9`, locker `0xf362...5d68`, deployer `0xd466...1bd3`
-- **ApeStore**: factory `0x0bf8...f58a`, deployer `0xade2...1f6f`
+- **ApeStore**: factory `0x0bf8...f58a`, deployer `0xade2...1f6f`, factory `0xb3be...dabf`, router `0x5c93...6cf7`
 - **Flaunch**: deployer `0x6a53...9571`
 - Checks: address → deployer → top holders (single-pass)
+
+## Data Source Priority
+- **Deployer detection**: Blockscout v2 → Alchemy `alchemy_getAssetTransfers` (creation tx receipt) → Blockscout v1
+- **Wallet info**: RPC `eth_getBalance` + Blockscout v2 → Alchemy `alchemy_getAssetTransfers` (both directions) → Blockscout counters → RPC nonce
+- **Contract ownership**: Direct `owner()` call (0x8da5cb5b) — never infer renouncement from missing deployer
+- **X verification**: `u.verification?.verified` (nested object in fxtwitter API), NOT `u.verified`
+- **Linked CA**: DexScreener search + bio regex `0x[a-fA-F0-9]{40}`
 
 ## LP Status Detection
 - Checks top 10 holders from Blockscout against LOCKER_MAP and BURN_ADDRS

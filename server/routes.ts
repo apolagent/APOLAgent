@@ -22,6 +22,8 @@ const PLATFORM_MAP: Record<string, string> = {
   "0xade20c0cc8482c404a57da404ed1f3f2a1f6fe6f": "ApeStore",
   "0x070c1626e110c8776cdbeb5439257c69a8d35523": "ApeStore",
   "0x7e89e29f2b3d95e4e8aec0a751427015c8fbe966": "ApeStore",
+  "0xb3bea12afc263318c16dc16dbfd5ab3a0261dabf": "ApeStore",
+  "0x5c934383f3e7b5e13fb5e4832ca049334b526cf7": "ApeStore",
   "0x6a53961a5bc81e8b1e02aa84445e07a4e8057957": "Flaunch",
   "0xce0e4e4d2dc0033ce2dd0ec79abe6186106f0462": "Flaunch",
 };
@@ -36,6 +38,8 @@ const LOCKER_MAP: Record<string, string> = {
   "0x0bf85e6f2ff0ed5c4a76b1dbbd3f2f65c05a4f58": "ApeStore",
   "0x070c1626e110c8776cdbeb5439257c69a8d35523": "ApeStore",
   "0x7e89e29f2b3d95e4e8aec0a751427015c8fbe966": "ApeStore",
+  "0xb3bea12afc263318c16dc16dbfd5ab3a0261dabf": "ApeStore",
+  "0x5c934383f3e7b5e13fb5e4832ca049334b526cf7": "ApeStore",
   "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
   "0x6a53961a5bc81e8b1e02aa84445e07a4e8057957": "Flaunch",
   "0xce0e4e4d2dc0033ce2dd0ec79abe6186106f0462": "Flaunch",
@@ -171,6 +175,33 @@ async function getDeployer(addr: string): Promise<string | null> {
       .then((r) => (r.ok ? (r.json() as any) : null));
     if (data?.creator_address_hash) return data.creator_address_hash.toLowerCase();
   } catch {}
+
+  if (BASE_RPC) {
+    try {
+      const resp = await fetch(BASE_RPC, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0", id: 1, method: "alchemy_getAssetTransfers",
+          params: [{ fromBlock: "0x0", toBlock: "latest", contractAddresses: [addr], category: ["erc20"], maxCount: "0x1", order: "asc" }]
+        }),
+        signal: AbortSignal.timeout(6000),
+      });
+      const data = await resp.json() as any;
+      const firstTx = data?.result?.transfers?.[0];
+      if (firstTx?.hash) {
+        const receipt = await fetch(BASE_RPC, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "eth_getTransactionReceipt", params: [firstTx.hash] }),
+          signal: AbortSignal.timeout(4000),
+        }).then(r => r.json()) as any;
+        const txTo = receipt?.result?.to?.toLowerCase();
+        const txFrom = receipt?.result?.from?.toLowerCase();
+        if (txTo && txTo !== addr.toLowerCase()) return txTo;
+        if (txFrom) return txFrom;
+      }
+    } catch {}
+  }
+
   try {
     const data = await fetch(`https://base.blockscout.com/api?module=account&action=txlist&address=${addr}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc`, { signal: AbortSignal.timeout(4000) })
       .then((r) => (r.ok ? (r.json() as any) : null));
