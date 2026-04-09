@@ -13,22 +13,32 @@ const HARD_TIMEOUT = 10000;
 const PLATFORM_MAP: Record<string, string> = {
   "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
   "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
+  "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
   "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker",
   "0x2a787b2362021cc3eea3c24c4748a6cd5b687382": "Clanker",
-  "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore",
+  "0xe85a08cf16f07b0b6e8b1f5e4918f6e9dab3a5c0": "Clanker",
+  "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker",
   "0x6a53f8b799be11a2a3264ef0bff183dcb12d9571": "Flaunch",
+  "0xce0e4e4d2dc0033ce2dd0ec79abe6186106f0462": "Flaunch",
+  "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore",
+  "0xade20c0cc8482c404a57da404ed1f3f2a1f6fe6f": "ApeStore",
 };
 
 const LOCKER_MAP: Record<string, string> = {
   "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker",
   "0x2a787b2362021cc3eea3c24c4748a6cd5b687382": "Clanker",
+  "0xe85a08cf16f07b0b6e8b1f5e4918f6e9dab3a5c0": "Clanker",
+  "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker",
   "0x663a5c229c09b049e36dcc11a9b0d4a8eb9db214": "Unicrypt",
   "0x71b5759d73262fbb223956913ecf4ecc51057641": "PinkLock",
   "0xe2fe530c047f2d85298b07d9333c05737f1435fb": "Team Finance",
   "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore",
+  "0xade20c0cc8482c404a57da404ed1f3f2a1f6fe6f": "ApeStore",
   "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
   "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
+  "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
   "0x6a53f8b799be11a2a3264ef0bff183dcb12d9571": "Flaunch",
+  "0xce0e4e4d2dc0033ce2dd0ec79abe6186106f0462": "Flaunch",
 };
 
 function pad32(hex: string): string {
@@ -247,7 +257,10 @@ function detectPlatform(addr: string, deployer: string | null, holders: { addres
   return null;
 }
 
+const MANAGED_PROTOCOLS = new Set(["Virtuals", "Clanker", "Flaunch"]);
+
 function detectLpStatus(holders: { address: string; percent: number }[], platform: string | null): string {
+  if (platform && MANAGED_PROTOCOLS.has(platform)) return "Managed Protocol";
   for (const h of holders) {
     if (BURN_ADDRS.has(h.address)) return "BURNED";
     if (LOCKER_MAP[h.address]) return `LOCKED (${LOCKER_MAP[h.address]})`;
