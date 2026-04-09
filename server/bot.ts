@@ -268,10 +268,34 @@ async function getWalletInfo(addr: string): Promise<WalletInfo> {
       }
     } catch {}
 
+    if (!firstTx) {
+      try {
+        const fallbackData = await fetch(`https://base.blockscout.com/api?module=account&action=txlist&address=${addr}&sort=asc&offset=1&page=1`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
+        const fbItems = fallbackData?.result || [];
+        if (fbItems.length > 0 && fbItems[0]?.timeStamp) {
+          firstTx = new Date(parseInt(fbItems[0].timeStamp) * 1000).toISOString();
+          firstTxHash = firstTxHash || fbItems[0]?.hash || null;
+          firstTxFrom = firstTxFrom || fbItems[0]?.from || null;
+        }
+      } catch {}
+    }
+
     try {
       const countData = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}/counters`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
       txCount = countData?.transactions_count ? parseInt(countData.transactions_count) : 0;
     } catch {}
+
+    if (txCount === 0) {
+      try {
+        const [nonceResult] = await rpcBatch([
+          { method: "eth_getTransactionCount", params: [addr, "latest"] },
+        ]);
+        if (nonceResult) {
+          const nonce = parseInt(nonceResult, 16);
+          if (nonce > txCount) txCount = nonce;
+        }
+      } catch {}
+    }
 
     return { balance: balEth.toFixed(4), txCount, isContract, firstTx, firstTxHash, firstTxFrom, firstTxFromName, inflow, outflow };
   } catch { return { balance: "0", txCount: 0, isContract: false, firstTx: null, firstTxHash: null, firstTxFrom: null, firstTxFromName: null, inflow: 0, outflow: 0 }; }
@@ -357,7 +381,21 @@ async function runScan(address: string): Promise<string> {
   const hasPool = sim.simulationSuccess || isVirtuals;
   const dexStatus = hasPool ? "Live (Direct-to-V3) ✅" : "No Pool Found ⚠️";
 
-  const isOwnerRenounced = !deployer || deployer === "0x0000000000000000000000000000000000000000";
+  let contractOwner: string | null = null;
+  let isOwnerRenounced = false;
+  let ownerCheckDone = false;
+  try {
+    const ownerSig = "0x8da5cb5b";
+    const [ownerResult] = await rpcBatch([
+      { method: "eth_call", params: [{ to: address, data: ownerSig }, "latest"] },
+    ]);
+    if (ownerResult && ownerResult !== "0x" && ownerResult.length >= 66) {
+      contractOwner = "0x" + ownerResult.slice(26).toLowerCase();
+      const DEAD = ["0x0000000000000000000000000000000000000000", "0x000000000000000000000000000000000000dead", "0x0000000000000000000000000000000000000001"];
+      isOwnerRenounced = DEAD.includes(contractOwner);
+      ownerCheckDone = true;
+    }
+  } catch {}
 
   const nameUpper = tokenInfo.name.toUpperCase();
   const symbolUpper = tokenInfo.symbol.toUpperCase();
@@ -399,12 +437,18 @@ async function runScan(address: string): Promise<string> {
     ``,
   ];
 
-  if (isOwnerRenounced) {
-    lines.push(`✅ *CONTRACT RENOUNCED*`);
-    lines.push(`• Ownership burned. No admin keys.`);
-  } else {
-    lines.push(`⚠️ *CONTRACT NOT RENOUNCED*`);
-    lines.push(`• Owner: \`${deployer?.slice(0, 10)}...\``);
+  if (ownerCheckDone) {
+    if (isOwnerRenounced) {
+      lines.push(`✅ *CONTRACT RENOUNCED*`);
+      lines.push(`• Ownership burned. No admin keys.`);
+    } else if (contractOwner) {
+      lines.push(`⚠️ *CONTRACT NOT RENOUNCED*`);
+      lines.push(`• Owner: \`${contractOwner.slice(0, 10)}...\``);
+    }
+  } else if (deployer) {
+    lines.push(`📋 *DEPLOYER*`);
+    lines.push(`• \`${deployer.slice(0, 10)}...\``);
+    lines.push(`• Ownership status: Unknown`);
   }
 
   if (flags.length > 0) {
@@ -693,6 +737,7 @@ async function fetchXProfile(handle: string): Promise<{
     const data = await res.json() as any;
     const u = data?.user;
     if (!u) return null;
+    const isVerified = u.verified === true || u.verification?.verified === true || false;
     return {
       name: u.name || handle,
       screen_name: u.screen_name || handle,
@@ -700,7 +745,7 @@ async function fetchXProfile(handle: string): Promise<{
       joined: u.joined || "",
       followers: u.followers || 0,
       following: u.following || 0,
-      verified: u.verified === true,
+      verified: isVerified,
       tweets: u.tweets || 0,
       avatar: u.avatar_url || "",
     };
@@ -770,9 +815,15 @@ async function handleScanX(ctx: any, input: string): Promise<void> {
 
     const bioDisplay = profile.bio ? profile.bio.slice(0, 120) : "None";
 
-    const linkedCA = tokenResult && tokenResult.address
-      ? `${esc(tokenResult.name)} ($${esc(tokenResult.symbol)})\n   \`${tokenResult.address}\``
-      : "Not Found";
+    const bioCAMatch = profile.bio.match(/0x[a-fA-F0-9]{40}/);
+    const bioCA = bioCAMatch ? bioCAMatch[0] : null;
+
+    let linkedCA = "Not Found";
+    if (tokenResult && tokenResult.address) {
+      linkedCA = `${esc(tokenResult.name)} ($${esc(tokenResult.symbol)})\n   \`${tokenResult.address}\``;
+    } else if (bioCA) {
+      linkedCA = `\`${bioCA}\` _(from bio)_`;
+    }
 
     const lines = [
       `🔍 *X INVESTIGATION:*`,
