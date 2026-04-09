@@ -689,19 +689,20 @@ export function createBot(): Telegraf | null {
 
   bot.command("start", (ctx) => {
     const lines = [
-      `🦍 *APOL Agent — On-Chain Security*`,
+      `🚨 *APOL AGENT ONLINE*`,
+      `Protecting the Base trenches.`,
       ``,
-      `Forensic analysis on Base chain.`,
+      `Use /scan address to check a contract or /report to flag a larp.`,
       ``,
-      `*Commands:*`,
-      `/scan - Contract investigation`,
-      `/scanx - X/Twitter social forensics`,
-      `/scanagent - AI Agent verification`,
-      `/checkwallet - Wallet forensic audit`,
-      `/map - APOL Wall of Shame`,
-      `/verified - Certified Hero Projects`,
-      ``,
-      `Or just paste a contract address to scan.`,
+      `*AVAILABLE COMMANDS*`,
+      `🔍 /scan contract — Token security check`,
+      `🔍 /scanx username — X/Twitter social forensics`,
+      `🤖 /scanagent name or CA — AI agent audit`,
+      `🕵️ /checkwallet address — Wallet investigation`,
+      `🚩 /report — Submit scam evidence`,
+      `👮 /map — Wall of Shame`,
+      `🛡 /verified — Certified projects`,
+      `❓ /help — Help`,
     ];
     ctx.reply(lines.join("\n"), { parse_mode: "Markdown" });
   });
@@ -775,6 +776,56 @@ export function createBot(): Telegraf | null {
       `✅ *APOL Certified Hero Projects*\n\nVerified projects that passed APOL's security audit.\n\n🔗 [View Verified List](https://apolagent.online)\n\n💡 Want your project verified? Contact @ApolAgentBot`,
       { parse_mode: "Markdown", link_preview_options: { is_disabled: true } },
     );
+  });
+
+  bot.command("report", (ctx) => {
+    const input = ctx.message.text.replace(/^\/report(@\w+)?\s*/i, "").trim();
+    if (!input) {
+      ctx.reply(
+        `🚩 *APOL AGENT — REPORT*\n\nSubmit scam evidence for investigation.\n\n*Usage:*\n\`/report 0xContractAddress reason\`\n\nExample:\n\`/report 0x1234...abcd Honeypot, can't sell\``,
+        { parse_mode: "Markdown" },
+      );
+      return;
+    }
+    const parts = input.split(/\s+/);
+    const addr = parts[0];
+    const reason = parts.slice(1).join(" ") || "Reported by community";
+    if (isContractAddress(addr)) {
+      storage.upsertFlaggedWallet({
+        address: addr.toLowerCase(),
+        chain: "base",
+        reportCount: 1,
+        riskLevel: "Reported",
+        topCategory: "Community Report",
+        apolVerdict: reason,
+        reports: [{ source: "telegram", reason, timestamp: new Date().toISOString() }],
+      }).catch(() => {});
+      ctx.reply(
+        `🚩 *Report Submitted*\n\n📌 Address: \`${addr.slice(0, 8)}...${addr.slice(-6)}\`\n📝 Reason: ${esc(reason)}\n\n✅ This address has been flagged for investigation. Thank you for protecting the trenches.`,
+        { parse_mode: "Markdown" },
+      );
+    } else {
+      ctx.reply("🚩 Please provide a valid contract address.\nExample: `/report 0x... honeypot`", { parse_mode: "Markdown" });
+    }
+  });
+
+  bot.command("help", (ctx) => {
+    const lines = [
+      `❓ *APOL AGENT — HELP*`,
+      ``,
+      `🔍 /scan contract — Token security check`,
+      `🔍 /scanx username — X/Twitter social forensics`,
+      `🤖 /scanagent name or CA — AI agent audit`,
+      `🕵️ /checkwallet address — Wallet investigation`,
+      `🚩 /report — Submit scam evidence`,
+      `👮 /map — Wall of Shame`,
+      `🛡 /verified — Certified projects`,
+      ``,
+      `💡 You can also paste a contract address directly to scan it.`,
+      ``,
+      `🔗 [Website](https://apolagent.online) | 🐦 [Twitter](https://x.com/ApolAgent_)`,
+    ];
+    ctx.reply(lines.join("\n"), { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
   });
 
   bot.on("text", async (ctx) => {
