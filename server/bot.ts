@@ -1,6 +1,11 @@
 import { Telegraf } from "telegraf";
 import { storage } from "./storage";
 
+function log(message: string, source = "bot") {
+  const t = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true });
+  console.log(`${t} [${source}] ${message}`);
+}
+
 const BASE_RPC = process.env.BASE_RPC_URL || "";
 const WETH = "0x4200000000000000000000000000000000000006";
 const QUOTER_V2 = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a";
@@ -126,7 +131,6 @@ async function botAlchemySimulate(tokenAddress: string): Promise<SimResult> {
   const buyTax = parseFloat((netTax / 2).toFixed(1));
   const sellTax = parseFloat((netTax / 2).toFixed(1));
 
-  console.log(`[sim] fee=${fee}: roundTrip=${roundTripLoss.toFixed(2)}%, netTax=${netTax.toFixed(2)}%`);
   return { isHoneypot: false, buyTax, sellTax, simulationSuccess: true, feeTier: fee, tokensReceived, failReason: null };
 }
 
@@ -160,14 +164,14 @@ async function getDeployer(addr: string): Promise<string | null> {
 
 async function getHolderCount(addr: string): Promise<number> {
   try {
-    const data = await fetch(`https://base.blockscout.com/api/v2/tokens/${addr}/counters`, { signal: AbortSignal.timeout(2000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch(`https://base.blockscout.com/api/v2/tokens/${addr}/counters`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok ? r.json() as any : null);
     return parseInt(data?.token_holders_count || "0", 10);
   } catch { return 0; }
 }
 
 async function getTopHolders(addr: string): Promise<{ address: string; percent: number }[]> {
   try {
-    const data = await fetch(`https://base.blockscout.com/api/v2/tokens/${addr}/holders?limit=10`, { signal: AbortSignal.timeout(2000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch(`https://base.blockscout.com/api/v2/tokens/${addr}/holders?limit=10`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok ? r.json() as any : null);
     if (!data?.items) return [];
     return data.items.map((h: any) => ({ address: (h.address?.hash || "").toLowerCase(), percent: parseFloat(h.percentage || "0") }));
   } catch { return []; }
@@ -175,17 +179,49 @@ async function getTopHolders(addr: string): Promise<{ address: string; percent: 
 
 async function getEthUsdPrice(): Promise<number> {
   try {
-    const data = await fetch("https://api.dexscreener.com/latest/dex/tokens/0x4200000000000000000000000000000000000006", { signal: AbortSignal.timeout(2000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch("https://api.dexscreener.com/latest/dex/tokens/0x4200000000000000000000000000000000000006", { signal: AbortSignal.timeout(3000) }).then((r) => r.ok ? r.json() as any : null);
     return parseFloat(data?.pairs?.[0]?.priceUsd || "0") || 0;
   } catch { return 0; }
 }
 
 async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liquidity: number }> {
   try {
-    const data = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(2000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok ? r.json() as any : null);
     const pair = data?.pairs?.[0];
     return { priceUsd: parseFloat(pair?.priceUsd || "0") || 0, liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0 };
   } catch { return { priceUsd: 0, liquidity: 0 }; }
+}
+
+async function searchDexScreener(query: string): Promise<{ address: string; name: string; symbol: string; chain: string } | null> {
+  try {
+    const data = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(query)}`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
+    const pair = data?.pairs?.find((p: any) => p.chainId === "base");
+    if (!pair) return null;
+    return { address: pair.baseToken?.address || "", name: pair.baseToken?.name || "", symbol: pair.baseToken?.symbol || "", chain: "base" };
+  } catch { return null; }
+}
+
+async function getWalletInfo(addr: string): Promise<{ balance: string; txCount: number; isContract: boolean; firstTx: string | null }> {
+  try {
+    const [balResult, txCountResult] = await rpcBatch([
+      { method: "eth_getBalance", params: [addr, "latest"] },
+      { method: "eth_getTransactionCount", params: [addr, "latest"] },
+    ]);
+    const balWei = balResult ? BigInt(balResult) : BigInt(0);
+    const balEth = Number(balWei) / 1e18;
+    const txCount = txCountResult ? Number(BigInt(txCountResult)) : 0;
+
+    const addrData = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
+    const isContract = addrData?.is_contract || false;
+
+    let firstTx: string | null = null;
+    try {
+      const txData = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}/transactions?limit=1&sort=asc`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
+      firstTx = txData?.items?.[0]?.timestamp || null;
+    } catch {}
+
+    return { balance: balEth.toFixed(4), txCount, isContract, firstTx };
+  } catch { return { balance: "0", txCount: 0, isContract: false, firstTx: null }; }
 }
 
 function detectPlatform(addr: string, deployer: string | null, holders: { address: string }[]): string | null {
@@ -220,6 +256,10 @@ function formatUsd(val: number): string {
   return `$${val.toFixed(0)}`;
 }
 
+function isContractAddress(text: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(text.trim());
+}
+
 async function runScan(address: string): Promise<string> {
   const t0 = Date.now();
 
@@ -236,10 +276,10 @@ async function runScan(address: string): Promise<string> {
   const deployer = deployerR.status === "fulfilled" ? deployerR.value : null;
 
   const [holderCount, topHolders, ethUsd, dexData] = await Promise.all([
-    softTimeout(getHolderCount(address), 2000, 0),
-    softTimeout(getTopHolders(address), 2000, []),
-    softTimeout(getEthUsdPrice(), 2000, 0),
-    softTimeout(getDexScreenerData(address), 2000, { priceUsd: 0, liquidity: 0 }),
+    softTimeout(getHolderCount(address), 3000, 0),
+    softTimeout(getTopHolders(address), 3000, []),
+    softTimeout(getEthUsdPrice(), 3000, 0),
+    softTimeout(getDexScreenerData(address), 3000, { priceUsd: 0, liquidity: 0 }),
   ]);
 
   const scanCount = await storage.incrementLookup(address, tokenInfo.name, tokenInfo.symbol);
@@ -288,7 +328,7 @@ async function runScan(address: string): Promise<string> {
     `📍 *Address:* \`${shortAddr}\``,
     `⛓ *Chain:* Base Mainnet`,
     ``,
-    `*${tokenInfo.name}* ($${tokenInfo.symbol}) 🧿 ${scanCount}`,
+    `*${esc(tokenInfo.name)}* ($${esc(tokenInfo.symbol)}) 🧿 ${scanCount}`,
     `💲 *Price:* ${tokenPriceUsd > 0 ? formatPrice(tokenPriceUsd) : "Scanning..."}`,
     `📊 *Market Cap:* ${mcap > 0 ? formatUsd(mcap) : "N/A"}`,
     `💧 *Liquidity:* ${liquidity > 0 ? formatUsd(liquidity) : "Scanning..."}`,
@@ -324,9 +364,115 @@ async function runScan(address: string): Promise<string> {
   return lines.join("\n");
 }
 
-function isContractAddress(text: string): boolean {
-  const trimmed = text.trim();
-  return /^0x[a-fA-F0-9]{40}$/.test(trimmed);
+function esc(s: string): string {
+  return s.replace(/[_*[\]()~`>#+\-=|{}.!]/g, "\\$&");
+}
+
+async function handleScan(ctx: any, address: string): Promise<void> {
+  const loadingMsg = await ctx.reply("⏳ Running APOL forensic simulation...");
+  try {
+    const report = await runScan(address);
+    await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+  } catch (e: any) {
+    log(`Scan error for ${address}: ${e?.message}`, "bot");
+    const scanCount = await storage.incrementLookup(address).catch(() => 0);
+    await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
+      `🏛 *APOL AGENT — CONTRACT SNAPSHOT*\n\n📍 \`${address.slice(0, 8)}...${address.slice(-6)}\`\n\n⚠️ Scan error: ${e?.message?.slice(0, 80) || "Unknown"}\n👁 Scan count: ${scanCount}`,
+      { parse_mode: "Markdown" },
+    ).catch(() => {});
+  }
+}
+
+async function handleScanX(ctx: any, input: string): Promise<void> {
+  const loadingMsg = await ctx.reply("🔍 Running X/Twitter social forensics...");
+  try {
+    let handle = input.replace(/https?:\/\/(x\.com|twitter\.com)\//i, "").replace(/^@/, "").trim();
+    if (!handle) {
+      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
+        `🔍 *APOL AGENT — SCANX*\n\nUsage: \`/scanx @handle\` or \`/scanx https://x.com/handle\``,
+        { parse_mode: "Markdown" });
+      return;
+    }
+
+    handle = handle.split("/")[0].split("?")[0];
+
+    const tokenResult = await softTimeout(searchDexScreener(handle), 5000, null);
+
+    if (tokenResult && tokenResult.address) {
+      const report = await runScan(tokenResult.address);
+      const header = `🔍 *APOL AGENT — SCANX RESULTS*\n🐦 *X Handle:* @${esc(handle)}\n📌 *Token Found:* ${esc(tokenResult.name)} ($${esc(tokenResult.symbol)})\n\n`;
+      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, header + report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+    } else {
+      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
+        `🔍 *APOL AGENT — SCANX RESULTS*\n\n🐦 *X Handle:* @${esc(handle)}\n\n⚠️ No Base chain token found matching "${esc(handle)}"\n\n💡 Try scanning the contract address directly with /scan`,
+        { parse_mode: "Markdown" });
+    }
+  } catch (e: any) {
+    log(`ScanX error: ${e?.message}`, "bot");
+    await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
+      `🔍 *APOL AGENT — SCANX*\n\n⚠️ Error: ${e?.message?.slice(0, 80) || "Unknown"}`,
+      { parse_mode: "Markdown" }).catch(() => {});
+  }
+}
+
+async function handleCheckWallet(ctx: any, address: string): Promise<void> {
+  const loadingMsg = await ctx.reply("🔍 Running forensic wallet audit...");
+  try {
+    const walletInfo = await getWalletInfo(address);
+    const ethUsd = await softTimeout(getEthUsdPrice(), 3000, 0);
+    const balUsd = parseFloat(walletInfo.balance) * ethUsd;
+
+    let walletAge = "Unknown";
+    if (walletInfo.firstTx) {
+      const firstDate = new Date(walletInfo.firstTx);
+      const days = Math.floor((Date.now() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (days < 1) walletAge = "< 1 day ⚠️";
+      else if (days < 7) walletAge = `${days} days ⚠️`;
+      else if (days < 30) walletAge = `${days} days`;
+      else walletAge = `${Math.floor(days / 30)} months`;
+    }
+
+    const flags: string[] = [];
+    if (parseFloat(walletInfo.balance) < 0.001) flags.push("💸 Very low ETH balance");
+    if (walletInfo.txCount < 5) flags.push("📉 Very few transactions");
+    if (walletInfo.firstTx) {
+      const days = Math.floor((Date.now() - new Date(walletInfo.firstTx).getTime()) / (1000 * 60 * 60 * 24));
+      if (days < 7) flags.push("🆕 New wallet (< 7 days)");
+    }
+
+    const riskLevel = flags.length >= 2 ? "🔴 HIGH RISK" : flags.length === 1 ? "🟡 CAUTION" : "🟢 LOW RISK";
+    const shortAddr = address.slice(0, 8) + "..." + address.slice(-6);
+
+    const lines = [
+      `🏛 *APOL AGENT — WALLET AUDIT*`,
+      ``,
+      `📍 *Address:* \`${shortAddr}\``,
+      `⛓ *Chain:* Base Mainnet`,
+      ``,
+      `💰 *Balance:* ${walletInfo.balance} ETH (~${formatUsd(balUsd)})`,
+      `📊 *Transactions:* ${walletInfo.txCount.toLocaleString()}`,
+      `📅 *Wallet Age:* ${walletAge}`,
+      `🏷 *Type:* ${walletInfo.isContract ? "Contract" : "EOA (Wallet)"}`,
+      ``,
+      `*RISK LEVEL:* ${riskLevel}`,
+    ];
+
+    if (flags.length > 0) {
+      lines.push(``);
+      lines.push(`🚩 *FLAGS DETECTED:*`);
+      for (const f of flags) lines.push(`   ${f}`);
+    }
+
+    lines.push(``);
+    lines.push(`🔗 [View on Basescan](https://basescan.org/address/${address})`);
+
+    await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, lines.join("\n"), { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+  } catch (e: any) {
+    log(`CheckWallet error: ${e?.message}`, "bot");
+    await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
+      `🏛 *APOL AGENT — WALLET AUDIT*\n\n⚠️ Error: ${e?.message?.slice(0, 80) || "Unknown"}`,
+      { parse_mode: "Markdown" }).catch(() => {});
+  }
 }
 
 export function createBot(): Telegraf | null {
@@ -339,41 +485,100 @@ export function createBot(): Telegraf | null {
   const bot = new Telegraf(token);
 
   bot.command("start", (ctx) => {
-    ctx.reply("🦍 APOL Agent online. Use /scan <contract address> or just paste a CA to begin.");
+    const lines = [
+      `🦍 *APOL Agent — On-Chain Security*`,
+      ``,
+      `Forensic analysis on Base chain.`,
+      ``,
+      `*Commands:*`,
+      `/scan - Contract investigation`,
+      `/scanx - X/Twitter social forensics`,
+      `/scanagent - AI Agent verification`,
+      `/checkwallet - Wallet forensic audit`,
+      `/map - APOL Wall of Shame`,
+      `/verified - Certified Hero Projects`,
+      ``,
+      `Or just paste a contract address to scan.`,
+    ];
+    ctx.reply(lines.join("\n"), { parse_mode: "Markdown" });
   });
 
   bot.command("scan", async (ctx) => {
-    const input = ctx.message.text.replace(/\/scan\s*/i, "").trim();
+    const input = ctx.message.text.replace(/^\/scan(@\w+)?\s*/i, "").trim();
     if (!isContractAddress(input)) {
-      ctx.reply("🔍 Send a Base contract address after /scan\.\nExample: `/scan 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`", { parse_mode: "Markdown" });
+      ctx.reply("🔍 Send a Base contract address after /scan\nExample: `/scan 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`", { parse_mode: "Markdown" });
       return;
     }
-    const loadingMsg = await ctx.reply("⏳ Running APOL forensic simulation...");
+    await handleScan(ctx, input);
+  });
+
+  bot.command("scanx", async (ctx) => {
+    const input = ctx.message.text.replace(/^\/scanx(@\w+)?\s*/i, "").trim();
+    if (!input) {
+      ctx.reply("🔍 Send an X/Twitter handle or URL after /scanx\nExample: `/scanx @ShieldCoinBase`", { parse_mode: "Markdown" });
+      return;
+    }
+    await handleScanX(ctx, input);
+  });
+
+  bot.command("scanagent", async (ctx) => {
+    const input = ctx.message.text.replace(/^\/scanagent(@\w+)?\s*/i, "").trim();
+    if (!isContractAddress(input)) {
+      ctx.reply("🤖 Send an AI agent contract address after /scanagent\nExample: `/scanagent 0x...`", { parse_mode: "Markdown" });
+      return;
+    }
+    const loadingMsg = await ctx.reply("🤖 Running AI Agent authenticity scan...");
     try {
       const report = await runScan(input);
-      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+      const header = `🤖 *APOL AGENT — AI AGENT SCAN*\n\n`;
+      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, header + report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
     } catch (e: any) {
-      const scanCount = await storage.incrementLookup(input).catch(() => 0);
+      log(`ScanAgent error: ${e?.message}`, "bot");
       await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
-        `🏛 *APOL AGENT — CONTRACT SNAPSHOT*\n\n📍 \`${input.slice(0,8)}...${input.slice(-6)}\`\n\n⚠️ Scan error: ${e?.message?.slice(0, 80) || "Unknown"}\n👁 Scan count: ${scanCount}`,
-        { parse_mode: "Markdown" },
-      ).catch(() => {});
+        `🤖 *APOL AGENT — AI AGENT SCAN*\n\n⚠️ Error: ${e?.message?.slice(0, 80) || "Unknown"}`,
+        { parse_mode: "Markdown" }).catch(() => {});
     }
+  });
+
+  bot.command("checkwallet", async (ctx) => {
+    const input = ctx.message.text.replace(/^\/checkwallet(@\w+)?\s*/i, "").trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(input)) {
+      ctx.reply("💼 Send a wallet address after /checkwallet\nExample: `/checkwallet 0x...`", { parse_mode: "Markdown" });
+      return;
+    }
+    await handleCheckWallet(ctx, input);
+  });
+
+  bot.command("map", async (ctx) => {
+    try {
+      const flagged = await storage.getFlaggedWallets(10);
+      if (flagged.length === 0) {
+        ctx.reply("🏛 *APOL Wall of Shame*\n\nNo flagged addresses yet. Use /scan to investigate contracts.", { parse_mode: "Markdown" });
+        return;
+      }
+      const lines = [`🏛 *APOL Wall of Shame*\n`];
+      for (const f of flagged) {
+        lines.push(`🚩 \`${f.address.slice(0, 8)}...${f.address.slice(-6)}\` — ${f.reason || "Flagged"}`);
+      }
+      lines.push(`\n🔗 [View Full Map](https://apolagent.online)`);
+      ctx.reply(lines.join("\n"), { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+    } catch {
+      ctx.reply("🏛 *APOL Wall of Shame*\n\n🔗 [View on Web](https://apolagent.online)", { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+    }
+  });
+
+  bot.command("verified", (ctx) => {
+    ctx.reply(
+      `✅ *APOL Certified Hero Projects*\n\nVerified projects that passed APOL's security audit.\n\n🔗 [View Verified List](https://apolagent.online)\n\n💡 Want your project verified? Contact @ApolAgentBot`,
+      { parse_mode: "Markdown", link_preview_options: { is_disabled: true } },
+    );
   });
 
   bot.on("text", async (ctx) => {
     const text = ctx.message.text.trim();
-    if (!isContractAddress(text)) return;
-    const loadingMsg = await ctx.reply("⏳ Running APOL forensic simulation...");
-    try {
-      const report = await runScan(text);
-      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
-    } catch (e: any) {
-      const scanCount = await storage.incrementLookup(text).catch(() => 0);
-      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
-        `🏛 *APOL AGENT — CONTRACT SNAPSHOT*\n\n📍 \`${text.slice(0,8)}...${text.slice(-6)}\`\n\n⚠️ Scan error: ${e?.message?.slice(0, 80) || "Unknown"}\n👁 Scan count: ${scanCount}`,
-        { parse_mode: "Markdown" },
-      ).catch(() => {});
+    if (text.startsWith("/")) return;
+    if (isContractAddress(text)) {
+      await handleScan(ctx, text);
     }
   });
 
