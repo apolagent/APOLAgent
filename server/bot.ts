@@ -20,19 +20,28 @@ const PLATFORM_MAP: Record<string, string> = {
   "0xe85a08cf16f07b0b6e8b1f5e4918f6e9dab3a5c0": "Clanker",
   "0xf3625f0e85afe89228eeab5c8c6e3aff94e77d38": "Clanker",
   "0xd466e09acadc0345b4cf42ea530e242a086f68c7": "Clanker",
+  "0x1bc40af29dd8b8e1f685dc2b0e550f3d67842af5": "Clanker",
   "0x0bf85e6f2ff0ed5c4a76b1dbbd3f2f65c05a4f58": "ApeStore",
   "0xade20c0cc8482c404a57da404ed1f3f2a1f6fe6f": "ApeStore",
+  "0x070c1626e110c8776cdbeb5439257c69a8d35523": "ApeStore",
+  "0x7e89e29f2b3d95e4e8aec0a751427015c8fbe966": "ApeStore",
   "0x6a53961a5bc81e8b1e02aa84445e07a4e8057957": "Flaunch",
+  "0xce0e4e4d2dc0033ce2dd0ec79abe6186106f0462": "Flaunch",
 };
 
 const LOCKER_MAP: Record<string, string> = {
   "0xe85a08cf16f07b0b6e8b1f5e4918f6e9dab3a5c0": "Clanker",
   "0xf3625f0e85afe89228eeab5c8c6e3aff94e77d38": "Clanker",
+  "0x1bc40af29dd8b8e1f685dc2b0e550f3d67842af5": "Clanker",
   "0x663a5c229c09b049e36dcc11a9b0d4a8eb9db214": "Unicrypt",
   "0x71b5759d73262fbb223956913ecf4ecc51057641": "PinkLock",
   "0xe2fe530c047f2d85298b07d9333c05737f1435fb": "Team Finance",
   "0x0bf85e6f2ff0ed5c4a76b1dbbd3f2f65c05a4f58": "ApeStore",
+  "0x070c1626e110c8776cdbeb5439257c69a8d35523": "ApeStore",
+  "0x7e89e29f2b3d95e4e8aec0a751427015c8fbe966": "ApeStore",
   "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
+  "0x6a53961a5bc81e8b1e02aa84445e07a4e8057957": "Flaunch",
+  "0xce0e4e4d2dc0033ce2dd0ec79abe6186106f0462": "Flaunch",
 };
 
 interface SimResult {
@@ -93,7 +102,7 @@ async function findBestPool(token: string): Promise<{ pool: string; fee: number 
   return null;
 }
 
-async function botAlchemySimulate(tokenAddress: string): Promise<SimResult> {
+async function simulateToken(tokenAddress: string): Promise<SimResult> {
   const addr = tokenAddress.toLowerCase();
   const fail = (reason: string): SimResult => ({ isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: reason });
 
@@ -158,8 +167,14 @@ async function getTokenInfo(addr: string): Promise<{ name: string; symbol: strin
 async function getDeployer(addr: string): Promise<string | null> {
   try {
     const data = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
-    return data?.creator_address_hash?.toLowerCase() || null;
-  } catch { return null; }
+    if (data?.creator_address_hash) return data.creator_address_hash.toLowerCase();
+  } catch {}
+  try {
+    const data = await fetch(`https://base.blockscout.com/api?module=account&action=txlist&address=${addr}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
+    const firstFrom = data?.result?.[0]?.from;
+    if (firstFrom) return firstFrom.toLowerCase();
+  } catch {}
+  return null;
 }
 
 async function getHolderCount(addr: string): Promise<number> {
@@ -264,7 +279,7 @@ async function runScan(address: string): Promise<string> {
   const t0 = Date.now();
 
   const [simR, tokenR, deployerR] = await Promise.allSettled([
-    botAlchemySimulate(address),
+    simulateToken(address),
     getTokenInfo(address),
     getDeployer(address),
   ]);
@@ -328,7 +343,7 @@ async function runScan(address: string): Promise<string> {
     `📍 *Address:* \`${shortAddr}\``,
     `⛓ *Chain:* Base Mainnet`,
     ``,
-    `*${esc(tokenInfo.name)}* ($${esc(tokenInfo.symbol)}) 🧿 ${scanCount}`,
+    `*${esc(tokenInfo.name)}* ($${esc(tokenInfo.symbol)}) 👁️ ${scanCount}`,
     `💲 *Price:* ${tokenPriceUsd > 0 ? formatPrice(tokenPriceUsd) : "Scanning..."}`,
     `📊 *Market Cap:* ${mcap > 0 ? formatUsd(mcap) : "N/A"}`,
     `💧 *Liquidity:* ${liquidity > 0 ? formatUsd(liquidity) : "Scanning..."}`,
@@ -359,7 +374,7 @@ async function runScan(address: string): Promise<string> {
   lines.push(`🔍 [Full Scan](https://apolagent.online)   🏛 [Wall of Shame](https://apolagent.online)`);
   lines.push(`🔗 [View on Basescan](https://basescan.org/address/${address})`);
   lines.push(``);
-  lines.push(`⚡ ${elapsed}s · Alchemy Simulation Engine`);
+  lines.push(`⚡ ${elapsed}s · APOL Forensic Engine`);
 
   return lines.join("\n");
 }

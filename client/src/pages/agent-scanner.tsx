@@ -913,7 +913,7 @@ export default function AgentScanner() {
                     )}
 
                     {(checkResult.liveStatus || checkResult.lpStatus) && (
-                      <div data-testid="div-alchemy-status" style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "12px 16px", border: `1px solid rgba(0,255,0,0.2)`, background: "rgba(0,255,0,0.03)" }}>
+                      <div data-testid="div-status-panel" style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "12px 16px", border: `1px solid rgba(0,255,0,0.2)`, background: "rgba(0,255,0,0.03)" }}>
                         {checkResult.liveStatus && (
                           <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace" }}>
                             <span style={{ color: "rgba(255,255,255,0.5)", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700 }}>Status</span>
