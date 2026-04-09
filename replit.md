@@ -24,7 +24,8 @@ shared/
 ```
 
 ## Simulation-First Engine
-- **Single-Path Lookup**: `findBestPool` uses V3 Factory `getPool` (batch RPC) across 4 fee tiers → finds pool address → runs ONE buy + ONE sell simulation
+- **Two-Pass Simulation**: Micro amount (0.000001 ETH) for accurate tax isolation, then normal amount (0.001 ETH) for liquidity depth. Prevents price impact from being misreported as contract tax.
+- **Single-Path Lookup**: `findBestPool` uses V3 Factory `getPool` (batch RPC) across 4 fee tiers → finds pool address
 - **QuoterV2**: `0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a`, selector `0xc6a5026a`
 - **V3 Factory**: `0x33128a8fC17869897dcE68Ed026d694621f6FDfD` (Base)
 - **WETH**: `0x4200000000000000000000000000000000000006`

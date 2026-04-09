@@ -377,21 +377,30 @@ function detectPlatform(addr: string, deployer: string | null, holders: { addres
   return null;
 }
 
-function detectLpStatus(holders: { address: string; percent: number }[], platform: string | null): string {
+function detectLpStatus(holders: { address: string; percent: number }[], platform: string | null, holdersComplete: boolean): string {
   for (const h of holders) {
     if (BURN_ADDRS.has(h.address)) return `Burned 🔥`;
     if (LOCKER_MAP[h.address]) return `${LOCKER_MAP[h.address]} Locked 🔒`;
   }
   if (platform) return `${platform} Managed ✅`;
+  if (!holdersComplete) return "Checking...";
   return "Unlocked ⚠️";
 }
 
 function formatPrice(usdPrice: number): string {
   if (usdPrice === 0) return "$0";
-  if (usdPrice >= 1) return `$${usdPrice.toFixed(2)}`;
-  if (usdPrice >= 0.01) return `$${usdPrice.toFixed(4)}`;
-  const str = usdPrice.toFixed(18).replace(/0+$/, "");
-  return `$${str}`;
+  if (usdPrice >= 1000) return `$${usdPrice.toFixed(2)}`;
+  if (usdPrice >= 1) return `$${usdPrice.toFixed(4)}`;
+  if (usdPrice >= 0.01) return `$${usdPrice.toFixed(6)}`;
+  if (usdPrice >= 0.0001) return `$${usdPrice.toFixed(8)}`;
+  const s = usdPrice.toFixed(20);
+  const match = s.match(/^0\.(0+)/);
+  if (match) {
+    const zeros = match[1].length;
+    const sigFigs = s.slice(2 + zeros, 2 + zeros + 4).replace(/0+$/, "") || "0";
+    return `$0.0{${zeros}}${sigFigs}`;
+  }
+  return `$${usdPrice.toPrecision(4)}`;
 }
 
 function formatUsd(val: number): string {
@@ -409,9 +418,9 @@ async function runScan(address: string): Promise<string> {
   const t0 = Date.now();
 
   const [simR, tokenR, deployerR] = await Promise.allSettled([
-    softTimeout(simulateToken(address), 10000, { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: "Timeout" } as SimResult),
+    softTimeout(simulateToken(address), 12000, { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: "Timeout" } as SimResult),
     softTimeout(getTokenInfo(address), 8000, { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18 }),
-    softTimeout(getDeployer(address), 6000, null),
+    softTimeout(getDeployer(address), 7000, null),
   ]);
 
   const sim: SimResult = simR.status === "fulfilled" ? simR.value
@@ -420,17 +429,35 @@ async function runScan(address: string): Promise<string> {
     : { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18 };
   const deployer = deployerR.status === "fulfilled" ? deployerR.value : null;
 
-  const [holderCount, topHolders, ethUsd, dexData] = await Promise.all([
-    softTimeout(getHolderCount(address), 3000, 0),
-    softTimeout(getTopHolders(address), 3000, []),
-    softTimeout(getEthUsdPrice(), 3000, 0),
-    softTimeout(getDexScreenerData(address), 3000, { priceUsd: 0, liquidity: 0 }),
+  const platformFromDeployer = detectPlatform(address, deployer, []);
+
+  let [holderCount, topHolders, ethUsd, dexData] = await Promise.all([
+    softTimeout(getHolderCount(address), 7000, 0),
+    softTimeout(getTopHolders(address), 7000, []),
+    softTimeout(getEthUsdPrice(), 7000, 0),
+    softTimeout(getDexScreenerData(address), 7000, { priceUsd: 0, liquidity: 0 }),
   ]);
+
+  let holdersComplete = topHolders.length > 0;
+
+  if (dexData.priceUsd === 0 || holderCount === 0) {
+    const retries = await Promise.all([
+      dexData.priceUsd === 0 ? softTimeout(getDexScreenerData(address), 5000, { priceUsd: 0, liquidity: 0 }) : Promise.resolve(dexData),
+      holderCount === 0 ? softTimeout(getHolderCount(address), 5000, 0) : Promise.resolve(holderCount),
+      topHolders.length === 0 ? softTimeout(getTopHolders(address), 5000, []) : Promise.resolve(topHolders),
+    ]);
+    if (dexData.priceUsd === 0) dexData = retries[0] as typeof dexData;
+    if (holderCount === 0) holderCount = retries[1] as number;
+    if (topHolders.length === 0) {
+      topHolders = retries[2] as typeof topHolders;
+      holdersComplete = topHolders.length > 0;
+    }
+  }
 
   const scanCount = await storage.incrementLookup(address, tokenInfo.name, tokenInfo.symbol);
 
-  const platform = detectPlatform(address, deployer, topHolders);
-  const lpStatus = detectLpStatus(topHolders, platform);
+  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer;
+  const lpStatus = detectLpStatus(topHolders, platform, holdersComplete);
   const isVirtuals = platform === "Virtuals";
 
   const buyTax = isVirtuals ? 0 : sim.buyTax;
@@ -486,6 +513,11 @@ async function runScan(address: string): Promise<string> {
   const shortAddr = address.slice(0, 8) + "..." + address.slice(-6);
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 
+  const priceStr = tokenPriceUsd > 0 ? formatPrice(tokenPriceUsd) : "N/A";
+  const mcapStr = mcap > 0 ? formatUsd(mcap) : "N/A";
+  const liqStr = liquidity > 0 ? formatUsd(liquidity) : "N/A";
+  const holderStr = holderCount > 0 ? holderCount.toLocaleString() : "N/A";
+
   const lines: string[] = [
     `🏛 *APOL AGENT — CONTRACT SNAPSHOT*`,
     ``,
@@ -493,12 +525,12 @@ async function runScan(address: string): Promise<string> {
     `⛓ *Chain:* Base Mainnet`,
     ``,
     `*${esc(tokenInfo.name)}* ($${esc(tokenInfo.symbol)}) 👁️ ${scanCount}`,
-    `💲 *Price:* ${tokenPriceUsd > 0 ? formatPrice(tokenPriceUsd) : "Scanning..."}`,
-    `📊 *Market Cap:* ${mcap > 0 ? formatUsd(mcap) : "N/A"}`,
-    `💧 *Liquidity:* ${liquidity > 0 ? formatUsd(liquidity) : "Scanning..."}`,
+    `💲 *Price:* ${priceStr}`,
+    `📊 *Market Cap:* ${mcapStr}`,
+    `💧 *Liquidity:* ${liqStr}`,
     `📡 *Status:* ${dexStatus}`,
     `🔒 *LP Status:* ${lpStatus}`,
-    `👥 *Holders:* ${holderCount > 0 ? holderCount.toLocaleString() : "Scanning..."}`,
+    `👥 *Holders:* ${holderStr}`,
     `💰 *Buy Tax:* ${buyTax.toFixed(1)}%  |  *Sell Tax:* ${sellTax.toFixed(1)}%`,
     ``,
     `*RISK LEVEL:* ${riskLevel}`,
@@ -617,9 +649,9 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
   const t0 = Date.now();
 
   const [simR, tokenR, deployerR] = await Promise.allSettled([
-    softTimeout(simulateToken(address), 10000, { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: "Timeout" } as SimResult),
+    softTimeout(simulateToken(address), 12000, { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: "Timeout" } as SimResult),
     softTimeout(getTokenInfo(address), 8000, { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18 }),
-    softTimeout(getDeployer(address), 6000, null),
+    softTimeout(getDeployer(address), 7000, null),
   ]);
 
   const sim: SimResult = simR.status === "fulfilled" ? simR.value
@@ -628,15 +660,17 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
     : { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18 };
   const deployer = deployerR.status === "fulfilled" ? deployerR.value : null;
 
+  const platformFromDeployer = detectPlatform(address, deployer, []);
+
   const [holderCount, topHolders, ethUsd, dexData, dexSocials] = await Promise.all([
-    softTimeout(getHolderCount(address), 3000, 0),
-    softTimeout(getTopHolders(address), 3000, []),
-    softTimeout(getEthUsdPrice(), 3000, 0),
-    softTimeout(getDexScreenerData(address), 3000, { priceUsd: 0, liquidity: 0 }),
-    softTimeout(getDexScreenerSocials(address), 4000, { twitter: null, website: null, telegram: null }),
+    softTimeout(getHolderCount(address), 7000, 0),
+    softTimeout(getTopHolders(address), 7000, []),
+    softTimeout(getEthUsdPrice(), 7000, 0),
+    softTimeout(getDexScreenerData(address), 7000, { priceUsd: 0, liquidity: 0 }),
+    softTimeout(getDexScreenerSocials(address), 7000, { twitter: null, website: null, telegram: null }),
   ]);
 
-  const platform = detectPlatform(address, deployer, topHolders);
+  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer;
   const isVirtuals = platform === "Virtuals";
   const buyTax = isVirtuals ? 0 : sim.buyTax;
   const sellTax = isVirtuals ? 0 : sim.sellTax;
