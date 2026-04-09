@@ -1889,7 +1889,7 @@ export function createBot(): Telegraf | null {
     return null;
   }
 
-  const bot  = new Telegraf(token);
+  const bot  = new Telegraf(token, { telegram: { webhookReply: false } });
   const site = getSiteUrl();
 
   // ── Global error handler ──────────────────────────────────────────────────
