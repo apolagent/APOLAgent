@@ -209,6 +209,22 @@ app.use((req, res, next) => {
     };
 
     setTimeout(() => hardResetWebhook(), 2000);
+
+    const webhookHealthCheck = async () => {
+      try {
+        const tkn2 = process.env.APOL_BOT_TOKEN!;
+        const infoRes = await fetch(`https://api.telegram.org/bot${tkn2}/getWebhookInfo`, { signal: AbortSignal.timeout(8000) });
+        const infoData = await infoRes.json() as any;
+        const currentUrl = infoData?.result?.url || "";
+        if (!currentUrl || !currentUrl.includes("apolagent.online")) {
+          log(`[HEALTH] Webhook missing or wrong (url="${currentUrl}"). Re-registering...`, "bot");
+          await hardResetWebhook();
+        }
+      } catch (e: any) {
+        log(`[HEALTH] Check failed: ${e?.message}`, "bot");
+      }
+    };
+    setInterval(webhookHealthCheck, 60000);
   } else if (bot) {
     log("Bot webhook registration skipped in dev — production only", "bot");
   }
