@@ -321,14 +321,19 @@ async function runScan(address: string): Promise<string> {
 
   const isOwnerRenounced = !deployer || deployer === "0x0000000000000000000000000000000000000000";
 
+  const nameUpper = tokenInfo.name.toUpperCase();
+  const symbolUpper = tokenInfo.symbol.toUpperCase();
+  const isFakeApol = symbolUpper === "APOL" || nameUpper === "APOL" || nameUpper === "APOL AGENT" || nameUpper.includes("APOLAGENT");
+
   const flags: string[] = [];
+  if (isFakeApol) flags.push("🚨 FAKE $APOL — APOL has NO official token. This is a SCAM.");
   if (isHoneypot) flags.push("🚨 Honeypot — SELL BLOCKED");
   if (buyTax > 5 || sellTax > 5) flags.push(`💰 High tax: Buy ${buyTax}% / Sell ${sellTax}%`);
   if (holderCount > 0 && holderCount < 100) flags.push("👥 Low holder count");
   if (liquidity > 0 && liquidity < 10000) flags.push("💧 Very Low Liquidity");
   if (!hasPool) flags.push("⚠️ No Uniswap V3 liquidity pool");
 
-  const riskLevel = isHoneypot || buyTax > 10 || sellTax > 10
+  const riskLevel = isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10
     ? "🔴 HIGH RISK"
     : flags.length > 0
       ? "🟡 CAUTION"
@@ -410,6 +415,14 @@ async function handleScanX(ctx: any, input: string): Promise<void> {
     }
 
     handle = handle.split("/")[0].split("?")[0];
+
+    const SELF_HANDLES = ["apolagent_", "apolagent", "apol_agent", "apolagentbot"];
+    if (SELF_HANDLES.includes(handle.toLowerCase())) {
+      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
+        `🔍 *APOL AGENT — SCANX RESULTS*\n\n🐦 *X Handle:* @${esc(handle)}\n\n✅ *VERIFIED — This is APOL Agent*\n\n🏛 Official security protocol on Base chain\n🔗 Website: apolagent.online\n🐦 Twitter: @ApolAgent\\_\n\n⚠️ *APOL has NO official token or CA.*\nAny token using $APOL ticker is a SCAM.`,
+        { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+      return;
+    }
 
     const tokenResult = await softTimeout(searchDexScreener(handle), 5000, null);
 

@@ -272,7 +272,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tokenPriceUsd = tokenPriceEth * ethUsd;
       const mcap = Number(tokenInfo.totalSupply) * tokenPriceUsd;
 
-      const riskLevel = isHoneypot || buyTax > 10 || sellTax > 10 ? "High" : buyTax > 0 || sellTax > 0 ? "Caution" : "Clean";
+      const nameUpper = tokenInfo.name.toUpperCase();
+      const symbolUpper = tokenInfo.symbol.toUpperCase();
+      const isFakeApol = symbolUpper === "APOL" || nameUpper === "APOL" || nameUpper === "APOL AGENT" || nameUpper.includes("APOLAGENT");
+
+      const riskLevel = isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10 ? "High" : buyTax > 0 || sellTax > 0 ? "Caution" : "Clean";
 
       res.json({
         address, chain, addressType: "contract",
@@ -288,7 +292,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         mcap,
         deployer,
         scanCount,
-        greenBadge: riskLevel === "Clean" && sim.simulationSuccess,
+        greenBadge: riskLevel === "Clean" && sim.simulationSuccess && !isFakeApol,
+        isFakeApol,
+        fakeApolWarning: isFakeApol ? "APOL has NO official token. Any $APOL token is a SCAM." : null,
       });
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Scan failed" });
