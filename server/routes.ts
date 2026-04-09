@@ -301,6 +301,264 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/agent/analyze", async (req, res) => {
+    try {
+      const { agentName, socialLink, wallet, chain = "base", claimedAbilities, logsUrl } = req.body;
+      if (!agentName) return res.status(400).json({ error: "Agent name is required" });
+
+      const missingData: string[] = [];
+      if (!wallet) missingData.push("wallet");
+      if (!logsUrl) missingData.push("logsUrl");
+      if (!socialLink) missingData.push("socialLink");
+      if (!claimedAbilities) missingData.push("claimedAbilities");
+
+      let contractScan: any = null;
+      let speedScore = 0;
+      let speedDetail = "";
+      let traceIsContract = false;
+      let traceDetail = "";
+      let deployerAddr: string | null = null;
+      let deployerContractCount = 0;
+      let treasuryEth = 0;
+      let treasuryUsd = 0;
+
+      if (wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet)) {
+        const [simR, tokenR, deployerR] = await Promise.allSettled([
+          withTimeout(rpcSimulate(wallet), HARD_TIMEOUT, "sim"),
+          withTimeout(getTokenInfo(wallet), HARD_TIMEOUT, "tokenInfo"),
+          withTimeout(getDeployer(wallet), 5000, "deployer"),
+        ]);
+
+        const sim = simR.status === "fulfilled" ? simR.value
+          : { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0) };
+        const tokenInfo = tokenR.status === "fulfilled" ? tokenR.value
+          : { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18 };
+        deployerAddr = deployerR.status === "fulfilled" ? deployerR.value : null;
+
+        const [holderCount, topHolders] = await Promise.all([
+          getHolderCount(wallet).catch(() => 0),
+          getTopHolders(wallet).catch(() => []),
+        ]);
+
+        const platform = detectPlatform(wallet, deployerAddr, topHolders);
+        const isVirtuals = platform === "Virtuals";
+        const buyTax = isVirtuals ? 0 : sim.buyTax;
+        const sellTax = isVirtuals ? 0 : sim.sellTax;
+        const honeypot = isVirtuals ? false : sim.isHoneypot;
+
+        const lpLockedPercent = (() => {
+          let burned = 0;
+          let locked = 0;
+          for (const h of topHolders) {
+            if (BURN_ADDRS.has(h.address)) burned += h.percent;
+            else if (LOCKER_MAP[h.address]) locked += h.percent;
+          }
+          return burned + locked;
+        })();
+
+        const lockLocations: string[] = [];
+        for (const h of topHolders) {
+          if (BURN_ADDRS.has(h.address)) lockLocations.push("Burn Address");
+          else if (LOCKER_MAP[h.address]) lockLocations.push(LOCKER_MAP[h.address]);
+        }
+
+        contractScan = {
+          honeypot, buyTax, sellTax,
+          lpLockedPercent,
+          lockLocations: [...new Set(lockLocations)],
+          topHolders: topHolders.map(h => ({
+            address: h.address,
+            percent: h.percent,
+            tag: BURN_ADDRS.has(h.address) ? "Burn" : LOCKER_MAP[h.address] || PLATFORM_MAP[h.address] || "",
+            isBurn: BURN_ADDRS.has(h.address),
+          })),
+          holderCount,
+          protocolLocker: platform || null,
+        };
+
+        traceIsContract = sim.simulationSuccess || tokenInfo.name !== "Unknown";
+        traceDetail = traceIsContract
+          ? `On-chain contract verified: ${tokenInfo.name} ($${tokenInfo.symbol}). ${holderCount} holders.`
+          : "Contract address provided but could not verify on-chain token.";
+
+        if (deployerAddr) {
+          try {
+            const deplTxData = await fetch(`https://base.blockscout.com/api?module=account&action=txlist&address=${deployerAddr}&startblock=0&endblock=99999999&page=1&offset=100&sort=desc`, { signal: AbortSignal.timeout(5000) }).then(r => r.ok ? r.json() as any : null);
+            const txs = deplTxData?.result || [];
+            for (const tx of txs) {
+              if (tx.contractAddress && tx.contractAddress !== "" && tx.from?.toLowerCase() === deployerAddr.toLowerCase()) {
+                deployerContractCount++;
+              }
+            }
+
+            const txTimestamps = txs.filter((tx: any) => tx.from?.toLowerCase() === wallet.toLowerCase() || tx.to?.toLowerCase() === wallet.toLowerCase()).map((tx: any) => parseInt(tx.timeStamp) * 1000);
+            if (txTimestamps.length > 5) {
+              const hours = txTimestamps.map((t: number) => new Date(t).getUTCHours());
+              const uniqueHours = new Set(hours);
+              speedScore = Math.min(30, uniqueHours.size * 2);
+              speedDetail = uniqueHours.size >= 12 ? "24/7 on-chain activity detected — consistent with autonomous agent." : uniqueHours.size >= 6 ? "Mixed activity timing — some autonomous patterns." : "Activity concentrated in business hours — likely manual operator.";
+            } else {
+              speedScore = 5;
+              speedDetail = "Insufficient transaction history for timing analysis.";
+            }
+          } catch {}
+
+          try {
+            const [balResult] = await rpcBatch([{ method: "eth_getBalance", params: [deployerAddr, "latest"] }]);
+            treasuryEth = balResult ? Number(BigInt(balResult)) / 1e18 : 0;
+            const ethUsd = await getEthUsdPrice().catch(() => 0);
+            treasuryUsd = treasuryEth * ethUsd;
+          } catch {}
+        }
+      } else if (wallet) {
+        traceDetail = "Invalid wallet address format.";
+      } else {
+        traceDetail = "No wallet address provided — cannot verify on-chain presence.";
+        speedDetail = "No wallet address provided — cannot analyze timing patterns.";
+      }
+
+      let socialStatus: "clear" | "suspicious" | "inconclusive" = "inconclusive";
+      let socialDetail = "No social link provided.";
+      let socialFollowers: number | undefined;
+      let socialAgeDays: number | undefined;
+
+      if (socialLink) {
+        const handle = socialLink.replace(/https?:\/\/(x\.com|twitter\.com)\//i, "").replace(/^@/, "").split("/")[0].split("?")[0].trim();
+        if (handle) {
+          try {
+            const xRes = await fetch(`https://api.fxtwitter.com/${handle}`, { signal: AbortSignal.timeout(6000) });
+            if (xRes.ok) {
+              const xData = await xRes.json() as any;
+              const u = xData?.user;
+              if (u) {
+                socialFollowers = u.followers || 0;
+                const joinDate = u.joined ? new Date(u.joined) : null;
+                socialAgeDays = joinDate ? Math.floor((Date.now() - joinDate.getTime()) / (1000 * 60 * 60 * 24)) : undefined;
+
+                const flags: string[] = [];
+                if (socialFollowers < 10) flags.push("very few followers");
+                if (socialAgeDays !== undefined && socialAgeDays < 14) flags.push("account < 14 days old");
+                if ((u.tweets || 0) < 5) flags.push("barely any tweets");
+                if (u.following > 0 && socialFollowers / u.following < 0.05) flags.push("suspicious follow ratio");
+
+                if (flags.length >= 2) {
+                  socialStatus = "suspicious";
+                  socialDetail = `Suspicious social profile: ${flags.join(", ")}. ${socialFollowers} followers, ${socialAgeDays ?? "?"} days old.`;
+                } else if (flags.length === 1) {
+                  socialStatus = "inconclusive";
+                  socialDetail = `Minor concern: ${flags[0]}. ${socialFollowers} followers, ${u.tweets || 0} tweets, ${socialAgeDays ?? "?"} days old.`;
+                } else {
+                  socialStatus = "clear";
+                  socialDetail = `Social profile appears legitimate. ${socialFollowers} followers, ${u.tweets || 0} tweets, account age: ${socialAgeDays ?? "?"} days.`;
+                }
+              }
+            }
+          } catch {}
+        }
+      }
+
+      let contextScore = 0;
+      let contextDetail = "No claimed abilities provided for analysis.";
+      if (claimedAbilities && claimedAbilities.trim()) {
+        const abilities = claimedAbilities.toLowerCase();
+        const keywords = ["trade", "trading", "swap", "monitor", "snipe", "analyze", "scan", "track", "alert", "report", "post", "tweet", "bridge", "yield", "farm", "lend", "borrow", "stake"];
+        const matches = keywords.filter(k => abilities.includes(k));
+        contextScore = Math.min(20, matches.length * 5);
+        if (matches.length >= 3) contextDetail = `Strong capability claims: ${matches.slice(0, 4).join(", ")}. Claims appear detailed and specific.`;
+        else if (matches.length >= 1) contextDetail = `Some capability claims: ${matches.join(", ")}. Partially verifiable.`;
+        else contextDetail = "Claimed abilities are vague or don't match known agent patterns.";
+      }
+
+      let logsStatus: "verified" | "mismatch" | "inconclusive" = "inconclusive";
+      let logsDetail = "No logs URL provided.";
+      const logsArr: string[] = [];
+      if (logsUrl && logsUrl.trim()) {
+        try {
+          const logsRes = await fetch(logsUrl.trim(), { signal: AbortSignal.timeout(5000) });
+          if (logsRes.ok) {
+            const text = await logsRes.text();
+            logsArr.push(text.slice(0, 500));
+            const hasTimestamps = /\d{4}-\d{2}-\d{2}|\d{10,13}|T\d{2}:\d{2}/.test(text);
+            const hasReasoningWords = /decided|chose|analyzing|calculated|executed|swapped|bought|sold/i.test(text);
+            if (hasTimestamps && hasReasoningWords) {
+              logsStatus = "verified";
+              logsDetail = "Logs contain timestamped reasoning entries consistent with autonomous operation.";
+            } else if (hasTimestamps || hasReasoningWords) {
+              logsStatus = "inconclusive";
+              logsDetail = "Logs partially verifiable — missing either timestamps or reasoning traces.";
+            } else {
+              logsStatus = "mismatch";
+              logsDetail = "Logs do not contain expected autonomous reasoning patterns.";
+            }
+          } else {
+            logsDetail = "Could not fetch logs URL — returned error.";
+          }
+        } catch {
+          logsDetail = "Could not fetch logs URL — timeout or connection error.";
+        }
+      }
+
+      const traceScore = traceIsContract ? 20 : wallet ? 5 : 0;
+      const socialScore = socialStatus === "clear" ? 20 : socialStatus === "suspicious" ? 5 : 10;
+      const logsScore = logsStatus === "verified" ? 20 : logsStatus === "mismatch" ? 0 : 5;
+      const totalPossible = 100;
+      const rawScore = speedScore + traceScore + contextScore + socialScore + logsScore;
+
+      const scoredTests = [
+        wallet ? 1 : 0,
+        socialLink ? 1 : 0,
+        logsUrl ? 1 : 0,
+        claimedAbilities ? 1 : 0,
+        wallet ? 1 : 0,
+      ].reduce((a, b) => a + b, 0);
+
+      const cognitionScore = scoredTests >= 2 ? Math.min(100, rawScore) : null;
+      const isPartial = scoredTests < 3;
+
+      type Verdict = "Digital Puppet" | "Semi-Autonomous" | "Fully Autonomous" | "Low Autonomy" | "Insufficient Data" | "Inconclusive";
+      let verdict: Verdict;
+      if (scoredTests < 2) verdict = "Insufficient Data";
+      else if (cognitionScore !== null && cognitionScore >= 71) verdict = "Fully Autonomous";
+      else if (cognitionScore !== null && cognitionScore >= 41) verdict = "Semi-Autonomous";
+      else if (cognitionScore !== null && cognitionScore >= 21) verdict = "Low Autonomy";
+      else if (cognitionScore !== null) verdict = "Digital Puppet";
+      else verdict = "Inconclusive";
+
+      let apolVerdict = "";
+      if (verdict === "Digital Puppet") apolVerdict = "This entity shows minimal signs of autonomous operation. High probability of being a manually operated LARP.";
+      else if (verdict === "Low Autonomy") apolVerdict = "Contract security verified but AI identity could not be confirmed. Not necessarily a risk, but exercise caution.";
+      else if (verdict === "Semi-Autonomous") apolVerdict = "Mixed signals detected. Some autonomous patterns present but not fully conclusive. Monitor for continued activity.";
+      else if (verdict === "Fully Autonomous") apolVerdict = "Strong evidence of autonomous operation. On-chain activity, social presence, and reasoning logs are consistent with a real AI agent.";
+      else if (verdict === "Insufficient Data") apolVerdict = "Not enough data to issue a verdict. Provide wallet address, logs URL, and claimed abilities for a full assessment.";
+      else apolVerdict = "No verifiable evidence submitted.";
+
+      if (deployerContractCount >= 5) apolVerdict += ` ⚠️ Serial deployer detected: ${deployerContractCount} contracts from the same creator.`;
+      if (treasuryEth < 0.005 && wallet) apolVerdict += " ⚠️ Creator treasury is near-empty.";
+
+      res.json({
+        agentName: agentName.trim(),
+        wallet: wallet || null,
+        cognitionScore,
+        verdict,
+        apolVerdict,
+        scoredTests,
+        missingData: missingData.length > 0 ? missingData : undefined,
+        isPartial,
+        speedTest: { scored: !!wallet, score: speedScore, maxScore: 30, label: speedScore >= 15 ? "Active" : "Limited", detail: speedDetail },
+        traceabilityTest: { scored: !!wallet, score: traceScore, maxScore: 20, label: traceIsContract ? "Verified" : "Unverified", detail: traceDetail, isContract: traceIsContract },
+        contextTest: { scored: !!claimedAbilities, score: contextScore, maxScore: 20, label: contextScore >= 10 ? "Coherent" : "Vague", detail: contextDetail },
+        logsTest: { status: logsStatus, detail: logsDetail, logs: logsArr },
+        socialTest: { status: socialStatus, detail: socialDetail, followers: socialFollowers, accountAgeDays: socialAgeDays },
+        contractScan,
+        creatorAddress: deployerAddr,
+        platformName: contractScan?.protocolLocker || null,
+        isKnownFactory: !!contractScan?.protocolLocker,
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Agent analysis failed" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
