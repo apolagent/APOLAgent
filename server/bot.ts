@@ -422,6 +422,239 @@ async function runScan(address: string): Promise<string> {
   return lines.join("\n");
 }
 
+async function getDeployerContracts(deployer: string): Promise<{ count: number; tokens: { address: string; name: string; age: number }[] }> {
+  try {
+    const data = await fetch(`https://base.blockscout.com/api/v2/addresses/${deployer}/tokens?type=ERC-20&limit=50`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
+    const items = data?.items || [];
+    const tokens: { address: string; name: string; age: number }[] = [];
+    for (const item of items) {
+      if (item.token?.address) {
+        tokens.push({
+          address: item.token.address,
+          name: item.token.name || "Unknown",
+          age: 0,
+        });
+      }
+    }
+    return { count: tokens.length, tokens: tokens.slice(0, 10) };
+  } catch { return { count: 0, tokens: [] }; }
+}
+
+async function getDeployerCreatedContracts(deployer: string): Promise<number> {
+  try {
+    const data = await fetch(`https://base.blockscout.com/api?module=account&action=txlist&address=${deployer}&startblock=0&endblock=99999999&page=1&offset=100&sort=desc`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
+    const txs = data?.result || [];
+    let contractCreations = 0;
+    for (const tx of txs) {
+      if (tx.contractAddress && tx.contractAddress !== "" && tx.from?.toLowerCase() === deployer.toLowerCase()) {
+        contractCreations++;
+      }
+    }
+    return contractCreations;
+  } catch { return 0; }
+}
+
+async function getTreasuryBalance(addr: string): Promise<{ eth: number; usd: number }> {
+  try {
+    const [balResult] = await rpcBatch([{ method: "eth_getBalance", params: [addr, "latest"] }]);
+    const eth = balResult ? Number(BigInt(balResult)) / 1e18 : 0;
+    const ethUsd = await softTimeout(getEthUsdPrice(), 3000, 0);
+    return { eth, usd: eth * ethUsd };
+  } catch { return { eth: 0, usd: 0 }; }
+}
+
+function getProtocolUrl(platform: string | null, address: string): string | null {
+  if (!platform) return null;
+  if (platform === "Virtuals") return `https://app.virtuals.io/virtuals?token=${address}`;
+  if (platform === "Clanker") return `https://clanker.world/clanker/${address}`;
+  if (platform === "ApeStore") return `https://ape.store/base/${address}`;
+  if (platform === "Flaunch") return `https://flaunch.gg/base/token/${address}`;
+  return null;
+}
+
+async function getDexScreenerSocials(addr: string): Promise<{ twitter: string | null; website: string | null; telegram: string | null }> {
+  try {
+    const data = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
+    const pair = data?.pairs?.[0];
+    const info = pair?.info || {};
+    const socials = info.socials || [];
+    let twitter: string | null = null;
+    let website: string | null = null;
+    let telegram: string | null = null;
+    for (const s of socials) {
+      if (s.type === "twitter" && s.url) twitter = s.url.replace(/https?:\/\/(x\.com|twitter\.com)\//i, "").replace(/\/$/, "");
+      if (s.type === "telegram" && s.url) telegram = s.url;
+    }
+    const websites = info.websites || [];
+    if (websites.length > 0) website = websites[0].url || null;
+    return { twitter, website, telegram };
+  } catch { return { twitter: null, website: null, telegram: null }; }
+}
+
+async function runAgentScan(address: string, searchedName: string | null): Promise<string> {
+  const t0 = Date.now();
+
+  const [simR, tokenR, deployerR] = await Promise.allSettled([
+    simulateToken(address),
+    getTokenInfo(address),
+    getDeployer(address),
+  ]);
+
+  const sim: SimResult = simR.status === "fulfilled" ? simR.value
+    : { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: "Simulation error" };
+  const tokenInfo = tokenR.status === "fulfilled" ? tokenR.value
+    : { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18 };
+  const deployer = deployerR.status === "fulfilled" ? deployerR.value : null;
+
+  const [holderCount, topHolders, ethUsd, dexData, dexSocials] = await Promise.all([
+    softTimeout(getHolderCount(address), 3000, 0),
+    softTimeout(getTopHolders(address), 3000, []),
+    softTimeout(getEthUsdPrice(), 3000, 0),
+    softTimeout(getDexScreenerData(address), 3000, { priceUsd: 0, liquidity: 0 }),
+    softTimeout(getDexScreenerSocials(address), 4000, { twitter: null, website: null, telegram: null }),
+  ]);
+
+  const platform = detectPlatform(address, deployer, topHolders);
+  const isVirtuals = platform === "Virtuals";
+  const buyTax = isVirtuals ? 0 : sim.buyTax;
+  const sellTax = isVirtuals ? 0 : sim.sellTax;
+  const isHoneypot = isVirtuals ? false : sim.isHoneypot;
+
+  const [treasuryBal, deployerContracts, xProfile] = await Promise.all([
+    deployer ? softTimeout(getTreasuryBalance(deployer), 4000, { eth: 0, usd: 0 }) : Promise.resolve({ eth: 0, usd: 0 }),
+    deployer ? softTimeout(getDeployerCreatedContracts(deployer), 5000, 0) : Promise.resolve(0),
+    dexSocials.twitter ? softTimeout(fetchXProfile(dexSocials.twitter), 5000, null) : Promise.resolve(null),
+  ]);
+
+  let tokenPriceUsd = dexData.priceUsd;
+  if (tokenPriceUsd === 0 && sim.tokensReceived > BigInt(0) && ethUsd > 0) {
+    const tokensWholeUnits = Number(sim.tokensReceived) / (10 ** tokenInfo.decimals);
+    tokenPriceUsd = tokensWholeUnits > 0 ? (0.001 / tokensWholeUnits) * ethUsd : 0;
+  }
+  const mcap = Number(tokenInfo.totalSupply) * tokenPriceUsd;
+
+  const agentFlags: string[] = [];
+  const agentPasses: string[] = [];
+
+  if (isHoneypot) agentFlags.push("🚨 Honeypot — SELL BLOCKED");
+  if (buyTax > 5 || sellTax > 5) agentFlags.push(`💰 High tax: Buy ${buyTax.toFixed(1)}% / Sell ${sellTax.toFixed(1)}%`);
+
+  if (dexSocials.twitter && xProfile) {
+    if (xProfile.tweets < 3) agentFlags.push("🤖 Mind silent — Twitter linked but barely active");
+    else if (xProfile.tweets >= 10) agentPasses.push("✅ Mind active — Twitter posting regularly");
+    else agentPasses.push("🟡 Mind semi-active — Some Twitter activity");
+
+    if (xProfile.followers < 10) agentFlags.push("👤 Negligible social following");
+    const joinDays = xProfile.joined ? Math.floor((Date.now() - new Date(xProfile.joined).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+    if (joinDays > 0 && joinDays < 14) agentFlags.push("🆕 Twitter account < 14 days old");
+  } else if (!dexSocials.twitter) {
+    agentFlags.push("🔇 No linked Twitter/X — Mind unverifiable");
+  }
+
+  if (treasuryBal.eth < 0.005) agentFlags.push("💸 Treasury near-empty — Creator may have exited");
+  else if (treasuryBal.eth >= 0.1) agentPasses.push("✅ Treasury funded — Active maintenance");
+  else agentPasses.push("🟡 Treasury has some funds");
+
+  if (deployerContracts >= 5) agentFlags.push(`⚠️ Serial deployer — ${deployerContracts} contracts created`);
+  else if (deployerContracts >= 3) agentFlags.push(`🟡 Multiple deployments — ${deployerContracts} contracts from this creator`);
+  else if (deployerContracts <= 1) agentPasses.push("✅ Focused creator — Single deployment");
+
+  if (holderCount > 0 && holderCount < 50) agentFlags.push("👥 Very few holders");
+  if (dexData.liquidity > 0 && dexData.liquidity < 5000) agentFlags.push("💧 Critically low liquidity");
+
+  if (platform) agentPasses.push(`✅ Deployed via ${platform} protocol`);
+  if (sim.simulationSuccess) agentPasses.push("✅ Buy/Sell simulation passed");
+
+  let verdict = "";
+  let verdictEmoji = "";
+  if (isHoneypot || agentFlags.length >= 4) { verdict = "LARP DETECTED"; verdictEmoji = "🔴"; }
+  else if (agentFlags.length >= 2) { verdict = "SUSPICIOUS — Possible Larp"; verdictEmoji = "🟡"; }
+  else if (agentFlags.length === 1 && agentPasses.length >= 2) { verdict = "INCONCLUSIVE — Minor concerns"; verdictEmoji = "🟡"; }
+  else if (agentPasses.length >= 3) { verdict = "LIKELY LEGITIMATE"; verdictEmoji = "🟢"; }
+  else { verdict = "INSUFFICIENT DATA"; verdictEmoji = "⚪"; }
+
+  const shortAddr = address.slice(0, 8) + "..." + address.slice(-6);
+  const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+  const protocolUrl = getProtocolUrl(platform, address);
+
+  const lines: string[] = [
+    `🤖 *APOL AGENT — LARP DETECTOR*`,
+    ``,
+    `📍 *Agent:* ${esc(tokenInfo.name)} ($${esc(tokenInfo.symbol)})`,
+    `📌 *CA:* \`${shortAddr}\``,
+    `⛓ *Chain:* Base Mainnet`,
+    `${platform ? `🏗 *Protocol:* ${platform}` : `🏗 *Protocol:* Unknown`}`,
+    ``,
+  ];
+
+  lines.push(`🧠 *MIND\\-TO\\-WALLET TRACE*`);
+  if (dexSocials.twitter && xProfile) {
+    lines.push(`   🐦 Twitter: @${esc(xProfile.screen_name)}`);
+    lines.push(`   👥 Followers: ${xProfile.followers.toLocaleString()} | Tweets: ${xProfile.tweets.toLocaleString()}`);
+    const twitterActive = xProfile.tweets >= 10;
+    lines.push(`   ${twitterActive ? "✅ Mind is active" : "⚠️ Mind is quiet"}`);
+  } else {
+    lines.push(`   ⚠️ No linked social — Cannot trace mind`);
+  }
+
+  lines.push(``);
+  lines.push(`💰 *TREASURY HEALTH*`);
+  if (deployer) {
+    lines.push(`   Creator: \`${deployer.slice(0, 8)}...${deployer.slice(-6)}\``);
+    lines.push(`   Balance: ${treasuryBal.eth.toFixed(4)} ETH (~${formatUsd(treasuryBal.usd)})`);
+    lines.push(`   ${treasuryBal.eth >= 0.1 ? "✅ Treasury funded" : treasuryBal.eth >= 0.01 ? "🟡 Low treasury" : "🔴 Treasury empty"}`);
+  } else {
+    lines.push(`   ⚠️ Deployer unknown`);
+  }
+
+  lines.push(``);
+  lines.push(`🔬 *CREATOR FORENSIC*`);
+  if (deployer) {
+    lines.push(`   Contracts deployed: ${deployerContracts}`);
+    if (deployerContracts >= 5) lines.push(`   🔴 Serial deployer — High rug risk`);
+    else if (deployerContracts >= 3) lines.push(`   🟡 Multiple projects — Monitor closely`);
+    else lines.push(`   ✅ Focused creator`);
+  } else {
+    lines.push(`   ⚠️ Cannot analyze — Deployer unknown`);
+  }
+
+  lines.push(``);
+  lines.push(`📊 *TOKEN HEALTH*`);
+  lines.push(`   💲 Price: ${tokenPriceUsd > 0 ? formatPrice(tokenPriceUsd) : "N/A"}`);
+  lines.push(`   📈 MCap: ${mcap > 0 ? formatUsd(mcap) : "N/A"}`);
+  lines.push(`   💧 Liquidity: ${dexData.liquidity > 0 ? formatUsd(dexData.liquidity) : "N/A"}`);
+  lines.push(`   👥 Holders: ${holderCount > 0 ? holderCount.toLocaleString() : "N/A"}`);
+  lines.push(`   💰 Tax: Buy ${buyTax.toFixed(1)}% / Sell ${sellTax.toFixed(1)}%`);
+  if (isHoneypot) lines.push(`   🚨 HONEYPOT DETECTED`);
+
+  lines.push(``);
+  lines.push(`${verdictEmoji} *VERDICT: ${verdict}*`);
+  lines.push(``);
+
+  if (agentFlags.length > 0) {
+    lines.push(`🚩 *RED FLAGS:*`);
+    for (const f of agentFlags) lines.push(`   ${f}`);
+    lines.push(``);
+  }
+  if (agentPasses.length > 0) {
+    lines.push(`✅ *PASSED:*`);
+    for (const p of agentPasses) lines.push(`   ${p}`);
+    lines.push(``);
+  }
+
+  const linkParts: string[] = [];
+  if (protocolUrl) linkParts.push(`🏗 [${platform} Profile](${protocolUrl})`);
+  linkParts.push(`🔗 [Basescan](https://basescan.org/address/${address})`);
+  if (dexSocials.twitter) linkParts.push(`🐦 [Twitter](https://x.com/${dexSocials.twitter})`);
+  if (dexSocials.website) linkParts.push(`🌐 [Website](${dexSocials.website})`);
+  lines.push(linkParts.join("   "));
+
+  lines.push(``);
+  lines.push(`⚡ ${elapsed}s · APOL Larp Detector`);
+
+  return lines.join("\n");
+}
+
 function esc(s: string): string {
   return s.replace(/[_*[\]()~`>#+\-=|{}.!]/g, "\\$&");
 }
@@ -727,19 +960,34 @@ export function createBot(): Telegraf | null {
 
   bot.command("scanagent", async (ctx) => {
     const input = ctx.message.text.replace(/^\/scanagent(@\w+)?\s*/i, "").trim();
-    if (!isContractAddress(input)) {
-      ctx.reply("🤖 Send an AI agent contract address after /scanagent\nExample: `/scanagent 0x...`", { parse_mode: "Markdown" });
+    if (!input) {
+      ctx.reply("🤖 Send an AI agent contract address or name after /scanagent\nExample: `/scanagent 0x...` or `/scanagent AgentName`", { parse_mode: "Markdown" });
       return;
     }
-    const loadingMsg = await ctx.reply("🤖 Running AI Agent authenticity scan...");
+
+    const loadingMsg = await ctx.reply("🤖 Running AI Agent forensic audit...");
     try {
-      const report = await runScan(input);
-      const header = `🤖 *APOL AGENT — AI AGENT SCAN*\n\n`;
-      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, header + report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+      let address = input;
+      let searchedName: string | null = null;
+
+      if (!isContractAddress(input)) {
+        const found = await softTimeout(searchDexScreener(input), 5000, null);
+        if (!found || !found.address) {
+          await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
+            `🤖 *APOL AGENT — LARP DETECTOR*\n\n⚠️ No Base chain agent found matching "${esc(input)}"\n\n💡 Try with a contract address: \`/scanagent 0x...\``,
+            { parse_mode: "Markdown" });
+          return;
+        }
+        address = found.address;
+        searchedName = found.name;
+      }
+
+      const report = await runAgentScan(address, searchedName);
+      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
     } catch (e: any) {
       log(`ScanAgent error: ${e?.message}`, "bot");
       await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
-        `🤖 *APOL AGENT — AI AGENT SCAN*\n\n⚠️ Error: ${e?.message?.slice(0, 80) || "Unknown"}`,
+        `🤖 *APOL AGENT — LARP DETECTOR*\n\n⚠️ Error: ${e?.message?.slice(0, 80) || "Unknown"}`,
         { parse_mode: "Markdown" }).catch(() => {});
     }
   });
