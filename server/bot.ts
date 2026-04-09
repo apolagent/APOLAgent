@@ -71,6 +71,13 @@ function fmtMcap(price: number, supply: number | null): string {
   return `$${mcap.toFixed(2)}`;
 }
 
+function fmtHolderCount(n: number): string {
+  if (n <= 0) return "Scanning...";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M+`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k+`;
+  return n.toLocaleString();
+}
+
 // ─── Platform Locker / Deployer Maps (Base V3/V4 launchpads) ────────────────
 
 const BOT_PLATFORM_LOCKERS: Record<string, string> = {
@@ -504,31 +511,42 @@ async function directGoPlus(address: string): Promise<any> {
 }
 
 async function buildSnapshot(address: string, siteUrl: string): Promise<string> {
+  const t0 = Date.now();
+
   try {
-    const t0 = Date.now();
-
-    const [apiResult, dexResult] = await Promise.allSettled([
-      fetch(
-        `http://localhost:5000/api/detective/analyze?address=${encodeURIComponent(address)}&chain=base`,
-        { signal: AbortSignal.timeout(45_000) }
-      ).then(r => r.ok ? r.json() : null),
-      fetch(
-        `https://api.dexscreener.com/latest/dex/tokens/${address}`,
-        { signal: AbortSignal.timeout(8_000) }
-      ).then(r => r.json()),
+    const [securityR, dexScreenerR, holderCountR, dualDexR] = await Promise.allSettled([
+      directGoPlus(address),
+      fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`,
+        { signal: AbortSignal.timeout(8_000) }).then(r => r.json()),
+      botFetchHolderCount(address),
+      botCheckDualDex(address),
     ]);
-    console.log(`[bot-perf] internal API + DexScreener: ${Date.now() - t0}ms`);
 
-    let api: any = apiResult.status === "fulfilled" ? apiResult.value : null;
-    const dexData: any = dexResult.status === "fulfilled" ? dexResult.value : null;
+    const api: any = securityR.status === "fulfilled" ? securityR.value : null;
+    const dexData: any = dexScreenerR.status === "fulfilled" ? dexScreenerR.value : null;
+    const directHolderCount: number | null = holderCountR.status === "fulfilled" ? holderCountR.value : null;
+    const directDex: BotDexResult = dualDexR.status === "fulfilled"
+      ? dualDexR.value : { version: null, isInDex: false };
 
-    if (!api) {
-      console.log(`[bot] Internal API returned null, using direct GoPlus fallback for ${address.slice(0,10)}`);
-      api = await directGoPlus(address);
+    console.log(`[bot-perf] Parallel phase: ${Date.now() - t0}ms (security=${securityR.status}, dex=${dexScreenerR.status}, holders=${holderCountR.status}, dualDex=${dualDexR.status})`);
+
+    const bestHolderCount = (directHolderCount && directHolderCount > 0)
+      ? directHolderCount
+      : (api?.holderCount && api.holderCount > 0 ? api.holderCount : 0);
+
+    if (api && !api.isInDex && directDex.isInDex) {
+      api.isInDex = true;
+      api.dexVersion = api.dexVersion || directDex.version;
+      api.liveStatus = api.liveStatus || botDexLiveStatus(directDex.version);
+      console.log(`[bot] DEX merge: Uniswap ${directDex.version} pool confirmed for ${address.slice(0,10)}`);
     }
 
-    let allPairs: any[] = dexData?.pairs ?? [];
-    let basePairs = allPairs
+    let lookupCount = 0;
+    try {
+      lookupCount = await storage.incrementLookup(address, api?.tokenName || "", api?.tokenSymbol || "");
+    } catch {}
+
+    let basePairs = (dexData?.pairs ?? [])
       .filter((p: any) => p.chainId === "base")
       .sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
 
@@ -538,19 +556,17 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
         if (searchQ) {
           const sRes = await fetch(
             `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(searchQ)}`,
-            { signal: AbortSignal.timeout(6000) }
+            { signal: AbortSignal.timeout(4_000) }
           );
           if (sRes.ok) {
             const sData = await sRes.json() as any;
-            const sPairs: any[] = sData?.pairs ?? [];
-            const matched = sPairs.filter((p: any) =>
+            const matched = (sData?.pairs ?? []).filter((p: any) =>
               p.chainId === "base" &&
               (p.baseToken?.address?.toLowerCase() === address.toLowerCase() ||
                p.quoteToken?.address?.toLowerCase() === address.toLowerCase())
             );
             if (matched.length > 0) {
               basePairs = matched.sort((a: any, b: any) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
-              console.log(`[bot] DexScreener search fallback found ${matched.length} pairs for ${searchQ}`);
             }
           }
         }
@@ -559,22 +575,18 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
 
     const topPair = basePairs[0] ?? null;
 
-    if (api?.addressType === "wallet") {
-      const wFlags: string[] = api.walletFlags ?? [];
-      const wRisk = api.riskLevel ?? "Clean";
-      const wVerdict = api.apolVerdict ?? "No flags detected.";
-      const flagsText = wFlags.length > 0 ? wFlags.map((f: string) => `• ${esc(f)}`).join("\n") : "• No flags detected on Base chain.";
-      return (
-        `🔍 *APOL AGENT — WALLET SCAN*\n\n` +
-        `📍 Address: \`${address.slice(0,6)}...${address.slice(-4)}\`\n` +
-        `🌐 Chain: Base Mainnet\n\n` +
-        `RISK LEVEL: ${wRisk === "Clean" ? "🟢" : wRisk === "High Risk" ? "🔴" : "🟡"} *${esc(wRisk).toUpperCase()}*\n\n` +
-        `${flagsText}\n\n` +
-        `${esc(wVerdict)}`
-      );
-    }
-
     if (!api && !topPair) {
+      const elapsed = Date.now() - t0;
+      if (elapsed > 10_000) {
+        return (
+          `⚠️ *PARTIAL REPORT — DATA TIMEOUT*\n\n` +
+          `📍 \`${shortAddr(address)}\`\n` +
+          `⛓️ Base Mainnet\n\n` +
+          `Intelligence sources timed out after ${(elapsed / 1000).toFixed(1)}s.\n` +
+          `Try again or use the full scanner:\n\n` +
+          `🔍 [Full Scanner](${siteUrl}/agent-scanner)`
+        );
+      }
       return (
         `⚠️ *INVESTIGATION STALLED*\n\n` +
         `Contract not found on Base Mainnet. Ensure the CA is correct.\n\n` +
@@ -599,15 +611,13 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
       );
     }
 
-    const holderCount = api?.holderCountLabel
-      ? (parseInt(api.holderCountLabel) > 0 ? parseInt(api.holderCountLabel).toLocaleString() : api.holderCountLabel)
-      : (api?.holderCount && api.holderCount > 0) ? api.holderCount.toLocaleString() : "Scanning (High Activity)";
+    const holderCount = fmtHolderCount(bestHolderCount);
     const isProtocolTax = !!api?.taxOverride;
     const buyTaxFmt  = isProtocolTax ? `0.0%` : (api ? `${(api.buyTax ?? 0).toFixed(1)}%` : "Data Pending");
     const sellTaxFmt = isProtocolTax ? `0.0%` : (api ? `${(api.sellTax ?? 0).toFixed(1)}%` : "Data Pending");
 
     const hasDex = !!topPair;
-    const isInDex = !!api?.isInDex;
+    const isInDex = !!api?.isInDex || directDex.isInDex;
     const isKnownFactory = !!api?.isKnownFactory;
     const lpEscrowName   = api?.lpEscrow?.name ?? null;
 
@@ -623,7 +633,7 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     const redFlags: string[] = api?.redFlags ?? [];
     const adminThreats: any[] = api?.adminThreats ?? [];
 
-    const liveStatus: string | null = api?.liveStatus || (isInDex ? botDexLiveStatus(api?.dexVersion || null) : null);
+    const liveStatus: string | null = api?.liveStatus || (isInDex ? botDexLiveStatus(api?.dexVersion || directDex.version || null) : null);
 
     let lpStatus: string;
     if (api?.lpStatus)                  lpStatus = esc(api.lpStatus);
@@ -668,7 +678,6 @@ async function buildSnapshot(address: string, siteUrl: string): Promise<string> 
     msg += `📍 *Address:* \`${shortAddr(address)}\`\n`;
     msg += `⛓️ *Chain:* Base Mainnet\n\n`;
 
-    const lookupCount = api?.lookupCount ?? 0;
     msg += `*${tokenName}* (${tokenSymbol}) 👁️ ${lookupCount}\n`;
     msg += `💲 Price: *${priceStr}*\n`;
     msg += `📊 Market Cap: *${mcapStr}*\n`;
@@ -1940,64 +1949,48 @@ export function createBot(): Telegraf | null {
 
   // ── /scan [address] ───────────────────────────────────────────────────────
   bot.command("scan", async ctx => {
-    const parts   = (ctx.message.text ?? "").trim().split(/\s+/);
-    const address = parts[1]?.trim();
-
-    if (!address) {
-      return ctx.replyWithMarkdown(
-        `❓ *Usage:* /scan [contract address]\n\nExample: \`/scan 0x1234...abcd\``
-      );
-    }
-
-    if (!isEvmAddress(address)) {
-      return ctx.replyWithMarkdown(
-        `⚠️ *Invalid address.*\n\nPlease provide a valid EVM address starting with \`0x\` (42 chars).`
-      );
-    }
-
     let loadingMsg: { message_id: number; chat: { id: number } } | null = null;
     try {
       loadingMsg = await ctx.replyWithMarkdown(
-        `🔍 *Analyzing Forensic Data...*\n\n` +
-        `📍 \`${shortAddr(address)}\`\n` +
-        `_Consulting APOL intelligence database. This may take a moment..._`
+        `🔍 *Analyzing Forensic Data... please wait.*`
       );
     } catch { /* non-fatal */ }
 
-    const alchemyPreCheck = (async () => {
+    const parts   = (ctx.message.text ?? "").trim().split(/\s+/);
+    const address = parts[1]?.trim();
+
+    if (!address || !isEvmAddress(address)) {
+      const errMsg = !address
+        ? `❓ *Usage:* /scan [contract address]\n\nExample: \`/scan 0x1234...abcd\``
+        : `⚠️ *Invalid address.*\n\nPlease provide a valid EVM address starting with \`0x\` (42 chars).`;
+      if (loadingMsg) {
+        try {
+          await ctx.telegram.editMessageText(
+            loadingMsg.chat.id, loadingMsg.message_id, undefined,
+            errMsg, { parse_mode: "Markdown" } as any,
+          );
+          return;
+        } catch { /* fall through */ }
+      }
+      return ctx.replyWithMarkdown(errMsg);
+    }
+
+    if (loadingMsg) {
       try {
-        const t0 = Date.now();
-        const [dexPre, tokenInfo] = await Promise.all([
-          botCheckDualDex(address),
-          botGetTokenInfo(address),
-        ]);
-        const elapsed = Date.now() - t0;
-        if (elapsed < 4000 && dexPre.isInDex && tokenInfo && loadingMsg) {
-          const quickLabel = botDexLiveStatus(dexPre.version) || "Live ✅";
-          const quickMsg =
-            `🔍 *APOL AGENT — QUICK SCAN*\n\n` +
-            `📍 \`${shortAddr(address)}\`\n` +
-            `⛓️ Base Mainnet\n\n` +
-            `*${tokenInfo.name}* ($${tokenInfo.symbol})\n` +
-            `📡 Status: *${quickLabel}*\n` +
-            `_Full forensic report loading..._`;
-          try {
-            await ctx.telegram.editMessageText(
-              loadingMsg.chat.id, loadingMsg.message_id, undefined,
-              quickMsg, { parse_mode: "Markdown", disable_web_page_preview: true } as any,
-            );
-            console.log(`[bot] Alchemy pre-check completed in ${elapsed}ms — quick status (${dexPre.version}) sent for ${address.slice(0,10)}`);
-          } catch { /* non-fatal */ }
-        }
+        await ctx.telegram.editMessageText(
+          loadingMsg.chat.id, loadingMsg.message_id, undefined,
+          `🔍 *Analyzing Forensic Data...*\n\n📍 \`${shortAddr(address)}\`\n_Consulting APOL intelligence database..._`,
+          { parse_mode: "Markdown", disable_web_page_preview: true } as any,
+        );
       } catch { /* non-fatal */ }
-    })();
+    }
 
     const SCAN_TIMEOUT_MSG =
       `⚠️ *Scan Timeout*\n\n` +
       `The scan is taking longer than expected. External APIs may be slow.\n\n` +
       `Try the full scanner at [${site}](${site}/agent-scanner) for faster results.`;
 
-    const snapshot = await withTimeout(buildSnapshot(address, site), 60_000, SCAN_TIMEOUT_MSG);
+    const snapshot = await withTimeout(buildSnapshot(address, site), 12_000, SCAN_TIMEOUT_MSG);
 
     if (loadingMsg) {
       try {
