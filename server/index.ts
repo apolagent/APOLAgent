@@ -125,7 +125,9 @@ app.use((req, res, next) => {
     },
   );
 
-  if (bot) {
+  const isProduction = process.env.NODE_ENV === "production" || !!process.env.REPL_DEPLOYMENT;
+
+  if (bot && isProduction) {
     const tkn = process.env.APOL_BOT_TOKEN!;
     const WEBHOOK_PATH = `/bot-webhook-${tkn}`;
     const WEBHOOK_URL = `https://apolagent.online${WEBHOOK_PATH}`;
@@ -207,9 +209,10 @@ app.use((req, res, next) => {
     };
 
     setTimeout(() => hardResetWebhook(), 2000);
+  } else if (bot) {
+    log("Bot webhook registration skipped in dev — production only", "bot");
   }
 
-  const isProduction = process.env.NODE_ENV === "production" || !!process.env.REPL_DEPLOYMENT;
   if (isProduction) {
     const CHECK_INTERVAL = 10 * 60 * 1000;
     const INITIAL_DELAY = 2 * 60 * 1000;
