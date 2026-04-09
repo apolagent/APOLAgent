@@ -169,11 +169,6 @@ async function getTokenInfo(addr: string): Promise<{ name: string; symbol: strin
 }
 
 async function getDeployer(addr: string): Promise<string | null> {
-  try {
-    const data = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
-    if (data?.creator_address_hash) return data.creator_address_hash.toLowerCase();
-  } catch {}
-
   if (BASE_RPC) {
     try {
       const resp = await fetch(BASE_RPC, {
@@ -203,9 +198,8 @@ async function getDeployer(addr: string): Promise<string | null> {
   }
 
   try {
-    const data = await fetch(`https://base.blockscout.com/api?module=account&action=txlist&address=${addr}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
-    const firstFrom = data?.result?.[0]?.from;
-    if (firstFrom) return firstFrom.toLowerCase();
+    const data = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
+    if (data?.creator_address_hash) return data.creator_address_hash.toLowerCase();
   } catch {}
   return null;
 }
@@ -264,17 +258,14 @@ interface WalletInfo {
 async function getWalletInfo(addr: string): Promise<WalletInfo> {
   try {
     const lowerAddr = addr.toLowerCase();
-    const [balResult] = await rpcBatch([
+
+    const [balResult, codeResult] = await rpcBatch([
       { method: "eth_getBalance", params: [addr, "latest"] },
+      { method: "eth_getCode", params: [addr, "latest"] },
     ]);
     const balWei = balResult ? BigInt(balResult) : BigInt(0);
     const balEth = Number(balWei) / 1e18;
-
-    const [addrData, codeResult] = await Promise.all([
-      fetch(`https://base.blockscout.com/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null).catch(() => null),
-      rpcBatch([{ method: "eth_getCode", params: [addr, "latest"] }]).then(r => r[0]).catch(() => "0x"),
-    ]);
-    const isContract = addrData?.is_contract || (codeResult && codeResult !== "0x" && codeResult.length > 2);
+    const isContract = codeResult && codeResult !== "0x" && codeResult.length > 2;
 
     let txCount = 0;
     let firstTx: string | null = null;
@@ -284,25 +275,7 @@ async function getWalletInfo(addr: string): Promise<WalletInfo> {
     let inflow = 0;
     let outflow = 0;
 
-    try {
-      const txData = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}/transactions?limit=50&sort=asc`, { signal: AbortSignal.timeout(6000) }).then((r) => r.ok ? r.json() as any : null);
-      const items = txData?.items || [];
-      if (items.length > 0) {
-        firstTx = items[0]?.timestamp || null;
-        firstTxHash = items[0]?.hash || null;
-        firstTxFrom = items[0]?.from?.hash || null;
-        firstTxFromName = items[0]?.from?.name || items[0]?.from?.ens_domain_name || null;
-      }
-      for (const tx of items) {
-        const val = tx.value ? Number(BigInt(tx.value)) / 1e18 : 0;
-        if (val > 0) {
-          if (tx.to?.hash?.toLowerCase() === lowerAddr) inflow += val;
-          if (tx.from?.hash?.toLowerCase() === lowerAddr) outflow += val;
-        }
-      }
-    } catch {}
-
-    if (BASE_RPC && (!firstTx || txCount === 0)) {
+    if (BASE_RPC) {
       try {
         const [inResp, outResp] = await Promise.all([
           fetch(BASE_RPC, {
@@ -330,9 +303,9 @@ async function getWalletInfo(addr: string): Promise<WalletInfo> {
 
         const uniqueHashes = new Set<string>();
         for (const t of allTransfers) uniqueHashes.add(t.hash);
-        if (uniqueHashes.size > txCount) txCount = uniqueHashes.size;
+        txCount = uniqueHashes.size;
 
-        if (!firstTx && allTransfers.length > 0) {
+        if (allTransfers.length > 0) {
           const first = allTransfers[0];
           firstTxHash = first.hash;
           const blockHex = first.blockNum;
@@ -356,14 +329,6 @@ async function getWalletInfo(addr: string): Promise<WalletInfo> {
         for (const t of outTransfers) {
           if (t.value && t.asset === "ETH") outflow += t.value;
         }
-      } catch {}
-    }
-
-    if (txCount === 0) {
-      try {
-        const countData = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}/counters`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
-        const parsed = countData?.transactions_count ? parseInt(countData.transactions_count) : 0;
-        if (parsed > txCount) txCount = parsed;
       } catch {}
     }
 
@@ -565,16 +530,26 @@ async function getDeployerContracts(deployer: string): Promise<{ count: number; 
 }
 
 async function getDeployerCreatedContracts(deployer: string): Promise<number> {
-  try {
-    const data = await fetch(`https://base.blockscout.com/api?module=account&action=txlist&address=${deployer}&startblock=0&endblock=99999999&page=1&offset=100&sort=desc`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
-    const txs = data?.result || [];
-    let contractCreations = 0;
-    for (const tx of txs) {
-      if (tx.contractAddress && tx.contractAddress !== "" && tx.from?.toLowerCase() === deployer.toLowerCase()) {
-        contractCreations++;
+  if (BASE_RPC) {
+    try {
+      const resp = await fetch(BASE_RPC, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "alchemy_getAssetTransfers",
+          params: [{ fromBlock: "0x0", toBlock: "latest", fromAddress: deployer, category: ["erc20"], maxCount: "0x32", excludeZeroValue: false }] }),
+        signal: AbortSignal.timeout(6000),
+      });
+      const data = await resp.json() as any;
+      const transfers = data?.result?.transfers || [];
+      const uniqueContracts = new Set<string>();
+      for (const t of transfers) {
+        if (t.rawContract?.address) uniqueContracts.add(t.rawContract.address.toLowerCase());
       }
-    }
-    return contractCreations;
+      if (uniqueContracts.size > 0) return uniqueContracts.size;
+    } catch {}
+  }
+  try {
+    const data = await fetch(`https://base.blockscout.com/api/v2/addresses/${deployer}/counters`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
+    return data?.token_transfers_count ? Math.min(parseInt(data.token_transfers_count), 50) : 0;
   } catch { return 0; }
 }
 

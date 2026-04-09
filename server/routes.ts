@@ -170,12 +170,6 @@ async function getTokenInfo(addr: string): Promise<{ name: string; symbol: strin
 }
 
 async function getDeployer(addr: string): Promise<string | null> {
-  try {
-    const data = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(4000) })
-      .then((r) => (r.ok ? (r.json() as any) : null));
-    if (data?.creator_address_hash) return data.creator_address_hash.toLowerCase();
-  } catch {}
-
   if (BASE_RPC) {
     try {
       const resp = await fetch(BASE_RPC, {
@@ -203,10 +197,9 @@ async function getDeployer(addr: string): Promise<string | null> {
   }
 
   try {
-    const data = await fetch(`https://base.blockscout.com/api?module=account&action=txlist&address=${addr}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc`, { signal: AbortSignal.timeout(4000) })
+    const data = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(4000) })
       .then((r) => (r.ok ? (r.json() as any) : null));
-    const firstFrom = data?.result?.[0]?.from;
-    if (firstFrom) return firstFrom.toLowerCase();
+    if (data?.creator_address_hash) return data.creator_address_hash.toLowerCase();
   } catch {}
   return null;
 }
@@ -414,23 +407,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (deployerAddr) {
           try {
-            const deplTxData = await fetch(`https://base.blockscout.com/api?module=account&action=txlist&address=${deployerAddr}&startblock=0&endblock=99999999&page=1&offset=100&sort=desc`, { signal: AbortSignal.timeout(5000) }).then(r => r.ok ? r.json() as any : null);
-            const txs = deplTxData?.result || [];
-            for (const tx of txs) {
-              if (tx.contractAddress && tx.contractAddress !== "" && tx.from?.toLowerCase() === deployerAddr.toLowerCase()) {
-                deployerContractCount++;
+            if (BASE_RPC) {
+              const deplResp = await fetch(BASE_RPC, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "alchemy_getAssetTransfers",
+                  params: [{ fromBlock: "0x0", toBlock: "latest", fromAddress: deployerAddr, category: ["erc20"], maxCount: "0x32", excludeZeroValue: false }] }),
+                signal: AbortSignal.timeout(6000),
+              });
+              const deplData = await deplResp.json() as any;
+              const deplTransfers = deplData?.result?.transfers || [];
+              const uniqueContracts = new Set<string>();
+              for (const t of deplTransfers) {
+                if (t.rawContract?.address) uniqueContracts.add(t.rawContract.address.toLowerCase());
               }
-            }
+              deployerContractCount = uniqueContracts.size;
 
-            const txTimestamps = txs.filter((tx: any) => tx.from?.toLowerCase() === wallet.toLowerCase() || tx.to?.toLowerCase() === wallet.toLowerCase()).map((tx: any) => parseInt(tx.timeStamp) * 1000);
-            if (txTimestamps.length > 5) {
-              const hours = txTimestamps.map((t: number) => new Date(t).getUTCHours());
-              const uniqueHours = new Set(hours);
-              speedScore = Math.min(30, uniqueHours.size * 2);
-              speedDetail = uniqueHours.size >= 12 ? "24/7 on-chain activity detected — consistent with autonomous agent." : uniqueHours.size >= 6 ? "Mixed activity timing — some autonomous patterns." : "Activity concentrated in business hours — likely manual operator.";
-            } else {
-              speedScore = 5;
-              speedDetail = "Insufficient transaction history for timing analysis.";
+              const walletResp = await fetch(BASE_RPC, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "alchemy_getAssetTransfers",
+                  params: [{ fromBlock: "0x0", toBlock: "latest", fromAddress: wallet, category: ["external", "internal", "erc20"], maxCount: "0x32" }] }),
+                signal: AbortSignal.timeout(6000),
+              });
+              const walletData = await walletResp.json() as any;
+              const walletTransfers = walletData?.result?.transfers || [];
+              if (walletTransfers.length > 5) {
+                const blockNums = walletTransfers.map((t: any) => parseInt(t.blockNum, 16));
+                const uniqueBlocks = new Set(blockNums);
+                speedScore = Math.min(30, uniqueBlocks.size * 2);
+                speedDetail = uniqueBlocks.size >= 20 ? "High on-chain activity detected — consistent with autonomous agent." : uniqueBlocks.size >= 10 ? "Mixed activity patterns — some autonomous behavior." : "Limited activity — likely manual operator.";
+              } else {
+                speedScore = 5;
+                speedDetail = "Insufficient transaction history for timing analysis.";
+              }
             }
           } catch {}
 

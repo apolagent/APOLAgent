@@ -41,10 +41,17 @@ shared/
 - **Flaunch**: deployer `0x6a53...9571`
 - Checks: address → deployer → top holders (single-pass)
 
-## Data Source Priority
-- **Deployer detection**: Blockscout v2 → Alchemy `alchemy_getAssetTransfers` (creation tx receipt) → Blockscout v1
-- **Wallet info**: RPC `eth_getBalance` + Blockscout v2 → Alchemy `alchemy_getAssetTransfers` (both directions) → Blockscout counters → RPC nonce
-- **Contract ownership**: Direct `owner()` call (0x8da5cb5b) — never infer renouncement from missing deployer
+## Source Hierarchy (STRICT)
+1. **PRIMARY ENGINE (Alchemy RPC)**: ALL simulations (buy/sell/tax), deployer detection, wallet info, balance, contract checks, treasury balance
+2. **SPEED RULE**: Alchemy is for the "Report Header." If Alchemy is slow, send the report anyway
+3. **SECONDARY DATA (Blockscout ONLY)**: Holder counts, top holders, contract verification status, BaseScan links
+4. **NO OVERRIDES**: Never switch to Blockscout as primary for any reason
+
+### Implementation:
+- **Deployer detection**: Alchemy `alchemy_getAssetTransfers` (creation tx receipt) → Blockscout v2 fallback
+- **Wallet info**: Alchemy RPC `eth_getBalance` + `eth_getCode` + `alchemy_getAssetTransfers` (both directions) → RPC nonce fallback
+- **Contract ownership**: Direct `owner()` call via Alchemy RPC (0x8da5cb5b) — never infer renouncement from missing deployer
+- **Serial deployer detection**: Alchemy `alchemy_getAssetTransfers` from deployer → Blockscout counters fallback
 - **X verification**: `u.verification?.verified` (nested object in fxtwitter API), NOT `u.verified`
 - **Linked CA**: DexScreener search + bio regex `0x[a-fA-F0-9]{40}`
 
