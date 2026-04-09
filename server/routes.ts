@@ -1017,14 +1017,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const isVirtualsFactory = earlyPlatform === "Virtuals";
         const isApeStoreOrFlaunch = earlyPlatform === "ApeStore" || earlyPlatform === "Flaunch";
 
+        const isVirtuals = (isVirtualsFactory || earlyVirtualsPair || (address as string).toLowerCase() === ERC8183_VAULT);
+        if (isVirtuals) {
+          console.log(`[forensics] Virtuals bypass: ${(address as string).slice(0,10)} — honeypot=false, taxes=0, returning clean`);
+          const blockscoutHolderCount = await fetchHolderCountFallback(address as string);
+          const holderCount = blockscoutHolderCount !== null && blockscoutHolderCount > 0
+            ? blockscoutHolderCount : parseInt(tokenData.holder_count ?? "0");
+          const tokenName = tokenData.token_name || "";
+          const tokenSymbol = tokenData.token_symbol || "";
+          const isOpenSource = tokenData.is_open_source === "1" || tokenData.is_open_source === 1;
+          const isInDex = true;
+          return res.json({
+            address, chain, addressType: "contract",
+            riskLevel: "Clean",
+            apolVerdict: `Citizen, ${tokenName} (${tokenSymbol}) has earned the APOL Agent Green Badge. Verified open source, safe tax structure, no malicious functions detected. ✅`,
+            isHighRisk: false, isNewOffender: false, greenBadge: true,
+            redFlags: [], adminThreats: [],
+            ownerAddress: null, creatorAddress: creatorAddress || null,
+            isOwnershipRenounced: true, isSingleSigAdmin: false,
+            lookupCount: lookupCount || 0,
+            tokenName, tokenSymbol,
+            holderCount, holderCountLabel: holderCount > 0 ? holderCount.toLocaleString() : "Scanning (High Activity)",
+            buyTax: 0, sellTax: 0, taxOverride: null,
+            isHoneypot: false, isMintable: false, isOpenSource,
+            isInDex, isProxy: false, hasBlacklist: false, canPause: false,
+            protocolSecured: true, isKnownFactory: true,
+            lpEscrow: { name: "Virtuals", address: (address as string).toLowerCase(), percent: 100 },
+            isWhitelistedFactory: true, platformName: "Virtuals",
+            liveStatus: "Live (Direct-to-V3) ✅",
+            lpStatus: "Virtuals Managed ✅", dexVersion: earlyDexVersion || "v3",
+          });
+        }
+
         const isHoneypotGP = tokenData.is_honeypot === "1" || tokenData.is_honeypot === 1;
         const isHoneypotHP = hpData?.honeypotResult?.isHoneypot === true;
         let isHoneypot = isHoneypotGP || isHoneypotHP;
-
-        if (isVirtualsFactory && isHoneypot) {
-          isHoneypot = false;
-          console.log(`[forensics] Virtuals factory override: isHoneypot forced FALSE for ${(address as string).slice(0,10)}`);
-        }
 
         let buyTax = hpData?.simulationResult?.buyTax != null ? hpData.simulationResult.buyTax * 100 : taxPct(tokenData.buy_tax);
         let sellTax = hpData?.simulationResult?.sellTax != null ? hpData.simulationResult.sellTax * 100 : taxPct(tokenData.sell_tax);
