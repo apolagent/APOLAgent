@@ -106,45 +106,68 @@ async function findBestPool(token: string): Promise<{ pool: string; fee: number 
   return null;
 }
 
+async function simulateRoundTrip(addr: string, amount: bigint, fee: number): Promise<{ tokensReceived: bigint; ethBack: bigint } | "buy_fail" | "sell_fail"> {
+  const sel = "0xc6a5026a";
+  const buyData = sel + pad32(WETH) + pad32(addr) + uint256Hex(amount) + uint256Hex(BigInt(fee)) + uint256Hex(BigInt(0));
+  let buyResult: string;
+  try { buyResult = await rpcCall("eth_call", [{ to: QUOTER_V2, data: buyData }, "latest"]); }
+  catch { return "buy_fail"; }
+  if (!buyResult || buyResult === "0x") return "buy_fail";
+  const tokensReceived = BigInt("0x" + buyResult.slice(2, 66));
+  if (tokensReceived === BigInt(0)) return "buy_fail";
+
+  const sellData = sel + pad32(addr) + pad32(WETH) + uint256Hex(tokensReceived) + uint256Hex(BigInt(fee)) + uint256Hex(BigInt(0));
+  let sellResult: string;
+  try { sellResult = await rpcCall("eth_call", [{ to: QUOTER_V2, data: sellData }, "latest"]); }
+  catch { return "sell_fail"; }
+  if (!sellResult || sellResult === "0x") return "sell_fail";
+  const ethBack = BigInt("0x" + sellResult.slice(2, 66));
+  return { tokensReceived, ethBack };
+}
+
 async function simulateToken(tokenAddress: string): Promise<SimResult> {
   const addr = tokenAddress.toLowerCase();
   const fail = (reason: string): SimResult => ({ isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: reason });
 
   const poolInfo = await findBestPool(addr);
   if (!poolInfo) return fail("No Uniswap V3 pool found");
-
   const { fee } = poolInfo;
-  const sel = "0xc6a5026a";
-  const buyData = sel + pad32(WETH) + pad32(addr) + uint256Hex(SIM_AMOUNT) + uint256Hex(BigInt(fee)) + uint256Hex(BigInt(0));
-
-  let buyResult: string;
-  try { buyResult = await rpcCall("eth_call", [{ to: QUOTER_V2, data: buyData }, "latest"]); }
-  catch (e: any) { return fail(e?.message?.includes("revert") ? "Insufficient liquidity" : "Buy simulation failed"); }
-  if (!buyResult || buyResult === "0x") return fail("Insufficient liquidity");
-
-  const tokensReceived = BigInt("0x" + buyResult.slice(2, 66));
-  if (tokensReceived === BigInt(0)) return fail("Insufficient liquidity");
-
-  let sellResult: string;
-  try {
-    const sellData = sel + pad32(addr) + pad32(WETH) + uint256Hex(tokensReceived) + uint256Hex(BigInt(fee)) + uint256Hex(BigInt(0));
-    sellResult = await rpcCall("eth_call", [{ to: QUOTER_V2, data: sellData }, "latest"]);
-  } catch { return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, tokensReceived, failReason: null }; }
-
-  if (!sellResult || sellResult === "0x") return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, tokensReceived, failReason: null };
-
-  const ethBack = BigInt("0x" + sellResult.slice(2, 66));
-  if (ethBack === BigInt(0)) return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, tokensReceived, failReason: null };
-
-  const ethIn = Number(SIM_AMOUNT) / 1e18;
-  const ethOut = Number(ethBack) / 1e18;
-  const roundTripLoss = ((ethIn - ethOut) / ethIn) * 100;
   const expectedPoolFees = (fee / 10000) * 2;
-  const netTax = Math.max(0, roundTripLoss - expectedPoolFees);
+
+  const MICRO_AMOUNT = BigInt("1000000000000");
+  let taxFromMicro: number | null = null;
+
+  const microResult = await simulateRoundTrip(addr, MICRO_AMOUNT, fee);
+  if (microResult !== "buy_fail" && microResult !== "sell_fail" && microResult.ethBack > BigInt(0)) {
+    const microIn = Number(MICRO_AMOUNT) / 1e18;
+    const microOut = Number(microResult.ethBack) / 1e18;
+    const microLoss = ((microIn - microOut) / microIn) * 100;
+    taxFromMicro = Math.max(0, microLoss - expectedPoolFees);
+  }
+
+  const mainResult = await simulateRoundTrip(addr, SIM_AMOUNT, fee);
+  if (mainResult === "buy_fail") {
+    if (microResult === "buy_fail") return fail("Insufficient liquidity");
+    if (microResult === "sell_fail") return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, tokensReceived: BigInt(0), failReason: null };
+    return { isHoneypot: false, buyTax: parseFloat(((taxFromMicro || 0) / 2).toFixed(1)), sellTax: parseFloat(((taxFromMicro || 0) / 2).toFixed(1)), simulationSuccess: true, feeTier: fee, tokensReceived: microResult.tokensReceived, failReason: null };
+  }
+  if (mainResult === "sell_fail") return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, tokensReceived: BigInt(0), failReason: null };
+  if (mainResult.ethBack === BigInt(0)) return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, tokensReceived: mainResult.tokensReceived, failReason: null };
+
+  let netTax: number;
+  if (taxFromMicro !== null) {
+    netTax = taxFromMicro;
+  } else {
+    const ethIn = Number(SIM_AMOUNT) / 1e18;
+    const ethOut = Number(mainResult.ethBack) / 1e18;
+    const roundTripLoss = ((ethIn - ethOut) / ethIn) * 100;
+    netTax = Math.max(0, roundTripLoss - expectedPoolFees);
+  }
+
   const buyTax = parseFloat((netTax / 2).toFixed(1));
   const sellTax = parseFloat((netTax / 2).toFixed(1));
 
-  return { isHoneypot: false, buyTax, sellTax, simulationSuccess: true, feeTier: fee, tokensReceived, failReason: null };
+  return { isHoneypot: false, buyTax, sellTax, simulationSuccess: true, feeTier: fee, tokensReceived: mainResult.tokensReceived, failReason: null };
 }
 
 async function getTokenInfo(addr: string): Promise<{ name: string; symbol: string; totalSupply: bigint; decimals: number }> {
@@ -281,13 +304,13 @@ async function getWalletInfo(addr: string): Promise<WalletInfo> {
           fetch(BASE_RPC, {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ jsonrpc: "2.0", id: 10, method: "alchemy_getAssetTransfers",
-              params: [{ fromBlock: "0x0", toBlock: "latest", toAddress: addr, category: ["external", "internal", "erc20", "erc721", "erc1155"], maxCount: "0x32", order: "asc" }] }),
+              params: [{ fromBlock: "0x0", toBlock: "latest", toAddress: addr, category: ["external", "erc20", "erc721", "erc1155"], maxCount: "0x32", order: "asc" }] }),
             signal: AbortSignal.timeout(8000),
           }).then(r => r.json() as any),
           fetch(BASE_RPC, {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ jsonrpc: "2.0", id: 11, method: "alchemy_getAssetTransfers",
-              params: [{ fromBlock: "0x0", toBlock: "latest", fromAddress: addr, category: ["external", "internal", "erc20", "erc721", "erc1155"], maxCount: "0x32", order: "asc" }] }),
+              params: [{ fromBlock: "0x0", toBlock: "latest", fromAddress: addr, category: ["external", "erc20", "erc721", "erc1155"], maxCount: "0x32", order: "asc" }] }),
             signal: AbortSignal.timeout(8000),
           }).then(r => r.json() as any),
         ]);
