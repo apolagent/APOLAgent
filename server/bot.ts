@@ -782,8 +782,8 @@ export function createBot(): Telegraf | null {
     const input = ctx.message.text.replace(/^\/report(@\w+)?\s*/i, "").trim();
     if (!input) {
       ctx.reply(
-        `🚩 *APOL AGENT — REPORT*\n\nSubmit scam evidence for investigation.\n\n*Usage:*\n\`/report 0xContractAddress reason\`\n\nExample:\n\`/report 0x1234...abcd Honeypot, can't sell\``,
-        { parse_mode: "Markdown" },
+        `🚩 *APOL AGENT — REPORT*\n\nSubmit scam evidence for investigation.\n\n*Quick report:*\n\`/report 0xContractAddress reason\`\n\nExample:\n\`/report 0x1234...abcd Honeypot, can't sell\`\n\n📋 For a detailed report with evidence, use the full form:\n🔗 [Submit Report on Web](https://apolagent.online/report-scam)`,
+        { parse_mode: "Markdown", link_preview_options: { is_disabled: true } },
       );
       return;
     }
@@ -801,11 +801,11 @@ export function createBot(): Telegraf | null {
         reports: [{ source: "telegram", reason, timestamp: new Date().toISOString() }],
       }).catch(() => {});
       ctx.reply(
-        `🚩 *Report Submitted*\n\n📌 Address: \`${addr.slice(0, 8)}...${addr.slice(-6)}\`\n📝 Reason: ${esc(reason)}\n\n✅ This address has been flagged for investigation. Thank you for protecting the trenches.`,
-        { parse_mode: "Markdown" },
+        `🚩 *Report Submitted*\n\n📌 Address: \`${addr.slice(0, 8)}...${addr.slice(-6)}\`\n📝 Reason: ${esc(reason)}\n\n✅ This address has been flagged for investigation. Thank you for protecting the trenches.\n\n📋 Want to add more evidence? Use the full form:\n🔗 [Submit on Web](https://apolagent.online/report-scam)`,
+        { parse_mode: "Markdown", link_preview_options: { is_disabled: true } },
       );
     } else {
-      ctx.reply("🚩 Please provide a valid contract address.\nExample: `/report 0x... honeypot`", { parse_mode: "Markdown" });
+      ctx.reply("🚩 Please provide a valid contract address.\nExample: `/report 0x... honeypot`\n\n📋 Or use the full web form: https://apolagent.online/report-scam", { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
     }
   });
 
