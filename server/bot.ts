@@ -1,35 +1,50 @@
 import { Telegraf } from "telegraf";
+import { storage } from "./storage";
 
 const BASE_RPC = process.env.BASE_RPC_URL || "";
 const WETH = "0x4200000000000000000000000000000000000006";
 const QUOTER_V2 = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a";
+const V3_FACTORY = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD";
 const SIM_AMOUNT = BigInt("100000000000000000");
-const FEE_TIERS = [500, 3000, 10000, 100] as const;
+const BURN_ADDRS = new Set(["0x0000000000000000000000000000000000000000", "0x000000000000000000000000000000000000dead"]);
+const HARD_TIMEOUT = 10000;
 
-const VIRTUAL_TOKEN = "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b";
-const VIRTUAL_VAULT = "0xdad686299fb562f89e55da05f1d96fabeb2a2e32";
-const VIRTUAL_DEPLOYER = "0x97cf38bb06da57b6418083998b09976ec40a90a3";
+const PLATFORM_MAP: Record<string, string> = {
+  "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
+  "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
+  "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
+  "0xe85a08cf16f07b0b6e8b1f5e4918f6e9dab3a5c0": "Clanker",
+  "0xf3625f0e85afe89228eeab5c8c6e3aff94e77d38": "Clanker",
+  "0xd466e09acadc0345b4cf42ea530e242a086f68c7": "Clanker",
+  "0x0bf85e6f2ff0ed5c4a76b1dbbd3f2f65c05a4f58": "ApeStore",
+  "0xade20c0cc8482c404a57da404ed1f3f2a1f6fe6f": "ApeStore",
+  "0x6a53961a5bc81e8b1e02aa84445e07a4e8057957": "Flaunch",
+};
 
-interface SimulationResult {
+const LOCKER_MAP: Record<string, string> = {
+  "0xe85a08cf16f07b0b6e8b1f5e4918f6e9dab3a5c0": "Clanker",
+  "0xf3625f0e85afe89228eeab5c8c6e3aff94e77d38": "Clanker",
+  "0x663a5c229c09b049e36dcc11a9b0d4a8eb9db214": "Unicrypt",
+  "0x71b5759d73262fbb223956913ecf4ecc51057641": "PinkLock",
+  "0xe2fe530c047f2d85298b07d9333c05737f1435fb": "Team Finance",
+  "0x0bf85e6f2ff0ed5c4a76b1dbbd3f2f65c05a4f58": "ApeStore",
+  "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
+};
+
+interface SimResult {
   isHoneypot: boolean;
   buyTax: number;
   sellTax: number;
   simulationSuccess: boolean;
   feeTier: number | null;
-  protocol: string;
+  tokensReceived: bigint;
 }
 
 function pad32(hex: string): string {
   return hex.replace(/^0x/i, "").padStart(64, "0");
 }
-
 function uint256Hex(n: bigint): string {
   return n.toString(16).padStart(64, "0");
-}
-
-function buildQuoteCalldata(tokenIn: string, tokenOut: string, amountIn: bigint, fee: number): string {
-  const selector = "0xc6a5026a";
-  return selector + pad32(tokenIn) + pad32(tokenOut) + uint256Hex(amountIn) + uint256Hex(BigInt(fee)) + uint256Hex(BigInt(0));
 }
 
 async function rpcCall(method: string, params: any[]): Promise<any> {
@@ -37,111 +52,221 @@ async function rpcCall(method: string, params: any[]): Promise<any> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(8000),
   });
-  const json = await resp.json() as any;
+  const json = (await resp.json()) as any;
   if (json.error) throw new Error(json.error.message || JSON.stringify(json.error));
   return json.result;
 }
 
-async function getTokenInfo(addr: string): Promise<{ name: string; symbol: string }> {
-  const nameSelector = "0x06fdde03";
-  const symbolSelector = "0x95d89b41";
+async function rpcBatch(calls: { method: string; params: any[] }[]): Promise<any[]> {
+  const body = calls.map((c, i) => ({ jsonrpc: "2.0", id: i + 1, method: c.method, params: c.params }));
+  const resp = await fetch(BASE_RPC, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(8000),
+  });
+  const results = (await resp.json()) as any[];
+  results.sort((a: any, b: any) => a.id - b.id);
+  return results.map((r: any) => (r.error ? null : r.result));
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Timeout: ${label} (${ms}ms)`)), ms)),
+  ]);
+}
+
+async function findBestPool(token: string): Promise<{ pool: string; fee: number } | null> {
+  const addr = token.toLowerCase();
+  const [t0, t1] = addr < WETH.toLowerCase() ? [addr, WETH.toLowerCase()] : [WETH.toLowerCase(), addr];
+  const selector = "0x1698ee82";
+  const fees = [500, 3000, 10000, 100];
+  const calls = fees.map((fee) => ({
+    method: "eth_call" as const,
+    params: [{ to: V3_FACTORY, data: selector + pad32(t0) + pad32(t1) + uint256Hex(BigInt(fee)) }, "latest"],
+  }));
+  const results = await rpcBatch(calls);
+  let bestPool: string | null = null;
+  let bestFee = 0;
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    if (!r || r === "0x" || r === "0x" + "0".repeat(64)) continue;
+    const poolAddr = "0x" + r.slice(26, 66);
+    if (poolAddr === "0x0000000000000000000000000000000000000000") continue;
+    bestPool = poolAddr;
+    bestFee = fees[i];
+    break;
+  }
+  if (!bestPool) return null;
+  return { pool: bestPool, fee: bestFee };
+}
+
+async function botAlchemySimulate(tokenAddress: string): Promise<SimResult> {
+  const addr = tokenAddress.toLowerCase();
+
+  const poolInfo = await findBestPool(addr);
+  if (!poolInfo) {
+    return { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0) };
+  }
+
+  const { fee } = poolInfo;
+  const selector = "0xc6a5026a";
+  const buyData = selector + pad32(WETH) + pad32(addr) + uint256Hex(SIM_AMOUNT) + uint256Hex(BigInt(fee)) + uint256Hex(BigInt(0));
+  const buyResult = await rpcCall("eth_call", [{ to: QUOTER_V2, data: buyData }, "latest"]);
+  if (!buyResult || buyResult === "0x") {
+    return { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: fee, tokensReceived: BigInt(0) };
+  }
+
+  const tokensReceived = BigInt("0x" + buyResult.slice(2, 66));
+  if (tokensReceived === BigInt(0)) {
+    return { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: fee, tokensReceived: BigInt(0) };
+  }
+
+  let sellResult: string;
   try {
-    const [nameRaw, symbolRaw] = await Promise.all([
-      rpcCall("eth_call", [{ to: addr, data: nameSelector }, "latest"]),
-      rpcCall("eth_call", [{ to: addr, data: symbolSelector }, "latest"]),
-    ]);
-    const decodeName = (hex: string) => {
-      if (!hex || hex === "0x" || hex.length < 130) return "";
+    const sellData = selector + pad32(addr) + pad32(WETH) + uint256Hex(tokensReceived) + uint256Hex(BigInt(fee)) + uint256Hex(BigInt(0));
+    sellResult = await rpcCall("eth_call", [{ to: QUOTER_V2, data: sellData }, "latest"]);
+  } catch {
+    return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, tokensReceived };
+  }
+
+  if (!sellResult || sellResult === "0x") {
+    return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, tokensReceived };
+  }
+
+  const ethBack = BigInt("0x" + sellResult.slice(2, 66));
+  if (ethBack === BigInt(0)) {
+    return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, tokensReceived };
+  }
+
+  const ethIn = Number(SIM_AMOUNT) / 1e18;
+  const ethOut = Number(ethBack) / 1e18;
+  const roundTripLoss = ((ethIn - ethOut) / ethIn) * 100;
+  const expectedPoolFees = (fee / 10000) * 2;
+  const netTax = Math.max(0, roundTripLoss - expectedPoolFees);
+  const buyTax = parseFloat((netTax / 2).toFixed(2));
+  const sellTax = parseFloat((netTax / 2).toFixed(2));
+
+  console.log(`[sim] fee=${fee}: roundTrip=${roundTripLoss.toFixed(2)}%, netTax=${netTax.toFixed(2)}%`);
+
+  return { isHoneypot: false, buyTax, sellTax, simulationSuccess: true, feeTier: fee, tokensReceived };
+}
+
+async function getTokenInfo(addr: string): Promise<{ name: string; symbol: string; totalSupply: bigint; decimals: number; rawSupply: bigint }> {
+  const results = await rpcBatch([
+    { method: "eth_call", params: [{ to: addr, data: "0x06fdde03" }, "latest"] },
+    { method: "eth_call", params: [{ to: addr, data: "0x95d89b41" }, "latest"] },
+    { method: "eth_call", params: [{ to: addr, data: "0x18160ddd" }, "latest"] },
+    { method: "eth_call", params: [{ to: addr, data: "0x313ce567" }, "latest"] },
+  ]);
+
+  const decodeName = (hex: string | null): string => {
+    if (!hex || hex === "0x" || hex.length < 130) return "";
+    try {
       const offset = parseInt(hex.slice(2, 66), 16) * 2;
       const len = parseInt(hex.slice(2 + offset, 2 + offset + 64), 16);
       const raw = hex.slice(2 + offset + 64, 2 + offset + 64 + len * 2);
       return Buffer.from(raw, "hex").toString("utf8");
-    };
-    return { name: decodeName(nameRaw) || "Unknown", symbol: decodeName(symbolRaw) || "???" };
-  } catch {
-    return { name: "Unknown", symbol: "???" };
-  }
+    } catch {
+      return "";
+    }
+  };
+
+  const rawSupply = results[2] ? BigInt(results[2]) : BigInt(0);
+  const decimals = results[3] ? Number(BigInt(results[3])) : 18;
+  const divisor = BigInt(10) ** BigInt(decimals);
+  const totalSupply = divisor > 0 ? rawSupply / divisor : BigInt(0);
+
+  return {
+    name: decodeName(results[0]) || "Unknown",
+    symbol: decodeName(results[1]) || "???",
+    totalSupply,
+    decimals,
+    rawSupply,
+  };
 }
 
 async function getDeployer(addr: string): Promise<string | null> {
   try {
-    const data = await fetch(
-      `https://base.blockscout.com/api/v2/addresses/${addr}`,
-      { signal: AbortSignal.timeout(6000) }
-    ).then(r => r.ok ? r.json() as any : null);
+    const data = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(6000) })
+      .then((r) => (r.ok ? (r.json() as any) : null));
     return data?.creator_address_hash?.toLowerCase() || null;
   } catch {
     return null;
   }
 }
 
-function detectVirtuals(addr: string, deployer: string | null): boolean {
-  const a = addr.toLowerCase();
-  if (a === VIRTUAL_TOKEN || a === VIRTUAL_VAULT) return true;
-  if (deployer === VIRTUAL_DEPLOYER || deployer === VIRTUAL_VAULT) return true;
-  return false;
-}
-
-export async function botAlchemySimulate(tokenAddress: string): Promise<SimulationResult> {
-  const addr = tokenAddress.toLowerCase();
-
-  for (const fee of FEE_TIERS) {
-    try {
-      const buyData = buildQuoteCalldata(WETH, addr, SIM_AMOUNT, fee);
-      const buyResult = await rpcCall("eth_call", [{ to: QUOTER_V2, data: buyData }, "latest"]);
-      if (!buyResult || buyResult === "0x") continue;
-
-      const tokensReceived = BigInt("0x" + buyResult.slice(2, 66));
-      if (tokensReceived === BigInt(0)) continue;
-
-      const poolFeePercent = fee / 10000;
-
-      let sellResult: string;
-      try {
-        const sellData = buildQuoteCalldata(addr, WETH, tokensReceived, fee);
-        sellResult = await rpcCall("eth_call", [{ to: QUOTER_V2, data: sellData }, "latest"]);
-      } catch {
-        console.log(`[sim] fee=${fee}: sell REVERTED → honeypot`);
-        return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, protocol: "Uniswap V3" };
-      }
-
-      if (!sellResult || sellResult === "0x") {
-        return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, protocol: "Uniswap V3" };
-      }
-
-      const ethBack = BigInt("0x" + sellResult.slice(2, 66));
-      if (ethBack === BigInt(0)) {
-        return { isHoneypot: true, buyTax: 0, sellTax: 100, simulationSuccess: true, feeTier: fee, protocol: "Uniswap V3" };
-      }
-
-      const ethIn = Number(SIM_AMOUNT) / 1e18;
-      const ethOut = Number(ethBack) / 1e18;
-      const roundTripLoss = ((ethIn - ethOut) / ethIn) * 100;
-      const expectedPoolFees = poolFeePercent * 2;
-      const netTax = Math.max(0, roundTripLoss - expectedPoolFees);
-      const buyTax = parseFloat((netTax / 2).toFixed(2));
-      const sellTax = parseFloat((netTax / 2).toFixed(2));
-
-      console.log(`[sim] fee=${fee}: roundTrip=${roundTripLoss.toFixed(2)}%, netTax=${netTax.toFixed(2)}%`);
-
-      return { isHoneypot: false, buyTax, sellTax, simulationSuccess: true, feeTier: fee, protocol: "Uniswap V3" };
-    } catch (e: any) {
-      console.log(`[sim] fee=${fee}: ${e?.message?.slice(0, 80) || "failed"}`);
-      continue;
-    }
+async function getHolderCount(addr: string): Promise<number> {
+  try {
+    const data = await fetch(`https://base.blockscout.com/api/v2/tokens/${addr}/counters`, { signal: AbortSignal.timeout(6000) })
+      .then((r) => (r.ok ? (r.json() as any) : null));
+    return parseInt(data?.token_holders_count || "0", 10);
+  } catch {
+    return 0;
   }
-
-  return { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, protocol: "None" };
 }
 
-function feeLabel(fee: number): string {
-  if (fee === 100) return "0.01%";
-  if (fee === 500) return "0.05%";
-  if (fee === 3000) return "0.3%";
-  if (fee === 10000) return "1%";
-  return `${fee / 10000}%`;
+async function getTopHolders(addr: string): Promise<{ address: string; percent: number }[]> {
+  try {
+    const data = await fetch(`https://base.blockscout.com/api/v2/tokens/${addr}/holders?limit=10`, { signal: AbortSignal.timeout(6000) })
+      .then((r) => (r.ok ? (r.json() as any) : null));
+    if (!data?.items) return [];
+    return data.items.map((h: any) => ({
+      address: (h.address?.hash || "").toLowerCase(),
+      percent: parseFloat(h.percentage || "0"),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function getEthUsdPrice(): Promise<number> {
+  try {
+    const data = await fetch("https://api.dexscreener.com/latest/dex/tokens/0x4200000000000000000000000000000000000006", { signal: AbortSignal.timeout(5000) })
+      .then((r) => (r.ok ? (r.json() as any) : null));
+    const pair = data?.pairs?.[0];
+    return parseFloat(pair?.priceUsd || "0") || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function detectPlatform(addr: string, deployer: string | null, holders: { address: string }[]): string | null {
+  const a = addr.toLowerCase();
+  if (PLATFORM_MAP[a]) return PLATFORM_MAP[a];
+  if (deployer && PLATFORM_MAP[deployer]) return PLATFORM_MAP[deployer];
+  for (const h of holders) {
+    if (PLATFORM_MAP[h.address]) return PLATFORM_MAP[h.address];
+  }
+  return null;
+}
+
+function detectLpStatus(holders: { address: string; percent: number }[], platform: string | null): string {
+  for (const h of holders) {
+    if (BURN_ADDRS.has(h.address)) return `🔥 BURNED (${h.percent.toFixed(1)}%)`;
+    if (LOCKER_MAP[h.address]) return `🔒 LOCKED (${LOCKER_MAP[h.address]})`;
+  }
+  if (platform) return `🔒 ${platform} Managed ✅`;
+  return "⚠️ OPEN";
+}
+
+function formatPrice(usdPrice: number): string {
+  if (usdPrice === 0) return "$0";
+  if (usdPrice >= 1) return `$${usdPrice.toFixed(2)}`;
+  if (usdPrice >= 0.01) return `$${usdPrice.toFixed(4)}`;
+  const str = usdPrice.toFixed(20);
+  const trimmed = str.replace(/0+$/, "");
+  return `$${trimmed}`;
+}
+
+function formatMcap(mcap: number): string {
+  if (mcap >= 1e9) return `$${(mcap / 1e9).toFixed(2)}B`;
+  if (mcap >= 1e6) return `$${(mcap / 1e6).toFixed(2)}M`;
+  if (mcap >= 1e3) return `$${(mcap / 1e3).toFixed(1)}K`;
+  return `$${mcap.toFixed(0)}`;
 }
 
 export function createBot(): Telegraf | null {
@@ -165,65 +290,101 @@ export function createBot(): Telegraf | null {
     }
 
     const t0 = Date.now();
-    const loadingMsg = await ctx.reply("⏳ Simulating buy/sell on Alchemy...");
+    const loadingMsg = await ctx.reply("⏳ Running APOL forensic simulation...");
 
     try {
-      const [sim, tokenInfo, deployer] = await Promise.all([
-        botAlchemySimulate(input),
-        getTokenInfo(input),
-        getDeployer(input),
-      ]);
+      const results = await withTimeout(
+        Promise.allSettled([
+          botAlchemySimulate(input),
+          getTokenInfo(input),
+          getDeployer(input),
+          getHolderCount(input),
+          getTopHolders(input),
+          getEthUsdPrice(),
+        ]),
+        HARD_TIMEOUT,
+        "forensic-scan",
+      );
+
+      const sim: SimResult = results[0].status === "fulfilled" ? results[0].value : { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0) };
+      const tokenInfo = results[1].status === "fulfilled" ? results[1].value : { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18, rawSupply: BigInt(0) };
+      const deployer: string | null = results[2].status === "fulfilled" ? results[2].value : null;
+      const holderCount: number = results[3].status === "fulfilled" ? results[3].value : 0;
+      const topHolders = results[4].status === "fulfilled" ? results[4].value : [];
+      const ethUsd: number = results[5].status === "fulfilled" ? results[5].value : 0;
+
+      const scanCount = await storage.incrementLookup(input, tokenInfo.name, tokenInfo.symbol);
+
+      const platform = detectPlatform(input, deployer, topHolders);
+      const lpStatus = detectLpStatus(topHolders, platform);
+
+      const isVirtuals = platform === "Virtuals";
+      const buyTax = isVirtuals ? 0 : sim.buyTax;
+      const sellTax = isVirtuals ? 0 : sim.sellTax;
+      const isHoneypot = isVirtuals ? false : sim.isHoneypot;
+
+      const ethSpent = 0.1;
+      const tokensWholeUnits = Number(sim.tokensReceived) / (10 ** tokenInfo.decimals);
+      const tokenPriceEth = tokensWholeUnits > 0 ? ethSpent / tokensWholeUnits : 0;
+      const tokenPriceUsd = tokenPriceEth * ethUsd;
+      const mcap = Number(tokenInfo.totalSupply) * tokenPriceUsd;
+
+      const riskBadge = isHoneypot || buyTax > 10 || sellTax > 10
+        ? "🔴 HIGH RISK" : "🟢 LOW RISK";
+
+      const protocolLabel = platform
+        ? `${platform} Managed ✅`
+        : sim.simulationSuccess
+          ? `Uniswap V3 (${sim.feeTier ? (sim.feeTier / 10000).toFixed(2) + "%" : "?"})`
+          : "No pool detected";
 
       const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-      const isVirtuals = detectVirtuals(input, deployer);
-      const protocol = isVirtuals ? "Virtuals Protocol 🤖" : sim.simulationSuccess ? `Uniswap V3 (${feeLabel(sim.feeTier!)})` : "No pool found";
-
-      if (isVirtuals && sim.simulationSuccess) {
-        sim.buyTax = 0;
-        sim.sellTax = 0;
-        sim.isHoneypot = false;
-      }
-
       const shortAddr = input.slice(0, 6) + "..." + input.slice(-4);
-      const header = `🔍 *APOL SIMULATION REPORT*\n${"─".repeat(28)}`;
-      const nameBlock = `🏷 *${tokenInfo.name}* ($${tokenInfo.symbol})\n📍 \`${shortAddr}\` · Base`;
 
-      let body: string;
-      if (!sim.simulationSuccess) {
-        body = [
-          `💰 *Tax:* N/A — no liquidity pool detected`,
-          `🍯 *Honeypot:* ⚠️ UNABLE TO TEST`,
-          `🔗 *Protocol:* ${protocol}`,
-        ].join("\n");
-      } else if (sim.isHoneypot) {
-        body = [
-          `💰 *Tax:* Buy ${sim.buyTax}% / Sell ${sim.sellTax}%`,
-          `🍯 *Honeypot:* 🚨 *YES — SELL BLOCKED*`,
-          `🔗 *Protocol:* ${protocol}`,
-        ].join("\n");
+      let honeypotLine: string;
+      if (!sim.simulationSuccess && !isVirtuals) {
+        honeypotLine = "⚠️ UNABLE TO TEST";
+      } else if (isHoneypot) {
+        honeypotLine = "🚨 YES — SELL BLOCKED";
       } else {
-        const taxStr = sim.buyTax === 0 && sim.sellTax === 0
-          ? "0% / 0% ✅"
-          : `${sim.buyTax}% / ${sim.sellTax}% ⚠️`;
-        body = [
-          `💰 *Tax:* Buy ${taxStr}`,
-          `🍯 *Honeypot:* NO ✅`,
-          `🔗 *Protocol:* ${protocol}`,
-        ].join("\n");
+        honeypotLine = "NO ✅";
       }
 
-      const footer = `⚡ ${elapsed}s · Alchemy Simulation Engine`;
-      const text = [header, "", nameBlock, "", body, "", footer].join("\n");
+      const taxLine = (!sim.simulationSuccess && !isVirtuals)
+        ? "N/A"
+        : (buyTax === 0 && sellTax === 0)
+          ? "0% / 0% ✅"
+          : `${buyTax}% / ${sellTax}% ⚠️`;
 
-      await ctx.telegram.editMessageText(
-        ctx.chat.id, loadingMsg.message_id, undefined, text,
-        { parse_mode: "Markdown" }
-      );
-    } catch (e: any) {
+      const lines = [
+        `🛡️ *APOL FORENSIC REPORT*`,
+        `${"─".repeat(28)}`,
+        ``,
+        `🏷 *${tokenInfo.name}* ($${tokenInfo.symbol}) 👁️ ${scanCount}`,
+        `📍 \`${shortAddr}\` · Base`,
+        ``,
+        `🔗 *Protocol:* ${protocolLabel}`,
+        `🍯 *Honeypot:* ${honeypotLine}`,
+        `💰 *Tax:* Buy ${taxLine}`,
+        `💧 *Liquidity:* ${lpStatus}`,
+        `👥 *Holders:* ${holderCount > 0 ? holderCount.toLocaleString() : "Scanning..."}`,
+        `💵 *Price:* ${formatPrice(tokenPriceUsd)}`,
+        `📊 *MCap:* ${mcap > 0 ? formatMcap(mcap) : "N/A"}`,
+        ``,
+        `${riskBadge}`,
+        `⚡ ${elapsed}s · Alchemy Simulation Engine`,
+      ];
+
       await ctx.telegram.editMessageText(
         ctx.chat.id, loadingMsg.message_id, undefined,
-        `❌ Simulation failed: ${e?.message?.slice(0, 100) || "Unknown error"}`
+        lines.join("\n"),
+        { parse_mode: "Markdown" },
       );
+    } catch (e: any) {
+      const msg = e?.message?.includes("Timeout")
+        ? "⏱ Timeout Error — scan took too long. Try again."
+        : `❌ Scan failed: ${e?.message?.slice(0, 100) || "Unknown error"}`;
+      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, msg);
     }
   });
 
