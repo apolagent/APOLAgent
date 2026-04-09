@@ -150,6 +150,7 @@ const V4_HOOK_ADDRESSES = [
 ];
 
 const ERC8183_VAULT = "0xdad686299fb562f89e55da05f1d96fabeb2a2e32";
+const VIRTUAL_TOKEN = "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b";
 
 async function rpcCheckUniV3Pool(tokenAddress: string): Promise<boolean> {
   if (!BASE_RPC_URL) return false;
@@ -193,17 +194,35 @@ async function rpcCheckUniV4Pool(tokenAddress: string): Promise<boolean> {
   return logs0.length > 0 || logs1.length > 0;
 }
 
-type DexResult = { version: "v3" | "v4" | null; isInDex: boolean };
+type DexResult = { version: "v3" | "v4" | null; isInDex: boolean; isVirtualsPair?: boolean };
+
+async function rpcCheckVirtualsPairing(tokenAddress: string): Promise<boolean> {
+  try {
+    const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`,
+      { signal: AbortSignal.timeout(5_000) });
+    if (!res.ok) return false;
+    const data = await res.json() as any;
+    const pairs: any[] = data?.pairs ?? [];
+    return pairs.some((p: any) =>
+      p.chainId === "base" && (
+        (p.quoteToken?.address || "").toLowerCase() === VIRTUAL_TOKEN ||
+        (p.baseToken?.address || "").toLowerCase() === VIRTUAL_TOKEN
+      )
+    );
+  } catch { return false; }
+}
 
 async function rpcCheckDualDex(tokenAddress: string): Promise<DexResult> {
   if (!BASE_RPC_URL) return { version: null, isInDex: false };
-  const [hasV3, hasV4] = await Promise.all([
+  const [hasV3, hasV4, hasVirtualsPool] = await Promise.all([
     rpcCheckUniV3Pool(tokenAddress),
     rpcCheckUniV4Pool(tokenAddress),
+    rpcCheckVirtualsPairing(tokenAddress),
   ]);
-  if (hasV4) return { version: "v4", isInDex: true };
-  if (hasV3) return { version: "v3", isInDex: true };
-  return { version: null, isInDex: false };
+  if (hasV4) return { version: "v4", isInDex: true, isVirtualsPair: hasVirtualsPool };
+  if (hasV3) return { version: "v3", isInDex: true, isVirtualsPair: hasVirtualsPool };
+  if (hasVirtualsPool) return { version: "v3", isInDex: true, isVirtualsPair: true };
+  return { version: null, isInDex: false, isVirtualsPair: false };
 }
 
 function dexLiveStatus(version: "v3" | "v4" | null): string | null {
@@ -707,6 +726,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch { /* non-fatal */ }
 
       let earlyDexVersion: "v3" | "v4" | null = null;
+      let earlyVirtualsPair = false;
 
       // 2. ALCHEMY-FIRST: Alchemy RPC is the FIRST call for EVERY scan on Base (Dual-DEX: V3 + V4)
       if (chain === "base") {
@@ -716,10 +736,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           rpcGetDeployer(address as string),
           rpcCheckDualDex(address as string),
         ]);
-        const { version: dexVersion, isInDex: hasPool } = dexResult;
+        const { version: dexVersion, isInDex: hasPool, isVirtualsPair } = dexResult;
+        earlyVirtualsPair = !!isVirtualsPair;
         earlyDexVersion = dexVersion;
         const liveStatus = dexLiveStatus(dexVersion);
-        console.log(`[alchemy-first] DEX check: ${dexVersion ? dexVersion.toUpperCase() + " FOUND" : "NONE"} for ${(address as string).slice(0,10)} in ${Date.now() - alchemyT0}ms`);
+        console.log(`[alchemy-first] DEX check: ${dexVersion ? dexVersion.toUpperCase() + " FOUND" : "NONE"} for ${(address as string).slice(0,10)} in ${Date.now() - alchemyT0}ms${earlyVirtualsPair ? " (VIRTUAL pair detected)" : ""}`);
 
         if (earlyRpcIsCtx) {
           const addrLower = (address as string).toLowerCase();
@@ -758,6 +779,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 }
               }
             } catch { /* non-fatal, fall through to GoPlus */ }
+          }
+
+          if (!fastPlatform && earlyVirtualsPair) {
+            fastPlatform = "Virtuals";
+            console.log(`[alchemy-first] Virtuals PAIR DETECTION: ${addrLower.slice(0,10)} paired with VIRTUAL token — marking as Virtuals Protocol`);
           }
 
           if (fastPlatform) {
@@ -982,7 +1008,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isContract) {
         const creatorAddress = tokenData.creator_address || null;
         const lpHoldersRaw: any[] = tokenData.lp_holders ?? [];
-        const earlyPlatform = getPlatformName(creatorAddress || "", lpHoldersRaw);
+        let earlyPlatform = getPlatformName(creatorAddress || "", lpHoldersRaw);
+        if (!earlyPlatform && earlyVirtualsPair) {
+          earlyPlatform = "Virtuals";
+          console.log(`[forensics] Virtuals PAIR DETECTION (GoPlus path): ${(address as string).slice(0,10)} paired with VIRTUAL token`);
+        }
         const isWhitelistedFactory = !!earlyPlatform || isKnownFactoryOrigin(creatorAddress || "", lpHoldersRaw);
         const isVirtualsFactory = earlyPlatform === "Virtuals";
         const isApeStoreOrFlaunch = earlyPlatform === "ApeStore" || earlyPlatform === "Flaunch";

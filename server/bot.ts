@@ -12,6 +12,7 @@ const WETH_BASE = "0x4200000000000000000000000000000000000006";
 const FEE_TIERS = [500, 3000, 10000, 100];
 
 const BOT_ERC8183_VAULT = "0xdad686299fb562f89e55da05f1d96fabeb2a2e32";
+const VIRTUAL_TOKEN = "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b";
 const BOT_OFFICIAL_APOL_CA = "";
 const BOT_OFFICIAL_APOL_TWITTER = "@ApolAgent_";
 
@@ -162,17 +163,35 @@ async function botCheckUniV4Pool(tokenAddress: string): Promise<boolean> {
   return logs0.length > 0 || logs1.length > 0;
 }
 
-type BotDexResult = { version: "v3" | "v4" | null; isInDex: boolean };
+type BotDexResult = { version: "v3" | "v4" | null; isInDex: boolean; isVirtualsPair?: boolean };
+
+async function botCheckVirtualsPairing(tokenAddress: string): Promise<boolean> {
+  try {
+    const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`,
+      { signal: AbortSignal.timeout(5_000) });
+    if (!res.ok) return false;
+    const data = await res.json() as any;
+    const pairs: any[] = data?.pairs ?? [];
+    return pairs.some((p: any) =>
+      p.chainId === "base" && (
+        (p.quoteToken?.address || "").toLowerCase() === VIRTUAL_TOKEN ||
+        (p.baseToken?.address || "").toLowerCase() === VIRTUAL_TOKEN
+      )
+    );
+  } catch { return false; }
+}
 
 async function botCheckDualDex(tokenAddress: string): Promise<BotDexResult> {
   if (!BOT_RPC_URL) return { version: null, isInDex: false };
-  const [hasV3, hasV4] = await Promise.all([
+  const [hasV3, hasV4, hasVirtualsPool] = await Promise.all([
     botCheckUniV3Pool(tokenAddress),
     botCheckUniV4Pool(tokenAddress),
+    botCheckVirtualsPairing(tokenAddress),
   ]);
-  if (hasV4) return { version: "v4", isInDex: true };
-  if (hasV3) return { version: "v3", isInDex: true };
-  return { version: null, isInDex: false };
+  if (hasV4) return { version: "v4", isInDex: true, isVirtualsPair: hasVirtualsPool };
+  if (hasV3) return { version: "v3", isInDex: true, isVirtualsPair: hasVirtualsPool };
+  if (hasVirtualsPool) return { version: "v3", isInDex: true, isVirtualsPair: true };
+  return { version: null, isInDex: false, isVirtualsPair: false };
 }
 
 function botDexLiveStatus(version: "v3" | "v4" | null): string | null {
@@ -435,8 +454,15 @@ async function directGoPlus(address: string): Promise<any> {
     const flagFn = (v: any) => v === "1" || v === 1 || v === true;
     const creatorLower = (token.creator_address || "").toLowerCase();
     const lpHolders: any[] = token.lp_holders ?? [];
-    const platformName = botGetPlatformName(creatorLower, lpHolders);
-    const isFactoryOrigin = !!platformName || ALL_BOT_FACTORY_ADDRESSES.has(creatorLower) || lpHolders.some((lp: any) => ALL_BOT_FACTORY_ADDRESSES.has((lp.address ?? "").toLowerCase()));
+    let platformName = botGetPlatformName(creatorLower, lpHolders);
+    let isFactoryOrigin = !!platformName || ALL_BOT_FACTORY_ADDRESSES.has(creatorLower) || lpHolders.some((lp: any) => ALL_BOT_FACTORY_ADDRESSES.has((lp.address ?? "").toLowerCase()));
+
+    const virtualsPairingCheck = await botCheckVirtualsPairing(address);
+    if (!platformName && virtualsPairingCheck) {
+      platformName = "Virtuals";
+      isFactoryOrigin = true;
+      console.log(`[bot] Virtuals PAIR DETECTION: ${address.slice(0,10)} paired with VIRTUAL token — marking as Virtuals Protocol`);
+    }
 
     let lpEscrowName: string | null = platformName;
     if (!lpEscrowName && isFactoryOrigin) lpEscrowName = "Protocol";
@@ -456,6 +482,7 @@ async function directGoPlus(address: string): Promise<any> {
       buyTax = 0;
       sellTax = 0;
       taxOverride = lpEscrowName;
+      console.log(`[bot] Tax override: ${address.slice(0,10)} — ${lpEscrowName} managed, taxes zeroed`);
     }
 
     let isInDex = flagFn(token.is_in_dex);
@@ -468,6 +495,7 @@ async function directGoPlus(address: string): Promise<any> {
         console.log(`[bot] Alchemy override: Uniswap ${dexFb.version?.toUpperCase()} pool confirmed for ${address.slice(0,10)}`);
       }
     }
+    if (isInDex && !gpDexVersion && virtualsPairingCheck) gpDexVersion = "v3";
 
     const redFlags: string[] = [];
     if (isHoneypot && !isKnownFactory) redFlags.push("Honeypot, cannot sell");
