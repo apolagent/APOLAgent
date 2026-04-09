@@ -816,8 +816,8 @@ function esc(s: string): string {
 }
 
 async function handleScan(ctx: any, address: string): Promise<void> {
-  const shortAddr = `${address.slice(0, 8)}...${address.slice(-6)}`;
-  const loadingMsg = await ctx.reply(`🔍 Analyzing Forensic Data...\n\n🔴 ${shortAddr}\nConsulting APOL intelligence database. This may take a moment.`);
+  const shortAddr = `${address.slice(0, 8)}. . .${address.slice(-6)}`;
+  const loadingMsg = await ctx.reply(`🔍 Analyzing Forensic Data...\n\n📍 ${shortAddr}\nConsulting APOL intelligence database. This may take a moment.`);
   try {
     const report = await softTimeout(runScan(address), 25000, null);
     if (report) {
@@ -867,7 +867,7 @@ async function fetchXProfile(handle: string): Promise<{
 
 async function handleScanX(ctx: any, input: string): Promise<void> {
   const displayHandle = input.replace(/https?:\/\/(x\.com|twitter\.com)\//i, "").replace(/^@/, "").split("/")[0];
-  const loadingMsg = await ctx.reply(`🔍 Analyzing Forensic Data...\n\n🔴 @${displayHandle}\nChecking APOL intelligence records...`);
+  const loadingMsg = await ctx.reply(`🔍 Analyzing Forensic Data...\n\n📍 @${displayHandle}\nChecking APOL intelligence records...`);
   try {
     let handle = input.replace(/https?:\/\/(x\.com|twitter\.com)\//i, "").replace(/^@/, "").trim();
     if (!handle) {
@@ -979,8 +979,8 @@ async function handleScanX(ctx: any, input: string): Promise<void> {
 }
 
 async function handleCheckWallet(ctx: any, address: string): Promise<void> {
-  const shortAddr = `${address.slice(0, 8)}...${address.slice(-6)}`;
-  const loadingMsg = await ctx.reply(`🔍 Analyzing Forensic Data...\n\n🔴 ${shortAddr}\nChecking APOL intelligence records...`);
+  const shortAddr = `${address.slice(0, 8)}. . .${address.slice(-6)}`;
+  const loadingMsg = await ctx.reply(`🔍 Analyzing Forensic Data...\n\n📍 ${shortAddr}\nChecking APOL intelligence records...`);
   try {
     const walletInfo = await softTimeout(getWalletInfo(address), 15000, { balance: "0", txCount: 0, isContract: false, firstTx: null, firstTxHash: null, firstTxFrom: null, firstTxFromName: null, inflow: 0, outflow: 0 } as WalletInfo);
     const ethUsd = await softTimeout(getEthUsdPrice(), 3000, 0);
@@ -1139,8 +1139,8 @@ export function createBot(): Telegraf | null {
       return;
     }
 
-    const displayId = isContractAddress(input) ? `${input.slice(0, 8)}...${input.slice(-6)}` : input;
-    const loadingMsg = await ctx.reply(`🔍 Analyzing Forensic Data...\n\n🔴 ${displayId}\nConsulting APOL intelligence database. This may take a moment.`);
+    const displayId = isContractAddress(input) ? `${input.slice(0, 8)}. . .${input.slice(-6)}` : input;
+    const loadingMsg = await ctx.reply(`🔍 Analyzing Forensic Data...\n\n📍 ${displayId}\nConsulting APOL intelligence database. This may take a moment.`);
     try {
       let address = input;
       let searchedName: string | null = null;
