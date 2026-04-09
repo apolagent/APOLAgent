@@ -77,17 +77,18 @@ shared/
   - `0x97cf...0a3` → "Virtuals" (deploys Virtuals Protocol)
   - `0xdad6...2e32` → "Virtuals" (Virtuals Vault — Live on Uniswap V3)
 - **Why deployer tracing**: GoPlus never exposes factory addresses directly for V3/V4 tokens. LP holders are per-token locker contracts (e.g., SingletonLpLocker) created by platform deployer EOAs.
-- **Virtuals early override** (`isVirtualsOrigin` + `isVirtualsContract`):
-  - Matches tokens created by Virtuals factory `0x0b3e...7e1b` or deployer `0x97cf...0a3`
-  - Runs BEFORE `resolveProtocolLocker` and GoPlus risk assessment
-  - For Virtuals-origin tokens: clears LP/holder/hidden-owner flags, forces risk to Clean (or Caution if other real flags remain)
+- **Virtuals PRE-GoPlus bypass** (fixes false 99% tax/honeypot):
+  - In `directGoPlus` (bot.ts) and `/api/detective/analyze` (routes.ts), Virtuals pairing check runs BEFORE GoPlus API call
+  - If `isVirtualsPair` or address matches ERC-8183 vault `0xdad6...2e32`, returns immediately: `isHoneypot: false`, `buyTax: 0`, `sellTax: 0`, `riskLevel: "Clean"`
+  - GoPlus is NEVER called for Virtuals tokens — eliminates false 99% tax and honeypot flags entirely
+  - Also matches tokens created by Virtuals factory `0x0b3e...7e1b` or deployer `0x97cf...0a3`
+  - For Virtuals-origin tokens: clears LP/holder/hidden-owner flags, forces risk to Clean
   - For Virtuals contract addresses themselves: also clears GoPlus false-positive honeypot/mint flags
-  - Safety gate: honeypot/killer-tax flags still force High Risk for non-Virtuals-contract tokens even if Virtuals-origin
 - **Override behavior**: When protocol match found:
   - `isSecure = true`, LP shown as "Protocol Managed"
   - Risk level forced to Clean (unless honeypot or killer tax for non-factory contracts)
 - **Tax override**: If a factory-origin token has simulated buy/sell tax > 50% (Direct-to-V3 simulation failure), tax is forced to 0 and `taxOverride` field is set to the platform name. UI/bot shows "Tax: Protocol Managed (Virtuals)" instead of the false 99%.
-- **Holder count fallback**: If GoPlus returns 0 holders, falls back to Blockscout token counters API. Shows "Calculating..." instead of 0 on failure.
+- **Holder count (Blockscout forced)**: `botFetchHolderCount` and `fetchHolderCountFallback` always return a number (0 on failure), never null. Primary source is Blockscout `/api/v2/tokens/{addr}/counters`.
 - **Response fields**: `protocolSecured: true`, `isKnownFactory: true`, `holderCount`, `lpEscrow: { name, address, percent }`, `contractScan.protocolLocker`
 - **Risk hierarchy**: Honeypot or sell_tax > 20% → forced High Risk even if protocol-secured (except for Virtuals contract addresses)
 - **Bot async scanning**: All scan commands (`/scan`, `/checkwallet`, `/scanagent`, `/scanx`) use edit-message pattern — send "Analyzing..." immediately, then edit with results. 60s timeout. On edit failure, deletes loading message and sends reply.

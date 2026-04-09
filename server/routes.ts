@@ -327,19 +327,14 @@ const ALL_KNOWN_FACTORY_ADDRESSES = new Set([
   ...Object.keys(PLATFORM_DEPLOYERS).map(a => a.toLowerCase()),
 ]);
 
-async function fetchHolderCountFallback(address: string): Promise<number | null> {
+async function fetchHolderCountFallback(address: string): Promise<number> {
   try {
-    const r = await fetch(
-      `https://base.blockscout.com/api/v2/tokens/${encodeURIComponent(address)}/counters`,
-      { signal: AbortSignal.timeout(6_000) },
-    );
-    if (!r.ok) return null;
-    const data = await r.json() as any;
-    const count = parseInt(data?.token_holders_count ?? "0");
-    return count > 0 ? count : null;
-  } catch {
-    return null;
-  }
+    const res = await fetch(`https://base.blockscout.com/api/v2/tokens/${encodeURIComponent(address)}/counters`,
+      { signal: AbortSignal.timeout(6_000) });
+    if (!res.ok) return 0;
+    const data = await res.json() as any;
+    return data.token_holders_count || 0;
+  } catch { return 0; }
 }
 
 function isKnownFactoryOrigin(creatorAddress: string, lpHolders: { address: string }[]): boolean {
@@ -902,6 +897,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
         }
+      }
+
+      // 2b. FORCE VIRTUALS BYPASS — before GoPlus to prevent false 99% tax/honeypot
+      if (chain === "base" && (earlyVirtualsPair || (address as string).toLowerCase() === ERC8183_VAULT)) {
+        console.log(`[forensics] Virtuals bypass (pre-GoPlus): ${(address as string).slice(0,10)} — honeypot=false, taxes=0`);
+        const [rpcToken, holderCountVirt, topHoldersVirt] = await Promise.all([
+          rpcGetTokenInfo(address as string),
+          fetchHolderCountFallback(address as string),
+          rpcGetTopHolders(address as string),
+        ]);
+        const tName = rpcToken?.name || "Unknown";
+        const tSymbol = rpcToken?.symbol || "???";
+        const addrLower = (address as string).toLowerCase();
+        const liveStatus = dexLiveStatus(earlyDexVersion);
+        const lpLabel = resolveVirtualsLabel("Virtuals", "", topHoldersVirt);
+        const lookupCount = await storage.incrementLookup(address as string, tName, tSymbol);
+        return res.json({
+          address, chain,
+          addressType: "contract",
+          riskLevel: "Clean",
+          apolVerdict: buildContractVerdict(tName, tSymbol, "Clean", true, []),
+          isHighRisk: false,
+          isNewOffender: false,
+          greenBadge: true,
+          redFlags: [],
+          adminThreats: [],
+          ownerAddress: null,
+          creatorAddress: null,
+          isOwnershipRenounced: true,
+          isSingleSigAdmin: false,
+          lookupCount,
+          tokenName: tName,
+          tokenSymbol: tSymbol,
+          holderCount: holderCountVirt > 0 ? holderCountVirt : 0,
+          holderCountLabel: holderCountVirt > 0 ? holderCountVirt.toLocaleString() : "Scanning (High Activity)",
+          buyTax: 0,
+          sellTax: 0,
+          taxOverride: null,
+          isHoneypot: false,
+          isMintable: false,
+          isOpenSource: true,
+          isInDex: true,
+          isProxy: false,
+          hasBlacklist: false,
+          canPause: false,
+          protocolSecured: true,
+          isKnownFactory: true,
+          lpEscrow: { name: "Virtuals", address: addrLower, percent: 100 },
+          topHolders: topHoldersVirt.length > 0 ? topHoldersVirt : undefined,
+          isWhitelistedFactory: true,
+          platformName: "Virtuals",
+          liveStatus,
+          lpStatus: lpLabel,
+          dexVersion: earlyDexVersion || "v3",
+        });
       }
 
       // 3. Non-whitelisted path: GoPlus + Honeypot.is

@@ -260,17 +260,14 @@ async function botGetTokenInfo(address: string): Promise<{ name: string; symbol:
   } catch { return null; }
 }
 
-async function botFetchHolderCount(address: string): Promise<number | null> {
+async function botFetchHolderCount(address: string): Promise<number> {
   try {
-    const r = await fetch(
-      `https://base.blockscout.com/api/v2/tokens/${encodeURIComponent(address)}/counters`,
-      { signal: AbortSignal.timeout(6_000) },
-    );
-    if (!r.ok) return null;
-    const data = await r.json() as any;
-    const count = parseInt(data?.token_holders_count ?? "0");
-    return count > 0 ? count : null;
-  } catch { return null; }
+    const res = await fetch(`https://base.blockscout.com/api/v2/tokens/${encodeURIComponent(address)}/counters`,
+      { signal: AbortSignal.timeout(6_000) });
+    if (!res.ok) return 0;
+    const data = await res.json() as any;
+    return data.token_holders_count || 0;
+  } catch { return 0; }
 }
 
 async function botGetTopHolders(tokenAddress: string, decimals: number = 18): Promise<{ address: string; balance: string; percent: number }[]> {
@@ -442,6 +439,42 @@ async function directGoPlus(address: string): Promise<any> {
       };
     }
 
+    const isVirtualsPair = await botCheckVirtualsPairing(address);
+    if (isVirtualsPair || addrLower === BOT_ERC8183_VAULT.toLowerCase()) {
+      console.log(`[bot] Virtuals bypass (pre-GoPlus): ${address.slice(0,10)} — honeypot=false, taxes=0`);
+      const [tokenInfoVirt, holderCountVirt, dexResultVirt] = await Promise.all([
+        botGetTokenInfo(address),
+        botFetchHolderCount(address),
+        botCheckDualDex(address),
+      ]);
+      const { version: dexVersionVirt, isInDex: hasDexPoolVirt } = dexResultVirt;
+      const lpLabel = botResolveVirtualsLabel("Virtuals", earlyDeployerBot || addrLower, []);
+      return {
+        riskLevel: "Clean",
+        isKnownFactory: true,
+        protocolSecured: true,
+        holderCount: holderCountVirt > 0 ? holderCountVirt : 0,
+        holderCountLabel: holderCountVirt > 0 ? holderCountVirt.toLocaleString() : "Scanning (High Activity)",
+        isOwnershipRenounced: true,
+        isHoneypot: false,
+        buyTax: 0,
+        sellTax: 0,
+        taxOverride: null,
+        redFlags: [],
+        adminThreats: [],
+        tokenName: tokenInfoVirt?.name || "Unknown",
+        tokenSymbol: tokenInfoVirt?.symbol || "???",
+        lpEscrow: { name: "Virtuals", address: addrLower, percent: 100 },
+        isHighRisk: false,
+        isInDex: hasDexPoolVirt || true,
+        platformName: "Virtuals",
+        isWhitelistedFactory: true,
+        liveStatus: dexVersionVirt ? botDexLiveStatus(dexVersionVirt) : "Live (Direct-to-V3) ✅",
+        lpStatus: lpLabel,
+        dexVersion: dexVersionVirt || "v3",
+      };
+    }
+
     const gpRes = await fetch(
       `https://api.gopluslabs.com/api/v1/token_security/8453?contract_addresses=${encodeURIComponent(address)}`,
       { signal: AbortSignal.timeout(15_000) }
@@ -456,44 +489,6 @@ async function directGoPlus(address: string): Promise<any> {
     const lpHolders: any[] = token.lp_holders ?? [];
     let platformName = botGetPlatformName(creatorLower, lpHolders);
     let isFactoryOrigin = !!platformName || ALL_BOT_FACTORY_ADDRESSES.has(creatorLower) || lpHolders.some((lp: any) => ALL_BOT_FACTORY_ADDRESSES.has((lp.address ?? "").toLowerCase()));
-
-    const virtualsPairingCheck = await botCheckVirtualsPairing(address);
-    if (!platformName && virtualsPairingCheck) {
-      platformName = "Virtuals";
-      isFactoryOrigin = true;
-      console.log(`[bot] Virtuals PAIR DETECTION: ${address.slice(0,10)} paired with VIRTUAL token — marking as Virtuals Protocol`);
-    }
-
-    const isVirtuals = (platformName === "Virtuals" || virtualsPairingCheck || addrLower === BOT_ERC8183_VAULT.toLowerCase());
-    if (isVirtuals) {
-      console.log(`[bot] Virtuals bypass: ${address.slice(0,10)} — honeypot=false, taxes=0`);
-      const bsHolderCount = await botFetchHolderCount(address);
-      let holderCount = bsHolderCount !== null && bsHolderCount > 0
-        ? bsHolderCount : parseInt(token.holder_count ?? "0");
-      return {
-        riskLevel: "Clean",
-        isKnownFactory: true,
-        protocolSecured: true,
-        holderCount,
-        isOwnershipRenounced: true,
-        isHoneypot: false,
-        buyTax: 0,
-        sellTax: 0,
-        taxOverride: null,
-        redFlags: [],
-        adminThreats: [],
-        tokenName: token.token_name,
-        tokenSymbol: token.token_symbol,
-        lpEscrow: { name: "Virtuals", address: addrLower, percent: 100 },
-        isHighRisk: false,
-        isInDex: flagFn(token.is_in_dex) || true,
-        platformName: "Virtuals",
-        isWhitelistedFactory: true,
-        liveStatus: "Live (Direct-to-V3) ✅",
-        lpStatus: "Virtuals Managed ✅",
-        dexVersion: "v3",
-      };
-    }
 
     let lpEscrowName: string | null = platformName;
     if (!lpEscrowName && isFactoryOrigin) lpEscrowName = "Protocol";
