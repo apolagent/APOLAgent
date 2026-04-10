@@ -1556,6 +1556,10 @@ export function createBot(): Telegraf | null {
 
   const bot = new Telegraf(token);
 
+  bot.catch((err: any, ctx: any) => {
+    log(`Bot error in chat ${ctx?.chat?.id ?? "?"}: ${err?.message || err}`, "bot");
+  });
+
   bot.command("start", (ctx) => {
     const lines = [
       `🚨 *APOL AGENT ONLINE*`,
