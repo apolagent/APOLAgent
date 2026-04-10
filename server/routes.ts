@@ -333,6 +333,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ status: "ok", engine: "APOL Forensic Engine", timestamp: Date.now() });
   });
 
+  app.get("/api/test-agent-logs/autonomous", (_req, res) => {
+    const now = Date.now();
+    const logs = [
+      { timestamp: new Date(now - 3600000 * 24).toISOString(), action: "market_scan", detail: "Analyzing ETH/USDC liquidity depth on Uniswap V3. Calculated optimal entry at $1,847.32 based on 4h VWAP crossover." },
+      { timestamp: new Date(now - 3600000 * 20).toISOString(), action: "risk_assessment", detail: "Decided against PEPE position — sell tax detected at 5.2% via simulation. Chose to skip and monitor." },
+      { timestamp: new Date(now - 3600000 * 16).toISOString(), action: "trade_execution", detail: "Executed swap: 0.5 ETH → 1,247,000 AERO via Aerodrome. Slippage 0.3%. Gas optimized to 0.0008 ETH." },
+      { timestamp: new Date(now - 3600000 * 12).toISOString(), action: "portfolio_rebalance", detail: "Analyzing portfolio weights. VIRTUAL allocation at 34% exceeds 25% target. Calculated rebalance: sold 15% VIRTUAL, bought GAME and LUNA." },
+      { timestamp: new Date(now - 3600000 * 8).toISOString(), action: "alpha_detection", detail: "Detected unusual volume spike on BRETT (+340% in 2h). Cross-referenced with deployer history — clean record, 12 prior tokens. Decided to take small position." },
+      { timestamp: new Date(now - 3600000 * 4).toISOString(), action: "social_intelligence", detail: "Parsed 847 tweets mentioning $DEGEN. Sentiment: 72% bullish. Whale wallet 0x3f7a... accumulated 2.1M tokens. Chose to monitor for 4h before action." },
+      { timestamp: new Date(now - 3600000 * 2).toISOString(), action: "risk_mitigation", detail: "Stop-loss triggered on AERO position at -8%. Swapped back to ETH. Net loss: 0.04 ETH. Updating risk parameters." },
+      { timestamp: new Date(now - 3600000).toISOString(), action: "strategy_update", detail: "Recalculated conviction scores. Top 3: VIRTUAL (87/100), GAME (73/100), LUNA (69/100). Adjusting position sizes based on Kelly criterion." },
+      { timestamp: new Date(now - 1800000).toISOString(), action: "on_chain_execution", detail: "Bought 50,000 GAME at $0.0082. Tx: 0xa4f2...c891. Gas: 0.0005 ETH. Reasoning: breakout above 20-day MA with increasing volume." },
+      { timestamp: new Date(now - 600000).toISOString(), action: "monitoring", detail: "Active positions: 3. Unrealized PnL: +0.12 ETH. Next rebalance scheduled in 6h. All stop-losses verified on-chain." },
+    ];
+    res.json({ agent: "APOL Test Agent (Autonomous)", version: "1.0", generatedAt: new Date().toISOString(), entries: logs });
+  });
+
+  app.get("/api/test-agent-logs/puppet", (_req, res) => {
+    res.json({
+      status: "active",
+      message: "Agent is running. Check back later for updates.",
+      lastUpdate: "recently",
+    });
+  });
+
   app.get("/api/detective/flagged", async (_req, res) => {
     try { res.json(await storage.getFlaggedWallets(20)); } catch { res.json([]); }
   });
