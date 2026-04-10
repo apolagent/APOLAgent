@@ -29,6 +29,7 @@ const PLATFORM_MAP: Record<string, string> = {
   "0xb1900f41d78d330a2a35c6771b3a6088a1b51309": "ApeStore",
   "0x39112541720078c70164ea4deb61f0a4811910f9": "Flaunch",
   "0xc785de52b739930ab0864b0ae7896ed6e327628a": "Flaunch",
+  "0x45edccb44da8aa1bf4b9e4f2baae61760d1c8fb9": "Flaunch",
 };
 
 const LOCKER_MAP: Record<string, string> = {
@@ -401,9 +402,31 @@ async function detectPlatformFromDeployerChain(deployer: string): Promise<string
     const resp = await fetch(`https://base.blockscout.com/api/v2/addresses/${deployer}`);
     if (!resp.ok) return null;
     const data = await resp.json() as any;
-    if (data.is_contract && data.creator_address_hash) {
-      const creator = data.creator_address_hash.toLowerCase();
-      if (PLATFORM_MAP[creator]) return PLATFORM_MAP[creator];
+    if (data.is_contract) {
+      if (data.creator_address_hash) {
+        const creator = data.creator_address_hash.toLowerCase();
+        if (PLATFORM_MAP[creator]) return PLATFORM_MAP[creator];
+      }
+      const name = (data.name || "").toLowerCase();
+      if (name.includes("flaunch") || name.includes("flayer")) return "Flaunch";
+      if (name.includes("clanker")) return "Clanker";
+      if (name.includes("apestore") || name.includes("ape.store")) return "ApeStore";
+      if (name.includes("virtuals")) return "Virtuals";
+
+      try {
+        const srcResp = await fetch(`https://base.blockscout.com/api/v2/smart-contracts/${deployer}`);
+        if (srcResp.ok) {
+          const srcData = await srcResp.json() as any;
+          const contractName = (srcData.name || "").toLowerCase();
+          if (contractName.includes("flaunch") || contractName.includes("flayer")) return "Flaunch";
+          if (contractName.includes("clanker")) return "Clanker";
+          if (contractName.includes("apestore") || contractName.includes("ape.store")) return "ApeStore";
+          if (contractName.includes("virtuals")) return "Virtuals";
+          const src = (srcData.source_code || "").slice(0, 5000).toLowerCase();
+          if (src.includes("@flaunch/") || src.includes("flaunchzap")) return "Flaunch";
+          if (src.includes("clanker")) return "Clanker";
+        }
+      } catch {}
     }
     return null;
   } catch { return null; }
@@ -501,9 +524,9 @@ async function runScan(address: string): Promise<string> {
   const isVirtuals = platform === "Virtuals";
   const isManaged = !!(platform && MANAGED_PROTOCOLS.has(platform));
 
-  const buyTax = isVirtuals ? 0 : sim.buyTax;
-  const sellTax = isVirtuals ? 0 : sim.sellTax;
-  const isHoneypot = isVirtuals ? false : sim.isHoneypot;
+  const buyTax = isManaged ? 0 : sim.buyTax;
+  const sellTax = isManaged ? 0 : sim.sellTax;
+  const isHoneypot = isManaged ? false : sim.isHoneypot;
 
   let tokenPriceUsd = dexData.priceUsd;
   if (tokenPriceUsd === 0 && sim.tokensReceived > BigInt(0) && ethUsd > 0) {
@@ -719,9 +742,10 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
 
   const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || creationPlatform || deployerChainPlatform;
   const isVirtuals = platform === "Virtuals";
-  const buyTax = isVirtuals ? 0 : sim.buyTax;
-  const sellTax = isVirtuals ? 0 : sim.sellTax;
-  const isHoneypot = isVirtuals ? false : sim.isHoneypot;
+  const isManaged = !!(platform && MANAGED_PROTOCOLS.has(platform));
+  const buyTax = isManaged ? 0 : sim.buyTax;
+  const sellTax = isManaged ? 0 : sim.sellTax;
+  const isHoneypot = isManaged ? false : sim.isHoneypot;
 
   const [treasuryBal, deployerContracts, xProfile] = await Promise.all([
     deployer ? softTimeout(getTreasuryBalance(deployer), 4000, { eth: 0, usd: 0 }) : Promise.resolve({ eth: 0, usd: 0 }),
