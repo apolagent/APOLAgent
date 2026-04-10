@@ -1170,6 +1170,15 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
   lines.push(`   💰 Tax: Buy ${buyTax.toFixed(1)}% / Sell ${sellTax.toFixed(1)}%`);
   if (isHoneypot) lines.push(`   🚨 HONEYPOT DETECTED`);
 
+  storage.logAgentActivity({
+    action: "agent_verification",
+    target: address,
+    detail: `Verified agent ${tokenInfo.name} ($${tokenInfo.symbol}) via Telegram. Verdict: ${verdict}. Flags: ${agentFlags.length}. Passes: ${agentPasses.length}. Tx count: ${contractActivity.txCount}. Code: ${contractActivity.hasContractCode ? `${(contractActivity.codeSize / 1024).toFixed(1)}KB` : "none"}.`.replace(/\s+/g, " ").trim(),
+    verdict,
+    source: "telegram",
+    metadata: { tokenSymbol: tokenInfo.symbol, tokenName: tokenInfo.name, flags: agentFlags.length, passes: agentPasses.length, txCount: contractActivity.txCount },
+  }).catch(() => {});
+
   lines.push(``);
   lines.push(`${verdictEmoji} *VERDICT: ${verdict}*`);
   lines.push(``);
@@ -1379,6 +1388,16 @@ async function handleScanX(ctx: any, input: string): Promise<void> {
     lines.push(`🚨 *Social Verdict:* ${socialVerdict}`);
     lines.push(``);
     lines.push(`🔍 [Full Report](https://x.com/${encodeURIComponent(profile.screen_name)})`);
+
+    const verdictShort = flags.length >= 3 ? "High Risk" : flags.length >= 1 ? "Inconclusive" : "Clean";
+    storage.logAgentActivity({
+      action: "x_agent_scan",
+      target: `@${profile.screen_name}`,
+      detail: `Scanned X profile @${profile.screen_name} via Telegram. ${flags.length} flags. Followers: ${profile.followers}. Age: ${joinedDays}d. Verdict: ${verdictShort}. ${tokenResult?.address ? `Linked token: ${tokenResult.name} (${tokenResult.address}).` : bioCA ? `Bio CA: ${bioCA}.` : "No linked token."}`.replace(/\s+/g, " ").trim(),
+      verdict: verdictShort,
+      source: "telegram",
+      metadata: { handle: profile.screen_name, flags: flags.length, followers: profile.followers, ageDays: joinedDays, linkedCA: tokenResult?.address || bioCA },
+    }).catch(() => {});
 
     await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, lines.join("\n"), { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
   } catch (e: any) {
