@@ -304,7 +304,7 @@ function detectPlatform(addr: string, deployer: string | null, holders: { addres
 const MANAGED_PROTOCOLS = new Set(["Virtuals", "Clanker", "Flaunch"]);
 
 function detectLpStatus(holders: { address: string; percent: number }[], platform: string | null): string {
-  if (platform && MANAGED_PROTOCOLS.has(platform)) return "Managed Protocol";
+  if (platform && MANAGED_PROTOCOLS.has(platform)) return `${platform} Managed`;
   for (const h of holders) {
     if (BURN_ADDRS.has(h.address)) return "BURNED";
     if (LOCKER_MAP[h.address]) return `LOCKED (${LOCKER_MAP[h.address]})`;

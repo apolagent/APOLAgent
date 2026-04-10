@@ -420,7 +420,7 @@ function detectPlatform(addr: string, deployer: string | null, holders: { addres
 const MANAGED_PROTOCOLS = new Set(["Virtuals", "Clanker", "Flaunch"]);
 
 function detectLpStatus(holders: { address: string; percent: number }[], platform: string | null, holdersComplete: boolean): string {
-  if (platform && MANAGED_PROTOCOLS.has(platform)) return "Managed Protocol ✅";
+  if (platform && MANAGED_PROTOCOLS.has(platform)) return `${platform} Managed ✅`;
   for (const h of holders) {
     if (BURN_ADDRS.has(h.address)) return `Burned 🔥`;
     if (LOCKER_MAP[h.address]) return `${LOCKER_MAP[h.address]} Locked 🔒`;
@@ -499,6 +499,7 @@ async function runScan(address: string): Promise<string> {
   const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || creationPlatform || deployerChainPlatform;
   const lpStatus = detectLpStatus(topHolders, platform, holdersComplete);
   const isVirtuals = platform === "Virtuals";
+  const isManaged = !!(platform && MANAGED_PROTOCOLS.has(platform));
 
   const buyTax = isVirtuals ? 0 : sim.buyTax;
   const sellTax = isVirtuals ? 0 : sim.sellTax;
@@ -513,7 +514,7 @@ async function runScan(address: string): Promise<string> {
   const mcap = Number(tokenInfo.totalSupply) * tokenPriceUsd;
   const liquidity = dexData.liquidity;
 
-  const hasPool = sim.simulationSuccess || isVirtuals;
+  const hasPool = sim.simulationSuccess || isManaged || !!platform;
   const dexStatus = hasPool ? "Live (Direct-to-V3) ✅" : "No Pool Found ⚠️";
 
   let contractOwner: string | null = null;
@@ -577,7 +578,11 @@ async function runScan(address: string): Promise<string> {
     ``,
   ];
 
-  if (ownerCheckDone) {
+  if (isManaged || platform) {
+    lines.push(`📋 *DEPLOYER*`);
+    if (deployer) lines.push(`• \`${deployer.slice(0, 10)}...\``);
+    lines.push(`• Deployed via ${platform}`);
+  } else if (ownerCheckDone) {
     if (isOwnerRenounced) {
       lines.push(`✅ *CONTRACT RENOUNCED*`);
       lines.push(`• Ownership burned. No admin keys.`);
