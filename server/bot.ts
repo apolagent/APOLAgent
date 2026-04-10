@@ -1203,7 +1203,7 @@ export function createBot(): Telegraf | null {
   bot.command("scan", async (ctx) => {
     const input = ctx.message.text.replace(/^\/scan(@\w+)?\s*/i, "").trim();
     if (!isContractAddress(input)) {
-      ctx.reply("🔍 Send a Base contract address after /scan\nExample: `/scan 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`", { parse_mode: "Markdown" });
+      ctx.reply("🔍 Paste a Base contract address below and I'll scan it instantly.\n\nOr type it inline: `/scan 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`", { parse_mode: "Markdown" });
       return;
     }
     await handleScan(ctx, input);
