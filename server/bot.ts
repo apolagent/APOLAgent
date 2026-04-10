@@ -17,6 +17,9 @@ const SCAN_CACHE = new Map<string, { result: string; timestamp: number }>();
 const SCAN_CACHE_TTL = 60000;
 const SCAN_IN_FLIGHT = new Map<string, Promise<string>>();
 
+const PENDING_COMMAND = new Map<number, { command: string; timestamp: number }>();
+const PENDING_TTL = 120000;
+
 const DEX_CACHE = new Map<string, { data: { priceUsd: number; liquidity: number; poolVersion: string | null }; timestamp: number }>();
 const DEX_CACHE_TTL = 60000;
 let ETH_PRICE_CACHE: { price: number; timestamp: number } | null = null;
@@ -1583,6 +1586,7 @@ export function createBot(): Telegraf | null {
   bot.command("scan", async (ctx) => {
     const input = ctx.message.text.replace(/^\/scan(@\w+)?\s*/i, "").trim();
     if (!isContractAddress(input)) {
+      PENDING_COMMAND.set(ctx.chat.id, { command: "scan", timestamp: Date.now() });
       ctx.reply("🔍 Paste a Base contract address below and I'll scan it instantly.\n\nOr type it inline: `/scan 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`", { parse_mode: "Markdown" });
       return;
     }
@@ -1592,6 +1596,7 @@ export function createBot(): Telegraf | null {
   bot.command("scanx", async (ctx) => {
     const input = ctx.message.text.replace(/^\/scanx(@\w+)?\s*/i, "").trim();
     if (!input) {
+      PENDING_COMMAND.set(ctx.chat.id, { command: "scanx", timestamp: Date.now() });
       ctx.reply("🔍 Send an X/Twitter handle or URL after /scanx\nExample: `/scanx @ShieldCoinBase`", { parse_mode: "Markdown" });
       return;
     }
@@ -1602,6 +1607,7 @@ export function createBot(): Telegraf | null {
     const input = ctx.message.text.replace(/^\/scanagent(@\w+)?\s*/i, "").trim();
     log(`/scanagent command: input="${input.slice(0, 30)}"`, "bot");
     if (!input) {
+      PENDING_COMMAND.set(ctx.chat.id, { command: "scanagent", timestamp: Date.now() });
       ctx.reply("🤖 Send an AI agent contract address or name after /scanagent\nExample: `/scanagent 0x...` or `/scanagent AgentName`", { parse_mode: "Markdown" });
       return;
     }
@@ -1650,6 +1656,7 @@ export function createBot(): Telegraf | null {
   bot.command("checkwallet", async (ctx) => {
     const input = ctx.message.text.replace(/^\/checkwallet(@\w+)?\s*/i, "").trim();
     if (!/^0x[a-fA-F0-9]{40}$/.test(input)) {
+      PENDING_COMMAND.set(ctx.chat.id, { command: "checkwallet", timestamp: Date.now() });
       ctx.reply("💼 Send a wallet address after /checkwallet\nExample: `/checkwallet 0x...`", { parse_mode: "Markdown" });
       return;
     }
@@ -1734,6 +1741,82 @@ export function createBot(): Telegraf | null {
   bot.on("text", async (ctx) => {
     const text = ctx.message.text.trim();
     if (text.startsWith("/")) return;
+
+    const chatId = ctx.chat.id;
+    const pending = PENDING_COMMAND.get(chatId);
+    if (pending && Date.now() - pending.timestamp < PENDING_TTL) {
+      PENDING_COMMAND.delete(chatId);
+      const cmd = pending.command;
+      log(`bot.on(text) pending=${cmd} input="${text.slice(0, 30)}"`, "bot");
+      try {
+        if (cmd === "checkwallet") {
+          if (isContractAddress(text)) {
+            await handleCheckWallet(ctx, text);
+          } else {
+            ctx.reply("⚠️ That doesn't look like a valid address. Send a 0x... wallet address.", { parse_mode: "Markdown" });
+          }
+        } else if (cmd === "scanx") {
+          await handleScanX(ctx, text);
+        } else if (cmd === "scanagent") {
+          if (isContractAddress(text)) {
+            const displayId = `${text.slice(0, 8)}. . .${text.slice(-6)}`;
+            const loadingMsg = await ctx.reply(`🔍 *Analyzing Forensic Data...*\n\n📍 ${displayId}\n_Consulting APOL intelligence database. This may take a moment._`, { parse_mode: "Markdown" });
+            try {
+              const report = await softTimeout(runAgentScan(text, null), 30000, null);
+              log(`scanagent result: ${report ? `${report.length} chars` : "NULL"}`, "bot");
+              if (report) {
+                try {
+                  await ctx.telegram.editMessageText(chatId, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+                } catch (mdErr: any) {
+                  log(`scanagent Markdown edit failed: ${mdErr?.message?.slice(0, 120)}`, "bot");
+                  const plain = report.replace(/[*_`\[\]]/g, "");
+                  await ctx.telegram.editMessageText(chatId, loadingMsg.message_id, undefined, plain.slice(0, 4000), { link_preview_options: { is_disabled: true } }).catch(() => {});
+                }
+              } else {
+                await ctx.telegram.editMessageText(chatId, loadingMsg.message_id, undefined,
+                  `🤖 *APOL AGENT — LARP DETECTOR*\n\n⚠️ Scan timed out. Try again.`, { parse_mode: "Markdown" }).catch(() => {});
+              }
+            } catch (e: any) {
+              log(`ScanAgent error: ${e?.message}`, "bot");
+              await ctx.telegram.editMessageText(chatId, loadingMsg.message_id, undefined,
+                `🤖 *APOL AGENT — LARP DETECTOR*\n\n⚠️ Error: ${e?.message?.slice(0, 80) || "Unknown"}`, { parse_mode: "Markdown" }).catch(() => {});
+            }
+          } else {
+            const found = await softTimeout(searchDexScreener(text), 5000, null);
+            if (!found || !found.address) {
+              ctx.reply(`🤖 No Base chain agent found matching "${esc(text)}"\n\n💡 Try with a contract address: \`/scanagent 0x...\``, { parse_mode: "Markdown" });
+              return;
+            }
+            const displayId = `${found.address.slice(0, 8)}. . .${found.address.slice(-6)}`;
+            const loadingMsg = await ctx.reply(`🔍 *Analyzing Forensic Data...*\n\n📍 ${displayId}\n_Consulting APOL intelligence database..._`, { parse_mode: "Markdown" });
+            try {
+              const report = await softTimeout(runAgentScan(found.address, found.name), 30000, null);
+              if (report) {
+                try {
+                  await ctx.telegram.editMessageText(chatId, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+                } catch (mdErr: any) {
+                  const plain = report.replace(/[*_`\[\]]/g, "");
+                  await ctx.telegram.editMessageText(chatId, loadingMsg.message_id, undefined, plain.slice(0, 4000), { link_preview_options: { is_disabled: true } }).catch(() => {});
+                }
+              } else {
+                await ctx.telegram.editMessageText(chatId, loadingMsg.message_id, undefined,
+                  `🤖 *APOL AGENT — LARP DETECTOR*\n\n⚠️ Scan timed out. Try again.`, { parse_mode: "Markdown" }).catch(() => {});
+              }
+            } catch (e: any) {
+              await ctx.telegram.editMessageText(chatId, loadingMsg.message_id, undefined,
+                `🤖 *APOL AGENT — LARP DETECTOR*\n\n⚠️ Error: ${e?.message?.slice(0, 80) || "Unknown"}`, { parse_mode: "Markdown" }).catch(() => {});
+            }
+          }
+        } else {
+          if (isContractAddress(text)) await handleScan(ctx, text);
+        }
+      } catch (e: any) {
+        log(`bot.on(text) pending handler THREW: ${e?.message}`, "bot");
+      }
+      return;
+    }
+
+    PENDING_COMMAND.delete(chatId);
     if (isContractAddress(text)) {
       log(`bot.on(text) dispatching handleScan for ${text.slice(0, 10)}...`, "bot");
       try {
