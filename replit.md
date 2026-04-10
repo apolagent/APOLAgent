@@ -75,7 +75,8 @@ shared/
 - **Ability Audit Keywords**: `AGENT_ABILITY_KEYWORDS` map in both `bot.ts` and `routes.ts`. Categories: Trading, Social, Analytics, DeFi, Bridge, Gaming, Autonomous.
 - **Reasoning URL Discovery**: Fetches up to 3 candidate URLs from website + social bios. Checks for: timestamped entries + reasoning words = "verified"; dashboard signals = "mismatch"; nothing found = "not_found".
 - **Verdict thresholds (bot)**: LARP DETECTED (honeypot or 4+ flags), SUSPICIOUS (2+ flags), INCONCLUSIVE (1 flag + 2 passes), LIKELY LEGITIMATE (3+ passes), INSUFFICIENT DATA (default).
-- **Web cognition score**: speedScore(30) + traceScore(20) + contextScore(20) + socialScore(20) + logsScore(20) + activityScore(15) + codeSizeScore(10). Verdict: Digital Puppet (<21), Low Autonomy (21-40), Semi-Autonomous (41-70), Fully Autonomous (71+).
+- **Web cognition score**: speedScore(30) + traceScore(20) + contextScore(20) + socialScore(20) + logsScore(20) + activityScore(15) + codeSizeScore(10). Verdict: Confirmed LARP (≤10 with 4+ scored tests), Unverified (11-20), Under Review (21-40), Semi-Autonomous (41-70), Fully Autonomous (71+). Harsh labels only with full evidence.
+- **`/api/scanx` endpoint**: GET `/api/scanx?username=handle`. Full agent verification from X handle — extracts abilities from bio + DexScreener, discovers reasoning logs, detects linked CA. Returns `agentAbilities`, `reasoningStatus`, `reasoningDetail`, `reasoningUrl`, `abilityMismatch` fields.
 - **Caching**: DexScreener data (60s), ETH price (60s), scan results (60s), in-flight deduplication for concurrent requests.
 
 ## Bot Commands

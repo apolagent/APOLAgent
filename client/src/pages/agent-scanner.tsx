@@ -119,7 +119,7 @@ type AgentResult = {
   agentName: string;
   wallet: string | null;
   cognitionScore: number | null;
-  verdict: "Digital Puppet" | "Semi-Autonomous" | "Fully Autonomous" | "Low Autonomy" | "Insufficient Data" | "Inconclusive";
+  verdict: "Confirmed LARP" | "Unverified" | "Semi-Autonomous" | "Fully Autonomous" | "Under Review" | "Insufficient Data" | "Inconclusive";
   apolVerdict: string;
   scoredTests: number;
   missingData?: string[];
@@ -160,7 +160,8 @@ function StatusBadge({ status, label }: { status: StatusColor; label: string }) 
 
 function oneLineSummary(r: AgentResult): string {
   if (r.verdict === "Inconclusive") return "No verifiable evidence submitted.";
-  if (r.verdict === "Low Autonomy") return "Contract security verified but AI identity could not be confirmed. Not necessarily a risk.";
+  if (r.verdict === "Under Review") return "Some indicators present but APOL reserves judgment until more evidence is available.";
+  if (r.verdict === "Unverified") return "APOL could not verify autonomous operation. This does not confirm fraud — the entity has not proven itself.";
   if (r.verdict === "Insufficient Data") return "Not enough data to issue a verdict. Provide wallet address, logs URL, and claimed abilities for a full assessment.";
   if (r.isPartial) return "Verdict based on limited data. Provide wallet and logs for a complete assessment.";
   const parts: string[] = [];
@@ -237,13 +238,17 @@ function AdvancedResults({ result }: { result: AgentResult }) {
 
   const riskLevel = result.cognitionScore === null ? "UNKNOWN"
     : result.verdict === "Insufficient Data" ? "INSUFFICIENT DATA"
-    : result.verdict === "Low Autonomy" ? "INCONCLUSIVE"
+    : result.verdict === "Under Review" ? "UNDER REVIEW"
+    : result.verdict === "Unverified" ? "UNVERIFIED"
+    : result.verdict === "Confirmed LARP" ? "LARP CONFIRMED"
     : result.cognitionScore >= 71 ? "LOW RISK"
     : result.cognitionScore >= 31 ? "MEDIUM RISK"
     : "HIGH RISK";
   const riskColor = result.cognitionScore === null ? "#6b7280"
     : result.verdict === "Insufficient Data" ? "#facc15"
-    : result.verdict === "Low Autonomy" ? "#facc15"
+    : result.verdict === "Under Review" ? "#facc15"
+    : result.verdict === "Unverified" ? "#facc15"
+    : result.verdict === "Confirmed LARP" ? "#f87171"
     : result.cognitionScore >= 71 ? G
     : result.cognitionScore >= 31 ? "#facc15"
     : "#f87171";
@@ -662,14 +667,15 @@ export default function AgentScanner() {
   };
 
   const scoreColor = (s: number | null) =>
-    s === null ? "text-slate-400" : s >= 71 ? "text-green-400" : s >= 31 ? "text-yellow-400" : "text-red-400";
+    s === null ? "text-slate-400" : s >= 71 ? "text-green-400" : s >= 21 ? "text-yellow-400" : "text-red-400";
 
   const verdictMeta = (v: string) => ({
     "Fully Autonomous": { color: "text-green-400", border: "border-green-700/50", icon: <CheckCircle className="w-5 h-5 text-green-400" /> },
     "Semi-Autonomous": { color: "text-yellow-400", border: "border-yellow-700/50", icon: <AlertTriangle className="w-5 h-5 text-yellow-400" /> },
-    "Low Autonomy": { color: "text-yellow-400", border: "border-yellow-700/50", icon: <AlertTriangle className="w-5 h-5 text-yellow-400" /> },
+    "Under Review": { color: "text-yellow-400", border: "border-yellow-700/50", icon: <AlertTriangle className="w-5 h-5 text-yellow-400" /> },
+    "Unverified": { color: "text-yellow-400", border: "border-yellow-700/50", icon: <AlertTriangle className="w-5 h-5 text-yellow-400" /> },
     "Insufficient Data": { color: "text-yellow-400", border: "border-yellow-700/50", icon: <AlertTriangle className="w-5 h-5 text-yellow-400" /> },
-    "Digital Puppet": { color: "text-red-400", border: "border-red-700/50", icon: <XCircle className="w-5 h-5 text-red-400" /> },
+    "Confirmed LARP": { color: "text-red-400", border: "border-red-700/50", icon: <XCircle className="w-5 h-5 text-red-400" /> },
     "Inconclusive": { color: "text-slate-400", border: "border-slate-700", icon: <HelpCircle className="w-5 h-5 text-slate-400" /> },
   }[v] ?? { color: "text-slate-400", border: "border-slate-700", icon: null });
 
@@ -1257,10 +1263,10 @@ export default function AgentScanner() {
               <svg viewBox="0 0 24 24" style={{ width: "16px", height: "16px", fill: G }} xmlns="http://www.w3.org/2000/svg">
                 <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.402 6.231H2.744l7.736-8.848L1.254 2.25H8.08l4.259 5.63 5.905-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
               </svg>
-              Scan X Profile
+              Scan X Agent
             </CardTitle>
             <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", fontFamily: "'JetBrains Mono', monospace", marginTop: "4px" }}>
-              Social forensics scan. Checks account age, follower quality, engagement, and AI agent verification.
+              Full agent verification from X profile. Checks social authenticity, extracts claimed abilities, discovers reasoning logs, and detects linked tokens.
             </p>
           </CardHeader>
           <CardContent style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -1325,7 +1331,7 @@ export default function AgentScanner() {
                   {[
                     { label: "Followers", value: r.followers.toLocaleString() },
                     { label: "Following", value: r.following.toLocaleString() },
-                    { label: "Ratio", value: `${r.followRatio}:1` },
+                    { label: "Ratio", value: r.followRatio },
                     { label: "Joined", value: r.joinedDate },
                     { label: "Age", value: `${r.ageDays} days` },
                     { label: "Tweets", value: r.totalTweets.toLocaleString() },
@@ -1369,6 +1375,34 @@ export default function AgentScanner() {
                   </div>
                 )}
 
+                {/* Agent Abilities */}
+                {r.agentAbilities && r.agentAbilities.length > 0 && (
+                  <div style={{ padding: "8px 12px", border: "1px solid rgba(0,255,0,0.15)", background: "rgba(0,255,0,0.03)" }}>
+                    <div style={{ fontSize: "9px", color: G, letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 900, fontFamily: "'JetBrains Mono', monospace", marginBottom: "6px" }}>Detected Abilities</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                      {r.agentAbilities.map((a: string, i: number) => (
+                        <span key={i} style={{ fontSize: "10px", padding: "2px 8px", background: "rgba(0,255,0,0.1)", border: "1px solid rgba(0,255,0,0.3)", color: G, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{a}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Reasoning Status */}
+                {r.reasoningStatus && r.reasoningStatus !== "no_source" && (
+                  <div style={{ padding: "8px 12px", border: `1px solid ${r.reasoningStatus === "verified" ? "rgba(0,255,0,0.3)" : "rgba(255,255,255,0.08)"}`, background: r.reasoningStatus === "verified" ? "rgba(0,255,0,0.03)" : "rgba(0,0,0,0.3)", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>
+                    <span style={{ color: "rgba(255,255,255,0.4)", fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700 }}>Reasoning: </span>
+                    <span style={{ color: r.reasoningStatus === "verified" ? G : r.reasoningStatus === "mismatch" ? "#facc15" : "rgba(255,255,255,0.6)", fontWeight: 700 }}>{r.reasoningDetail}</span>
+                    {r.reasoningUrl && <div style={{ fontSize: "10px", color: G, marginTop: "4px" }}>Source: {r.reasoningUrl}</div>}
+                  </div>
+                )}
+
+                {/* Ability Mismatch */}
+                {r.abilityMismatch && (
+                  <div style={{ padding: "8px 12px", border: "1px solid rgba(255,68,68,0.3)", background: "rgba(255,68,68,0.04)", fontSize: "11px", color: "#f87171", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
+                    ⚠️ {r.abilityMismatch}
+                  </div>
+                )}
+
                 {/* Linked CA */}
                 {r.linkedCA && (
                   <div style={{ padding: "8px 12px", border: "1px solid rgba(255,255,255,0.08)", background: "rgba(0,0,0,0.3)", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>
@@ -1379,15 +1413,10 @@ export default function AgentScanner() {
 
                 {/* Verdict */}
                 <div style={{ border: `2px solid ${vc}`, background: vc === G ? "rgba(0,255,0,0.06)" : vc === "#f87171" ? "rgba(255,68,68,0.06)" : "rgba(250,204,21,0.04)", padding: "16px", textAlign: "center" }}>
-                  <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", marginBottom: "6px" }}>Social Verdict</div>
-                  <div style={{ fontSize: "14px", fontWeight: 900, color: vc, letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace" }}>
+                  <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", marginBottom: "6px" }}>Agent Verification</div>
+                  <div data-testid="text-scanx-verdict" style={{ fontSize: "12px", fontWeight: 900, color: vc, letterSpacing: "0.05em", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.5 }}>
                     {r.verdict}
                   </div>
-                </div>
-
-                {/* Note about full scan */}
-                <div style={{ padding: "10px 14px", border: "1px solid rgba(255,255,255,0.08)", background: "rgba(0,0,0,0.2)", fontSize: "10px", color: "rgba(255,255,255,0.5)", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.5 }}>
-                  This is a social-only scan based on X profile data. For a full AI autonomy assessment, use the Agent LARP Scanner above with wallet address, logs URL, and claimed abilities.
                 </div>
               </div>
               );
@@ -1578,9 +1607,9 @@ export default function AgentScanner() {
                 <div className="flex items-center gap-4 py-2.5">
                   <span className="text-slate-500 font-semibold uppercase tracking-wider whitespace-nowrap w-36 flex-shrink-0">SCORE</span>
                   <span className="text-right ml-auto">
-                    <span className="text-red-400">0–30%</span><span className="text-slate-600"> LOW &nbsp;</span>
-                    <span className="text-yellow-400">31–70%</span><span className="text-slate-600"> MID &nbsp;</span>
-                    <span className="text-green-400">71–100%</span><span className="text-slate-600"> HIGH</span>
+                    <span className="text-red-400">0–20%</span><span className="text-slate-600"> LARP &nbsp;</span>
+                    <span className="text-yellow-400">21–70%</span><span className="text-slate-600"> REVIEW &nbsp;</span>
+                    <span className="text-green-400">71–100%</span><span className="text-slate-600"> VERIFIED</span>
                   </span>
                 </div>
               </div>

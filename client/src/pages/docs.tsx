@@ -331,8 +331,10 @@ function SecurityStandards() {
         <tbody>
           {([
             ["71 to 100", "Fully Autonomous"],
-            ["31 to 70", "Semi-Autonomous"],
-            ["0 to 30", "Digital Puppet (LARP)"],
+            ["41 to 70", "Semi-Autonomous"],
+            ["21 to 40", "Under Review"],
+            ["11 to 20", "Unverified"],
+            ["0 to 10", "Confirmed LARP (with 4+ scored tests)"],
           ]).map(([range, cls], i) => (
             <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
               <td style={{ padding: "10px 14px", fontFamily: mono, color: "#0f172a" }}>{range}</td>

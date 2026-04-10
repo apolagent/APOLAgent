@@ -1004,22 +1004,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const cognitionScore = scoredTests >= 2 ? Math.min(100, rawScore) : null;
       const isPartial = scoredTests < 3;
 
-      type Verdict = "Digital Puppet" | "Semi-Autonomous" | "Fully Autonomous" | "Low Autonomy" | "Insufficient Data" | "Inconclusive";
+      type Verdict = "Confirmed LARP" | "Unverified" | "Semi-Autonomous" | "Fully Autonomous" | "Under Review" | "Insufficient Data" | "Inconclusive";
       let verdict: Verdict;
       if (scoredTests < 2) verdict = "Insufficient Data";
       else if (cognitionScore !== null && cognitionScore >= 71) verdict = "Fully Autonomous";
       else if (cognitionScore !== null && cognitionScore >= 41) verdict = "Semi-Autonomous";
-      else if (cognitionScore !== null && cognitionScore >= 21) verdict = "Low Autonomy";
-      else if (cognitionScore !== null) verdict = "Digital Puppet";
+      else if (cognitionScore !== null && cognitionScore >= 21) verdict = "Under Review";
+      else if (cognitionScore !== null && cognitionScore <= 10 && scoredTests >= 4) verdict = "Confirmed LARP";
+      else if (cognitionScore !== null) verdict = "Unverified";
       else verdict = "Inconclusive";
 
       let apolVerdict = "";
-      if (verdict === "Digital Puppet") apolVerdict = "This entity shows minimal signs of autonomous operation. High probability of being a manually operated LARP.";
-      else if (verdict === "Low Autonomy") apolVerdict = "Contract security verified but AI identity could not be confirmed. Not necessarily a risk, but exercise caution.";
+      if (verdict === "Confirmed LARP") apolVerdict = "LARP CONFIRMED. Every verifiable data point contradicts autonomous operation. This entity has been weighed, measured, and found to be a fraud.";
+      else if (verdict === "Unverified") apolVerdict = "APOL could not verify autonomous operation from the evidence provided. This does not confirm fraud — it means the entity has not proven itself. Proceed with caution.";
+      else if (verdict === "Under Review") apolVerdict = "Some indicators present but not enough to confirm autonomous operation. APOL reserves judgment until more evidence is available.";
       else if (verdict === "Semi-Autonomous") apolVerdict = "Mixed signals detected. Some autonomous patterns present but not fully conclusive. Monitor for continued activity.";
       else if (verdict === "Fully Autonomous") apolVerdict = "Strong evidence of autonomous operation. On-chain activity, social presence, and reasoning logs are consistent with a real AI agent.";
-      else if (verdict === "Insufficient Data") apolVerdict = "Not enough data to issue a verdict. Provide wallet address for automatic on-chain audit.";
-      else apolVerdict = "No verifiable evidence submitted.";
+      else if (verdict === "Insufficient Data") apolVerdict = "Not enough data to issue a verdict. Provide wallet address for automatic on-chain audit. APOL does not speculate without evidence.";
+      else apolVerdict = "No verifiable evidence submitted. APOL makes no claims without data.";
 
       if (contractActivity.txCount === 0 && contractActivity.contractAgeDays > 7 && wallet) {
         apolVerdict += " 🚨 DEAD CONTRACT — No on-chain activity found despite contract being live for " + contractActivity.contractAgeDays + " days.";
@@ -1061,6 +1063,147 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Agent analysis failed" });
+    }
+  });
+
+  app.get("/api/scanx", async (req, res) => {
+    try {
+      const raw = (req.query.username as string || "").trim();
+      if (!raw) return res.status(400).json({ error: "Username is required" });
+
+      const handle = raw.replace(/https?:\/\/(x\.com|twitter\.com)\//i, "").replace(/^@/, "").split("/")[0].split("?")[0].trim();
+      if (!handle) return res.status(400).json({ error: "Invalid handle" });
+
+      const SELF_HANDLES = ["apolagent_", "apolagent", "apol_agent", "apolagentbot"];
+      if (SELF_HANDLES.includes(handle.toLowerCase())) {
+        return res.json({
+          username: handle, displayName: "APOL Agent", bio: "Official security protocol on Base chain. APOL has NO official token.", followers: 0, following: 0,
+          followRatio: "0:0", joinedDate: "", ageDays: 0, totalTweets: 0, isVerified: true, profileImage: null,
+          engagement: { rating: "N/A", avgLikes: 0, avgRetweets: 0 }, flags: [], verdict: "VERIFIED — Official APOL Agent",
+          verdictLevel: "green", linkedCA: null, linkedSymbol: null,
+          agentAbilities: [], reasoningStatus: "no_source" as const, reasoningDetail: "Official protocol — not applicable.", abilityMismatch: null, reasoningUrl: null,
+        });
+      }
+
+      const profileResp = await fetch(`https://api.fxtwitter.com/${handle}`, { signal: AbortSignal.timeout(6000) });
+      if (!profileResp.ok) return res.status(404).json({ error: "Could not fetch profile" });
+      const profileData = await profileResp.json() as any;
+      const u = profileData?.user;
+      if (!u) return res.status(404).json({ error: "User not found" });
+
+      const joinDate = u.joined ? new Date(u.joined) : null;
+      const ageDays = joinDate ? Math.floor((Date.now() - joinDate.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+      const followRatio = u.following > 0 ? `${(u.followers / u.following).toFixed(1)}:1` : u.followers > 0 ? "∞:1" : "0:0";
+      const bio: string = u.description || "";
+
+      const flags: { text: string; type: "critical" | "warning" | "info" }[] = [];
+      if (ageDays > 0 && ageDays < 30) flags.push({ text: "Account less than 30 days old", type: "critical" });
+      if ((u.followers || 0) < 10) flags.push({ text: "Very few followers", type: "critical" });
+      if (u.following > 0 && u.followers / u.following < 0.1) flags.push({ text: "Suspicious follow ratio", type: "warning" });
+      if ((u.tweets || 0) < 5) flags.push({ text: "Very few tweets", type: "warning" });
+      if (bio && /t\.co|http|\.com|\.xyz|\.io/i.test(bio) && (u.followers || 0) < 50) flags.push({ text: "Link-heavy bio with low following", type: "warning" });
+
+      if (ageDays > 180 && (u.followers || 0) >= 100) flags.push({ text: "Established account with history", type: "info" });
+      if ((u.tweets || 0) >= 100) flags.push({ text: "Active posting history", type: "info" });
+
+      const bioCAMatch = bio.match(/0x[a-fA-F0-9]{40}/);
+      const bioCA = bioCAMatch ? bioCAMatch[0] : null;
+
+      let linkedCA: string | null = null;
+      let linkedSymbol: string | null = null;
+      try {
+        const dexData = await fetch(`${DEXSCREENER_BASE}/latest/dex/search?q=${encodeURIComponent(handle)}`, { signal: AbortSignal.timeout(5000) }).then(r => r.ok ? r.json() as any : null);
+        const pair = dexData?.pairs?.find((p: any) => p.chainId === "base");
+        if (pair?.baseToken?.address) {
+          linkedCA = pair.baseToken.address;
+          linkedSymbol = `${pair.baseToken.name} ($${pair.baseToken.symbol})`;
+        }
+      } catch {}
+      if (!linkedCA && bioCA) { linkedCA = bioCA; linkedSymbol = "From bio"; }
+
+      const abilities = extractAbilitiesFromText(bio);
+
+      let websiteUrl: string | null = null;
+      const urlsInBio = (bio.match(/https?:\/\/[^\s"'<>)\]]+/gi) || [])
+        .filter((u: string) => !u.includes("x.com") && !u.includes("twitter.com") && !u.includes("t.me") && !u.includes("discord"))
+        .filter(isSafeUrl);
+      if (urlsInBio.length > 0) websiteUrl = urlsInBio[0];
+
+      let dummyActivity: ContractActivity = { txCount: 0, contractAgeDays: 0, hasContractCode: false, codeSize: 0, activityPerDay: 0 };
+      if (linkedCA && /^0x[a-fA-F0-9]{40}$/.test(linkedCA)) {
+        try { dummyActivity = await getContractActivity(linkedCA); } catch {}
+      }
+
+      const abilityAudit = await autoAuditAbilities(bio, null, websiteUrl, dummyActivity);
+
+      const criticalFlags = flags.filter(f => f.type === "critical").length;
+      const warningFlags = flags.filter(f => f.type === "warning").length;
+      const infoFlags = flags.filter(f => f.type === "info").length;
+
+      let verdict = "";
+      let verdictLevel: "green" | "red" | "yellow" | "grey" = "grey";
+
+      const hasConfirmedLarp = criticalFlags >= 3
+        || (criticalFlags >= 2 && warningFlags >= 2)
+        || ((u.tweets || 0) < 3 && (u.followers || 0) < 5 && ageDays < 14 && abilities.length === 0);
+
+      const hasStrongEvidence = criticalFlags >= 2 || (criticalFlags >= 1 && warningFlags >= 2);
+
+      if (hasConfirmedLarp) {
+        verdict = "LARP CONFIRMED — This account shows zero signs of autonomous operation. Empty shell with no verifiable agent activity.";
+        verdictLevel = "red";
+      } else if (hasStrongEvidence) {
+        verdict = "Suspicious — Multiple risk indicators present. Insufficient evidence to confirm legitimacy.";
+        verdictLevel = "red";
+      } else if (criticalFlags >= 1 || warningFlags >= 2) {
+        verdict = "Inconclusive — Some concerns detected. Not enough data to confirm or deny agent status.";
+        verdictLevel = "yellow";
+      } else if (infoFlags >= 1 && criticalFlags === 0 && warningFlags === 0) {
+        verdict = "Profile appears established. Social presence is consistent but autonomous operation not verified from social data alone.";
+        verdictLevel = "green";
+      } else {
+        verdict = "Inconclusive — Insufficient data to make a determination. Provide additional evidence for a complete assessment.";
+        verdictLevel = "grey";
+      }
+
+      if (abilityAudit.abilityMismatch && verdictLevel !== "red") {
+        verdict += ` Note: ${abilityAudit.abilityMismatch}`;
+      }
+      if (abilityAudit.reasoningStatus === "verified") {
+        verdict += " Autonomous reasoning logs detected at linked endpoint.";
+        if (verdictLevel !== "red") verdictLevel = "green";
+      }
+
+      res.json({
+        username: u.screen_name || handle,
+        displayName: u.name || handle,
+        bio: bio.slice(0, 300),
+        followers: u.followers || 0,
+        following: u.following || 0,
+        followRatio,
+        joinedDate: joinDate ? joinDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Unknown",
+        ageDays,
+        totalTweets: u.tweets || 0,
+        isVerified: u.verified === true || u.verification?.verified === true || false,
+        profileImage: u.avatar_url || null,
+        engagement: {
+          rating: (u.tweets || 0) >= 100 ? "High" : (u.tweets || 0) >= 10 ? "Medium" : "Low",
+          avgLikes: 0,
+          avgRetweets: 0,
+        },
+        flags,
+        verdict,
+        verdictLevel,
+        linkedCA,
+        linkedSymbol,
+        agentAbilities: abilities,
+        reasoningStatus: abilityAudit.reasoningStatus,
+        reasoningDetail: abilityAudit.reasoningDetail,
+        reasoningUrl: abilityAudit.reasoningUrl,
+        abilityMismatch: abilityAudit.abilityMismatch,
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Scan failed" });
     }
   });
 

@@ -284,8 +284,8 @@ function Page3() {
         <KaTeX math="CS = \frac{\sum_{i=1}^{n} w_i \cdot T_i}{\sum_{i=1}^{n} w_i} \times 100" />
         <p style={{ ...body, fontSize: 14 }}>
           Evaluates whether a purported AI agent exhibits genuine autonomous behavior.
-          Scores of 71% or above indicate Fully Autonomous; 31 to 70% indicate Semi-Autonomous;
-          30% or below indicates Digital Puppet.
+          Scores of 71% or above indicate Fully Autonomous; 41 to 70% indicate Semi-Autonomous;
+          21 to 40% indicates Under Review; 11 to 20% is Unverified; 10% or below with 4+ scored tests triggers Confirmed LARP.
         </p>
         <div style={{ padding: "10px 14px", background: "#fff", border: "1px solid #eee", fontSize: 13, fontFamily: serif, color: "#555" }}>
           <strong>Variables:</strong> T<sub>i</sub> = individual test score per domain,
