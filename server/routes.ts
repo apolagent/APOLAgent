@@ -22,6 +22,10 @@ const PLATFORM_MAP: Record<string, string> = {
   "0xce0e4e4d2dc0033ce2dd0ec79abe6186106f0462": "Flaunch",
   "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore",
   "0xade20c0cc8482c404a57da404ed1f3f2a1f6fe6f": "ApeStore",
+  "0xade256e1c2763b8766efe1eeb7c578d93f621f6f": "ApeStore",
+  "0xb1900f41d78d330a2a35c6771b3a6088a1b51309": "ApeStore",
+  "0x39112541720078c70164ea4deb61f0a4811910f9": "Flaunch",
+  "0xc785de52b739930ab0864b0ae7896ed6e327628a": "Flaunch",
 };
 
 const LOCKER_MAP: Record<string, string> = {
@@ -276,6 +280,19 @@ async function detectPlatformFromCreationTx(tokenAddr: string): Promise<string |
   } catch { return null; }
 }
 
+async function detectPlatformFromDeployerChain(deployer: string): Promise<string | null> {
+  try {
+    const resp = await fetch(`https://base.blockscout.com/api/v2/addresses/${deployer}`);
+    if (!resp.ok) return null;
+    const data = await resp.json() as any;
+    if (data.is_contract && data.creator_address_hash) {
+      const creator = data.creator_address_hash.toLowerCase();
+      if (PLATFORM_MAP[creator]) return PLATFORM_MAP[creator];
+    }
+    return null;
+  } catch { return null; }
+}
+
 function detectPlatform(addr: string, deployer: string | null, holders: { address: string }[]): string | null {
   const a = addr.toLowerCase();
   if (PLATFORM_MAP[a]) return PLATFORM_MAP[a];
@@ -335,7 +352,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let platform = detectPlatform(address, deployer, topHolders);
       if (!platform) {
-        platform = await withTimeout(detectPlatformFromCreationTx(address), 5000, "creation-platform-detect").catch(() => null);
+        const [creationP, chainP] = await Promise.all([
+          withTimeout(detectPlatformFromCreationTx(address), 5000, "creation-platform-detect").catch(() => null),
+          deployer ? withTimeout(detectPlatformFromDeployerChain(deployer), 5000, "deployer-chain-detect").catch(() => null) : null,
+        ]);
+        platform = creationP || chainP;
       }
       const scanCount = await storage.incrementLookup(address, tokenInfo.name, tokenInfo.symbol);
       const lpStatus = detectLpStatus(topHolders, platform);
@@ -417,7 +438,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           getTopHolders(wallet).catch(() => []),
         ]);
 
-        const platform = detectPlatform(wallet, deployerAddr, topHolders);
+        let platform = detectPlatform(wallet, deployerAddr, topHolders);
+        if (!platform) {
+          const [creationP, chainP] = await Promise.all([
+            detectPlatformFromCreationTx(wallet).catch(() => null),
+            deployerAddr ? detectPlatformFromDeployerChain(deployerAddr).catch(() => null) : null,
+          ]);
+          platform = creationP || chainP;
+        }
         const isVirtuals = platform === "Virtuals";
         const buyTax = isVirtuals ? 0 : sim.buyTax;
         const sellTax = isVirtuals ? 0 : sim.sellTax;

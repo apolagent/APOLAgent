@@ -25,6 +25,10 @@ const PLATFORM_MAP: Record<string, string> = {
   "0xce0e4e4d2dc0033ce2dd0ec79abe6186106f0462": "Flaunch",
   "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore",
   "0xade20c0cc8482c404a57da404ed1f3f2a1f6fe6f": "ApeStore",
+  "0xade256e1c2763b8766efe1eeb7c578d93f621f6f": "ApeStore",
+  "0xb1900f41d78d330a2a35c6771b3a6088a1b51309": "ApeStore",
+  "0x39112541720078c70164ea4deb61f0a4811910f9": "Flaunch",
+  "0xc785de52b739930ab0864b0ae7896ed6e327628a": "Flaunch",
 };
 
 const LOCKER_MAP: Record<string, string> = {
@@ -392,6 +396,19 @@ async function detectPlatformFromCreationTx(tokenAddr: string): Promise<string |
   } catch { return null; }
 }
 
+async function detectPlatformFromDeployerChain(deployer: string): Promise<string | null> {
+  try {
+    const resp = await fetch(`https://base.blockscout.com/api/v2/addresses/${deployer}`);
+    if (!resp.ok) return null;
+    const data = await resp.json() as any;
+    if (data.is_contract && data.creator_address_hash) {
+      const creator = data.creator_address_hash.toLowerCase();
+      if (PLATFORM_MAP[creator]) return PLATFORM_MAP[creator];
+    }
+    return null;
+  } catch { return null; }
+}
+
 function detectPlatform(addr: string, deployer: string | null, holders: { address: string }[]): string | null {
   const a = addr.toLowerCase();
   if (PLATFORM_MAP[a]) return PLATFORM_MAP[a];
@@ -452,12 +469,13 @@ async function runScan(address: string): Promise<string> {
 
   const platformFromDeployer = detectPlatform(address, deployer, []);
 
-  let [holderCount, topHolders, ethUsd, dexData, creationPlatform] = await Promise.all([
+  let [holderCount, topHolders, ethUsd, dexData, creationPlatform, deployerChainPlatform] = await Promise.all([
     softTimeout(getHolderCount(address), 7000, 0),
     softTimeout(getTopHolders(address), 7000, []),
     softTimeout(getEthUsdPrice(), 7000, 0),
     softTimeout(getDexScreenerData(address), 7000, { priceUsd: 0, liquidity: 0 }),
     !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
+    !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
   ]);
 
   let holdersComplete = topHolders.length > 0;
@@ -478,7 +496,7 @@ async function runScan(address: string): Promise<string> {
 
   const scanCount = await storage.incrementLookup(address, tokenInfo.name, tokenInfo.symbol);
 
-  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || creationPlatform;
+  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || creationPlatform || deployerChainPlatform;
   const lpStatus = detectLpStatus(topHolders, platform, holdersComplete);
   const isVirtuals = platform === "Virtuals";
 
@@ -684,16 +702,17 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
 
   const platformFromDeployer = detectPlatform(address, deployer, []);
 
-  const [holderCount, topHolders, ethUsd, dexData, dexSocials, creationPlatform] = await Promise.all([
+  const [holderCount, topHolders, ethUsd, dexData, dexSocials, creationPlatform, deployerChainPlatform] = await Promise.all([
     softTimeout(getHolderCount(address), 7000, 0),
     softTimeout(getTopHolders(address), 7000, []),
     softTimeout(getEthUsdPrice(), 7000, 0),
     softTimeout(getDexScreenerData(address), 7000, { priceUsd: 0, liquidity: 0 }),
     softTimeout(getDexScreenerSocials(address), 7000, { twitter: null, website: null, telegram: null }),
     !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
+    !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
   ]);
 
-  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || creationPlatform;
+  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || creationPlatform || deployerChainPlatform;
   const isVirtuals = platform === "Virtuals";
   const buyTax = isVirtuals ? 0 : sim.buyTax;
   const sellTax = isVirtuals ? 0 : sim.sellTax;
