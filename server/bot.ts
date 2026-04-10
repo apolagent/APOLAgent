@@ -13,6 +13,10 @@ function log(message: string, source = "bot") {
 
 const BASE_RPC = process.env.BASE_RPC_URL || "";
 
+const SCAN_CACHE = new Map<string, { result: string; timestamp: number }>();
+const SCAN_CACHE_TTL = 30000;
+const SCAN_IN_FLIGHT = new Map<string, Promise<string>>();
+
 interface SimResult {
   isHoneypot: boolean;
   buyTax: number;
@@ -901,11 +905,35 @@ function esc(s: string): string {
   return s.replace(/[_*[\]()~`>#+\-=|{}.!]/g, "\\$&");
 }
 
+async function cachedRunScan(address: string): Promise<string | null> {
+  const key = address.toLowerCase();
+  const cached = SCAN_CACHE.get(key);
+  if (cached && Date.now() - cached.timestamp < SCAN_CACHE_TTL) {
+    log(`Cache HIT for ${address.slice(0, 10)}... (age ${Math.round((Date.now() - cached.timestamp) / 1000)}s)`, "bot");
+    return cached.result;
+  }
+  const inflight = SCAN_IN_FLIGHT.get(key);
+  if (inflight) {
+    log(`Waiting on in-flight scan for ${address.slice(0, 10)}...`, "bot");
+    return inflight;
+  }
+  const promise = softTimeout(runScan(address), 25000, null).then((result) => {
+    if (result) SCAN_CACHE.set(key, { result, timestamp: Date.now() });
+    SCAN_IN_FLIGHT.delete(key);
+    return result;
+  }).catch((e) => {
+    SCAN_IN_FLIGHT.delete(key);
+    throw e;
+  });
+  SCAN_IN_FLIGHT.set(key, promise);
+  return promise;
+}
+
 async function handleScan(ctx: any, address: string): Promise<void> {
   const shortAddr = `${address.slice(0, 8)}. . .${address.slice(-6)}`;
   const loadingMsg = await ctx.reply(`🔍 *Analyzing Forensic Data...*\n\n📍 ${shortAddr}\n_Consulting APOL intelligence database. This may take a moment._`, { parse_mode: "Markdown" });
   try {
-    const report = await softTimeout(runScan(address), 25000, null);
+    const report = await cachedRunScan(address);
     if (report) {
       await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
     } else {
