@@ -67,14 +67,25 @@ shared/
 - `storage.incrementLookup()` — upsert with `lookupCount + 1` on conflict
 - Displayed as 👁️ count in Telegram output
 
+## Agent Verification (LARP Detector)
+- **On-Chain Activity Audit**: Fetches transaction count (Blockscout `/api/v2/addresses/.../counters`) + token_transfers_count. Contract age from creation tx (Blockscout) or first ERC-20 transfer block timestamp (Alchemy fallback). Activity rate = txCount / ageDays.
+- **Contract Code Check**: `eth_getCode` via RPC. Bare ERC-20 (<500 bytes) = no agent logic. Complex (>5KB) = agent logic possible.
+- **MCap vs Activity Mismatch**: $1M+ MCap with <10 transactions over >7 days = "NARRATIVE BLACK BOX" flag.
+- **Verdict thresholds (bot)**: LARP DETECTED (honeypot or 4+ flags), SUSPICIOUS (2+ flags), INCONCLUSIVE (1 flag + 2 passes), LIKELY LEGITIMATE (3+ passes), INSUFFICIENT DATA (default).
+- **Web cognition score**: speedScore(30) + traceScore(20) + contextScore(20) + socialScore(20) + logsScore(20) + activityScore(15) + codeSizeScore(10). Verdict: Digital Puppet (<21), Low Autonomy (21-40), Semi-Autonomous (41-70), Fully Autonomous (71+).
+- **Caching**: DexScreener data (60s), ETH price (60s), scan results (60s), in-flight deduplication for concurrent requests.
+
 ## Bot Commands
 - `/scan <CA>` — Full forensic report: protocol, honeypot, tax, LP, holders, price, mcap, risk badge, scan count
+- `/scanagent <CA or name>` — Agent LARP Detector: on-chain activity audit, mind-to-wallet trace, treasury health, creator forensic, token health, verdict
+- `/scanx <@handle or URL>` — X/Twitter profile forensic analysis
 - `/start` — Welcome message
 
 ## API Endpoints
 - `GET /health` — Health check
 - `GET /api/detective/flagged` — Recently flagged addresses
 - `GET /api/detective/analyze?address=&chain=` — Full forensic analysis (JSON)
+- `POST /api/agent/analyze` — Agent LARP Detector (body: agentName, wallet, socialLink, claimedAbilities, logsUrl)
 
 ## Telegram Output Format
 ```

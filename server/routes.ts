@@ -273,6 +273,65 @@ async function getFallbackTokenData(addr: string): Promise<FallbackTokenData | n
 }
 
 
+interface ContractActivity {
+  txCount: number;
+  contractAgeDays: number;
+  hasContractCode: boolean;
+  codeSize: number;
+  activityPerDay: number;
+}
+
+async function getContractActivity(addr: string): Promise<ContractActivity> {
+  const result: ContractActivity = { txCount: 0, contractAgeDays: 0, hasContractCode: false, codeSize: 0, activityPerDay: 0 };
+  try {
+    const [countersData, addrData, codeResult] = await Promise.all([
+      fetch(`${BLOCKSCOUT_BASE}/api/v2/addresses/${addr}/counters`, { signal: AbortSignal.timeout(5000) }).then(r => r.ok ? r.json() as any : null),
+      fetch(`${BLOCKSCOUT_BASE}/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(5000) }).then(r => r.ok ? r.json() as any : null),
+      rpcCall("eth_getCode", [addr, "latest"]),
+    ]);
+    if (countersData) {
+      const txCount = parseInt(countersData.transactions_count || "0", 10);
+      const transferCount = parseInt(countersData.token_transfers_count || "0", 10);
+      result.txCount = txCount + transferCount;
+    }
+    const creationHash = addrData?.creation_transaction_hash || addrData?.creation_tx_hash;
+    if (creationHash) {
+      try {
+        const txData = await fetch(`${BLOCKSCOUT_BASE}/api/v2/transactions/${creationHash}`, { signal: AbortSignal.timeout(4000) }).then(r => r.ok ? r.json() as any : null);
+        if (txData?.timestamp) {
+          const created = new Date(txData.timestamp).getTime();
+          result.contractAgeDays = Math.max(1, Math.floor((Date.now() - created) / (1000 * 60 * 60 * 24)));
+        }
+      } catch {}
+    }
+    if (result.contractAgeDays === 0) {
+      try {
+        const transfers = await rpcCall("alchemy_getAssetTransfers", [{
+          fromBlock: "0x0", toBlock: "latest",
+          contractAddresses: [addr], category: ["erc20"], maxCount: "0x1", order: "asc"
+        }]);
+        const firstHash = transfers?.transfers?.[0]?.hash;
+        if (firstHash) {
+          const blockHex = transfers.transfers[0].blockNum;
+          const blockData = await rpcCall("eth_getBlockByNumber", [blockHex, false]);
+          if (blockData?.timestamp) {
+            const created = Number(BigInt(blockData.timestamp)) * 1000;
+            result.contractAgeDays = Math.max(1, Math.floor((Date.now() - created) / (1000 * 60 * 60 * 24)));
+          }
+        }
+      } catch {}
+    }
+    if (codeResult && codeResult !== "0x") {
+      result.hasContractCode = true;
+      result.codeSize = (codeResult.length - 2) / 2;
+    }
+    if (result.contractAgeDays > 0 && result.txCount > 0) {
+      result.activityPerDay = parseFloat((result.txCount / result.contractAgeDays).toFixed(2));
+    }
+  } catch {}
+  return result;
+}
+
 async function detectPlatformFromCreationTx(tokenAddr: string): Promise<string | null> {
   try {
     const transfers = await rpcCall("alchemy_getAssetTransfers", [{
@@ -617,6 +676,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         speedDetail = "No wallet address provided — cannot analyze timing patterns.";
       }
 
+      let contractActivity: ContractActivity = { txCount: 0, contractAgeDays: 0, hasContractCode: false, codeSize: 0, activityPerDay: 0 };
+      if (wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet)) {
+        try {
+          contractActivity = await getContractActivity(wallet);
+        } catch {}
+      }
+
       let socialStatus: "clear" | "suspicious" | "inconclusive" = "inconclusive";
       let socialDetail = "No social link provided.";
       let socialFollowers: number | undefined;
@@ -698,11 +764,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      let activityScore = 0;
+      let activityLabel = "Unknown";
+      let activityDetail = "No wallet address provided — cannot audit on-chain activity.";
+      if (wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet)) {
+        if (contractActivity.txCount === 0 && contractActivity.contractAgeDays > 3) {
+          activityScore = 0;
+          activityLabel = "Dead";
+          activityDetail = `Contract has zero on-chain transactions over ${contractActivity.contractAgeDays} days. No evidence of autonomous activity.`;
+        } else if (contractActivity.txCount > 0 && contractActivity.txCount < 10 && contractActivity.contractAgeDays > 7) {
+          activityScore = 3;
+          activityLabel = "Dormant";
+          activityDetail = `Only ${contractActivity.txCount} transactions in ${contractActivity.contractAgeDays} days. Near-dormant contract with minimal interactions.`;
+        } else if (contractActivity.activityPerDay >= 1) {
+          activityScore = 15;
+          activityLabel = "Active";
+          activityDetail = `${contractActivity.txCount.toLocaleString()} transactions over ${contractActivity.contractAgeDays} days (${contractActivity.activityPerDay}/day). Consistent on-chain activity detected.`;
+        } else if (contractActivity.txCount >= 10) {
+          activityScore = 8;
+          activityLabel = "Moderate";
+          activityDetail = `${contractActivity.txCount.toLocaleString()} transactions over ${contractActivity.contractAgeDays} days. Some activity present but not highly active.`;
+        } else {
+          activityScore = 5;
+          activityLabel = "Low";
+          activityDetail = `${contractActivity.txCount} transactions over ${contractActivity.contractAgeDays || "?"} days. Limited activity detected.`;
+        }
+      }
+
+      let codeSizeScore = 0;
+      let codeSizeLabel = "Unknown";
+      let codeSizeDetail = "No wallet provided — cannot check contract code.";
+      if (wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet)) {
+        if (!contractActivity.hasContractCode || contractActivity.codeSize < 500) {
+          codeSizeScore = 0;
+          codeSizeLabel = "Bare Token";
+          codeSizeDetail = `Contract bytecode is ${contractActivity.codeSize > 0 ? `only ${(contractActivity.codeSize / 1024).toFixed(1)}KB` : "empty"}. Standard ERC-20 with no agent logic.`;
+        } else if (contractActivity.codeSize >= 5000) {
+          codeSizeScore = 10;
+          codeSizeLabel = "Complex";
+          codeSizeDetail = `Contract bytecode is ${(contractActivity.codeSize / 1024).toFixed(1)}KB. Complex contract code — agent logic possible.`;
+        } else {
+          codeSizeScore = 5;
+          codeSizeLabel = "Moderate";
+          codeSizeDetail = `Contract bytecode is ${(contractActivity.codeSize / 1024).toFixed(1)}KB. Some additional logic beyond standard ERC-20.`;
+        }
+      }
+
       const traceScore = traceIsContract ? 20 : wallet ? 5 : 0;
       const socialScore = socialStatus === "clear" ? 20 : socialStatus === "suspicious" ? 5 : 10;
       const logsScore = logsStatus === "verified" ? 20 : logsStatus === "mismatch" ? 0 : 5;
-      const totalPossible = 100;
-      const rawScore = speedScore + traceScore + contextScore + socialScore + logsScore;
+      const rawScore = speedScore + traceScore + contextScore + socialScore + logsScore + activityScore + codeSizeScore;
 
       const scoredTests = [
         wallet ? 1 : 0,
@@ -729,11 +840,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       else if (verdict === "Low Autonomy") apolVerdict = "Contract security verified but AI identity could not be confirmed. Not necessarily a risk, but exercise caution.";
       else if (verdict === "Semi-Autonomous") apolVerdict = "Mixed signals detected. Some autonomous patterns present but not fully conclusive. Monitor for continued activity.";
       else if (verdict === "Fully Autonomous") apolVerdict = "Strong evidence of autonomous operation. On-chain activity, social presence, and reasoning logs are consistent with a real AI agent.";
-      else if (verdict === "Insufficient Data") apolVerdict = "Not enough data to issue a verdict. Provide wallet address, logs URL, and claimed abilities for a full assessment.";
+      else if (verdict === "Insufficient Data") apolVerdict = "Not enough data to issue a verdict. Provide wallet address for automatic on-chain audit.";
       else apolVerdict = "No verifiable evidence submitted.";
 
+      if (contractActivity.txCount === 0 && contractActivity.contractAgeDays > 7 && wallet) {
+        apolVerdict += " 🚨 DEAD CONTRACT — No on-chain activity found despite contract being live for " + contractActivity.contractAgeDays + " days.";
+      }
       if (deployerContractCount >= 5) apolVerdict += ` ⚠️ Serial deployer detected: ${deployerContractCount} contracts from the same creator.`;
       if (treasuryEth < 0.005 && wallet) apolVerdict += " ⚠️ Creator treasury is near-empty.";
+      if (!contractActivity.hasContractCode && wallet) apolVerdict += " ⚠️ No contract code found — this is a bare token with no agent logic.";
 
       res.json({
         agentName: agentName.trim(),
@@ -749,6 +864,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contextTest: { scored: !!claimedAbilities, score: contextScore, maxScore: 20, label: contextScore >= 10 ? "Coherent" : "Vague", detail: contextDetail },
         logsTest: { status: logsStatus, detail: logsDetail, logs: logsArr },
         socialTest: { status: socialStatus, detail: socialDetail, followers: socialFollowers, accountAgeDays: socialAgeDays },
+        onChainActivityTest: { scored: !!(wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet)), score: activityScore, maxScore: 15, label: activityLabel, detail: activityDetail, txCount: contractActivity.txCount, contractAgeDays: contractActivity.contractAgeDays, activityPerDay: contractActivity.activityPerDay },
+        codeSizeTest: { scored: !!(wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet)), score: codeSizeScore, maxScore: 10, label: codeSizeLabel, detail: codeSizeDetail, codeSize: contractActivity.codeSize, hasCode: contractActivity.hasContractCode },
         contractScan,
         creatorAddress: deployerAddr,
         platformName: contractScan?.protocolLocker || null,

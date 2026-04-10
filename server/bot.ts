@@ -280,6 +280,65 @@ async function getFallbackTokenData(addr: string): Promise<FallbackTokenData | n
   } catch { return null; }
 }
 
+interface ContractActivity {
+  txCount: number;
+  contractAgeDays: number;
+  hasContractCode: boolean;
+  codeSize: number;
+  activityPerDay: number;
+}
+
+async function getContractActivity(addr: string): Promise<ContractActivity> {
+  const result: ContractActivity = { txCount: 0, contractAgeDays: 0, hasContractCode: false, codeSize: 0, activityPerDay: 0 };
+  try {
+    const [countersData, addrData, codeResult] = await Promise.all([
+      fetch(`${BLOCKSCOUT_BASE}/api/v2/addresses/${addr}/counters`, { signal: AbortSignal.timeout(5000) }).then(r => r.ok ? r.json() as any : null),
+      fetch(`${BLOCKSCOUT_BASE}/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(5000) }).then(r => r.ok ? r.json() as any : null),
+      rpcCall("eth_getCode", [addr, "latest"]),
+    ]);
+    if (countersData) {
+      const txCount = parseInt(countersData.transactions_count || "0", 10);
+      const transferCount = parseInt(countersData.token_transfers_count || "0", 10);
+      result.txCount = txCount + transferCount;
+    }
+    const creationHash = addrData?.creation_transaction_hash || addrData?.creation_tx_hash;
+    if (creationHash) {
+      try {
+        const txData = await fetch(`${BLOCKSCOUT_BASE}/api/v2/transactions/${creationHash}`, { signal: AbortSignal.timeout(4000) }).then(r => r.ok ? r.json() as any : null);
+        if (txData?.timestamp) {
+          const created = new Date(txData.timestamp).getTime();
+          result.contractAgeDays = Math.max(1, Math.floor((Date.now() - created) / (1000 * 60 * 60 * 24)));
+        }
+      } catch {}
+    }
+    if (result.contractAgeDays === 0) {
+      try {
+        const transfers = await rpcCall("alchemy_getAssetTransfers", [{
+          fromBlock: "0x0", toBlock: "latest",
+          contractAddresses: [addr], category: ["erc20"], maxCount: "0x1", order: "asc"
+        }]);
+        const firstHash = transfers?.transfers?.[0]?.hash;
+        if (firstHash) {
+          const blockHex = transfers.transfers[0].blockNum;
+          const blockData = await rpcCall("eth_getBlockByNumber", [blockHex, false]);
+          if (blockData?.timestamp) {
+            const created = Number(BigInt(blockData.timestamp)) * 1000;
+            result.contractAgeDays = Math.max(1, Math.floor((Date.now() - created) / (1000 * 60 * 60 * 24)));
+          }
+        }
+      } catch {}
+    }
+    if (codeResult && codeResult !== "0x") {
+      result.hasContractCode = true;
+      result.codeSize = (codeResult.length - 2) / 2;
+    }
+    if (result.contractAgeDays > 0 && result.txCount > 0) {
+      result.activityPerDay = parseFloat((result.txCount / result.contractAgeDays).toFixed(2));
+    }
+  } catch {}
+  return result;
+}
+
 async function searchDexScreener(query: string): Promise<{ address: string; name: string; symbol: string; chain: string } | null> {
   try {
     const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/search?q=${encodeURIComponent(query)}`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
@@ -792,10 +851,11 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
     isHoneypot = fallbackData.isHoneypot;
   }
 
-  const [treasuryBal, deployerContracts, xProfile] = await Promise.all([
+  const [treasuryBal, deployerContracts, xProfile, contractActivity] = await Promise.all([
     deployer ? softTimeout(getTreasuryBalance(deployer), 4000, { eth: 0, usd: 0 }) : Promise.resolve({ eth: 0, usd: 0 }),
     deployer ? softTimeout(getDeployerCreatedContracts(deployer), 5000, 0) : Promise.resolve(0),
     dexSocials.twitter ? softTimeout(fetchXProfile(dexSocials.twitter), 5000, null) : Promise.resolve(null),
+    softTimeout(getContractActivity(address), 6000, { txCount: 0, contractAgeDays: 0, hasContractCode: false, codeSize: 0, activityPerDay: 0 } as ContractActivity),
   ]);
 
   let tokenPriceUsd = dexData.priceUsd;
@@ -837,6 +897,36 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
   if (platform) agentPasses.push(`✅ Deployed via ${platform} protocol`);
   if (sim.simulationSuccess) agentPasses.push("✅ Buy/Sell simulation passed");
 
+  let onChainLabel = "";
+  let onChainEmoji = "";
+  if (contractActivity.txCount === 0 && contractActivity.contractAgeDays > 3) {
+    agentFlags.push("🚨 DEAD CONTRACT — Zero on-chain activity detected");
+    onChainLabel = "Dead";
+    onChainEmoji = "🔴";
+  } else if (contractActivity.txCount > 0 && contractActivity.txCount < 10 && contractActivity.contractAgeDays > 7) {
+    agentFlags.push("⚠️ Near-dormant — Minimal contract interactions");
+    onChainLabel = "Dormant";
+    onChainEmoji = "🟡";
+  } else if (contractActivity.activityPerDay >= 1) {
+    agentPasses.push("✅ Active contract — Regular on-chain interactions");
+    onChainLabel = "Active";
+    onChainEmoji = "🟢";
+  } else if (contractActivity.txCount >= 10) {
+    agentPasses.push("🟡 Some contract activity detected");
+    onChainLabel = "Moderate";
+    onChainEmoji = "🟡";
+  }
+
+  if (mcap > 1_000_000 && contractActivity.txCount < 10 && contractActivity.contractAgeDays > 7) {
+    agentFlags.push(`🚨 NARRATIVE BLACK BOX — ${formatUsd(mcap)} MCap but near-zero autonomous activity`);
+  }
+
+  if (!contractActivity.hasContractCode || contractActivity.codeSize < 500) {
+    agentFlags.push("⚠️ Bare token contract — No agent logic in bytecode");
+  } else if (contractActivity.codeSize >= 5000) {
+    agentPasses.push("✅ Complex contract code — Agent logic possible");
+  }
+
   let verdict = "";
   let verdictEmoji = "";
   if (isHoneypot || agentFlags.length >= 4) { verdict = "LARP DETECTED"; verdictEmoji = "🔴"; }
@@ -859,7 +949,15 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
     ``,
   ];
 
-  lines.push(`🧠 *MIND\\-TO\\-WALLET TRACE*`);
+  lines.push(`⛓ *ON-CHAIN ACTIVITY AUDIT*`);
+  lines.push(`   📊 Transactions: ${contractActivity.txCount > 0 ? contractActivity.txCount.toLocaleString() : "None"}`);
+  lines.push(`   📅 Contract Age: ${contractActivity.contractAgeDays > 0 ? `${contractActivity.contractAgeDays} days` : "Unknown"}`);
+  lines.push(`   ⚡ Activity Rate: ${contractActivity.activityPerDay > 0 ? `${contractActivity.activityPerDay}/day` : "Inactive"}`);
+  lines.push(`   📦 Code Size: ${contractActivity.hasContractCode ? `${(contractActivity.codeSize / 1024).toFixed(1)}KB` : "None"}`);
+  lines.push(`   ${onChainEmoji || "⚪"} *Status: ${onChainLabel || "Unknown"}*`);
+  lines.push(``);
+
+  lines.push(`🧠 *MIND-TO-WALLET TRACE*`);
   if (dexSocials.twitter && xProfile) {
     lines.push(`   🐦 Twitter: @${esc(xProfile.screen_name)}`);
     lines.push(`   👥 Followers: ${xProfile.followers.toLocaleString()} | Tweets: ${xProfile.tweets.toLocaleString()}`);

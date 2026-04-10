@@ -104,6 +104,9 @@ type ContractScan = {
   protocolLocker?: string | null;
 };
 
+type OnChainActivityTest = TestResult & { txCount?: number; contractAgeDays?: number; activityPerDay?: number };
+type CodeSizeTest = TestResult & { codeSize?: number; hasCode?: boolean };
+
 type AgentResult = {
   agentName: string;
   wallet: string | null;
@@ -118,6 +121,8 @@ type AgentResult = {
   contextTest: TestResult;
   logsTest: LogsTestResult;
   socialTest: SocialTestResult;
+  onChainActivityTest?: OnChainActivityTest;
+  codeSizeTest?: CodeSizeTest;
   contractScan: ContractScan | null;
 };
 
@@ -163,15 +168,18 @@ function oneLineSummary(r: AgentResult): string {
 function getEvidenceFiling(r: AgentResult | null, formState: { wallet: string; logsUrl: string; socialLink: string }) {
   if (!r) {
     return [
+      { emoji: "⛓", label: "On-Chain Activity", status: formState.wallet.trim() ? "green" as StatusColor : "grey" as StatusColor, tag: formState.wallet.trim() ? "Pending" : "No CA" },
       { emoji: "🕒", label: "Liveliness", status: formState.wallet.trim() ? "green" as StatusColor : "grey" as StatusColor, tag: formState.wallet.trim() ? "Active" : "Passive" },
       { emoji: "🧠", label: "Reasoning", status: formState.logsUrl.trim() ? "green" as StatusColor : "yellow" as StatusColor, tag: formState.logsUrl.trim() ? "Verified" : "Unlinked" },
       { emoji: "👥", label: "Sybil Check", status: formState.socialLink.trim() ? "green" as StatusColor : "grey" as StatusColor, tag: formState.socialLink.trim() ? "Clear" : "Pending" },
     ];
   }
+  const activityStatus: StatusColor = !r.onChainActivityTest?.scored ? "grey" : r.onChainActivityTest.label === "Active" ? "green" : r.onChainActivityTest.label === "Dead" || r.onChainActivityTest.label === "Dormant" ? "red" : "yellow";
   const liveStatus: StatusColor = !r.speedTest.scored ? "grey" : r.speedTest.score >= 12 ? "green" : "red";
   const reasoningStatus: StatusColor = r.logsTest.status === "verified" ? "green" : r.logsTest.status === "mismatch" ? "red" : "yellow";
   const sybilStatus: StatusColor = r.socialTest.status === "clear" ? "green" : r.socialTest.status === "suspicious" ? "red" : "grey";
   return [
+    { emoji: "⛓", label: "On-Chain Activity", status: activityStatus, tag: r.onChainActivityTest?.label || "Unknown" },
     { emoji: "🕒", label: "Liveliness", status: liveStatus, tag: liveStatus === "green" ? "Active" : "Passive" },
     { emoji: "🧠", label: "Reasoning", status: reasoningStatus, tag: reasoningStatus === "green" ? "Verified" : "Unlinked" },
     { emoji: "👥", label: "Sybil Check", status: sybilStatus, tag: sybilStatus === "green" ? "Clear" : sybilStatus === "red" ? "Suspicious" : "Unverified" },
@@ -246,6 +254,8 @@ function AdvancedResults({ result }: { result: AgentResult }) {
   const maxHolderPct = cs ? Math.max(...cs.topHolders.map(h => h.percent), 1) : 1;
 
   const narratives = [
+    { label: "On-Chain Activity", detail: result.onChainActivityTest?.detail || "" },
+    { label: "Contract Code", detail: result.codeSizeTest?.detail || "" },
     { label: "Speed Analysis", detail: result.speedTest.detail },
     { label: "Traceability", detail: result.traceabilityTest.detail },
     { label: "Context Coherence", detail: result.contextTest.detail },
