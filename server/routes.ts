@@ -249,6 +249,33 @@ async function getEthUsdPrice(): Promise<number> {
   } catch { return 0; }
 }
 
+const CREATION_LOG_SIGNATURES: Record<string, string> = {
+  "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
+  "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
+  "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
+};
+
+async function detectPlatformFromCreationTx(tokenAddr: string): Promise<string | null> {
+  try {
+    const transfers = await rpcCall("alchemy_getAssetTransfers", [{
+      fromBlock: "0x0", toBlock: "latest",
+      contractAddresses: [tokenAddr],
+      category: ["erc20"], maxCount: "0x1", order: "asc"
+    }]);
+    const firstTxHash = transfers?.transfers?.[0]?.hash;
+    if (!firstTxHash) return null;
+
+    const receipt = await rpcCall("eth_getTransactionReceipt", [firstTxHash]);
+    if (!receipt?.logs) return null;
+
+    for (const l of receipt.logs) {
+      const logAddr = (l.address || "").toLowerCase();
+      if (CREATION_LOG_SIGNATURES[logAddr]) return CREATION_LOG_SIGNATURES[logAddr];
+    }
+    return null;
+  } catch { return null; }
+}
+
 function detectPlatform(addr: string, deployer: string | null, holders: { address: string }[]): string | null {
   const a = addr.toLowerCase();
   if (PLATFORM_MAP[a]) return PLATFORM_MAP[a];
@@ -306,8 +333,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const topHolders = results[4].status === "fulfilled" ? results[4].value : [];
       const ethUsd = results[5].status === "fulfilled" ? results[5].value : 0;
 
+      let platform = detectPlatform(address, deployer, topHolders);
+      if (!platform) {
+        platform = await withTimeout(detectPlatformFromCreationTx(address), 5000, "creation-platform-detect").catch(() => null);
+      }
       const scanCount = await storage.incrementLookup(address, tokenInfo.name, tokenInfo.symbol);
-      const platform = detectPlatform(address, deployer, topHolders);
       const lpStatus = detectLpStatus(topHolders, platform);
       const isVirtuals = platform === "Virtuals";
 

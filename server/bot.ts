@@ -365,6 +365,33 @@ async function getWalletInfo(addr: string): Promise<WalletInfo> {
   } catch { return { balance: "0", txCount: 0, isContract: false, firstTx: null, firstTxHash: null, firstTxFrom: null, firstTxFromName: null, inflow: 0, outflow: 0 }; }
 }
 
+const CREATION_LOG_SIGNATURES: Record<string, string> = {
+  "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
+  "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
+  "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
+};
+
+async function detectPlatformFromCreationTx(tokenAddr: string): Promise<string | null> {
+  try {
+    const transfers = await rpcCall("alchemy_getAssetTransfers", [{
+      fromBlock: "0x0", toBlock: "latest",
+      contractAddresses: [tokenAddr],
+      category: ["erc20"], maxCount: "0x1", order: "asc"
+    }]);
+    const firstTxHash = transfers?.transfers?.[0]?.hash;
+    if (!firstTxHash) return null;
+
+    const receipt = await rpcCall("eth_getTransactionReceipt", [firstTxHash]);
+    if (!receipt?.logs) return null;
+
+    for (const l of receipt.logs) {
+      const logAddr = (l.address || "").toLowerCase();
+      if (CREATION_LOG_SIGNATURES[logAddr]) return CREATION_LOG_SIGNATURES[logAddr];
+    }
+    return null;
+  } catch { return null; }
+}
+
 function detectPlatform(addr: string, deployer: string | null, holders: { address: string }[]): string | null {
   const a = addr.toLowerCase();
   if (PLATFORM_MAP[a]) return PLATFORM_MAP[a];
@@ -425,11 +452,12 @@ async function runScan(address: string): Promise<string> {
 
   const platformFromDeployer = detectPlatform(address, deployer, []);
 
-  let [holderCount, topHolders, ethUsd, dexData] = await Promise.all([
+  let [holderCount, topHolders, ethUsd, dexData, creationPlatform] = await Promise.all([
     softTimeout(getHolderCount(address), 7000, 0),
     softTimeout(getTopHolders(address), 7000, []),
     softTimeout(getEthUsdPrice(), 7000, 0),
     softTimeout(getDexScreenerData(address), 7000, { priceUsd: 0, liquidity: 0 }),
+    !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
   ]);
 
   let holdersComplete = topHolders.length > 0;
@@ -450,7 +478,7 @@ async function runScan(address: string): Promise<string> {
 
   const scanCount = await storage.incrementLookup(address, tokenInfo.name, tokenInfo.symbol);
 
-  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer;
+  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || creationPlatform;
   const lpStatus = detectLpStatus(topHolders, platform, holdersComplete);
   const isVirtuals = platform === "Virtuals";
 
@@ -656,15 +684,16 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
 
   const platformFromDeployer = detectPlatform(address, deployer, []);
 
-  const [holderCount, topHolders, ethUsd, dexData, dexSocials] = await Promise.all([
+  const [holderCount, topHolders, ethUsd, dexData, dexSocials, creationPlatform] = await Promise.all([
     softTimeout(getHolderCount(address), 7000, 0),
     softTimeout(getTopHolders(address), 7000, []),
     softTimeout(getEthUsdPrice(), 7000, 0),
     softTimeout(getDexScreenerData(address), 7000, { priceUsd: 0, liquidity: 0 }),
     softTimeout(getDexScreenerSocials(address), 7000, { twitter: null, website: null, telegram: null }),
+    !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
   ]);
 
-  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer;
+  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || creationPlatform;
   const isVirtuals = platform === "Virtuals";
   const buyTax = isVirtuals ? 0 : sim.buyTax;
   const sellTax = isVirtuals ? 0 : sim.sellTax;
