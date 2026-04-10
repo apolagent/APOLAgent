@@ -241,6 +241,140 @@ async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liq
   }
 }
 
+async function getDexScreenerSocials(addr: string): Promise<{ twitter: string | null; website: string | null; description: string | null }> {
+  try {
+    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
+    const pair = data?.pairs?.[0];
+    const info = pair?.info || {};
+    const socials = info.socials || [];
+    let twitter: string | null = null;
+    let website: string | null = null;
+    const description: string | null = info.description || null;
+    for (const s of socials) {
+      if (s.type === "twitter" && s.url) twitter = s.url.replace(/https?:\/\/(x\.com|twitter\.com)\//i, "").replace(/\/$/, "");
+    }
+    const websites = info.websites || [];
+    if (websites.length > 0) website = websites[0].url || null;
+    return { twitter, website, description };
+  } catch { return { twitter: null, website: null, description: null }; }
+}
+
+const AGENT_ABILITY_KEYWORDS: Record<string, string[]> = {
+  "Trading": ["trade", "trading", "swap", "dex", "buy", "sell", "snipe", "arbitrage", "mev"],
+  "Social": ["tweet", "post", "social", "reply", "engage", "content", "community"],
+  "Analytics": ["analyze", "monitor", "track", "scan", "detect", "alert", "report", "data"],
+  "DeFi": ["yield", "farm", "lend", "borrow", "stake", "liquidity", "vault", "protocol"],
+  "Bridge": ["bridge", "cross-chain", "multichain", "transfer"],
+  "Gaming": ["game", "play", "nft", "mint", "breed"],
+  "Autonomous": ["autonomous", "self-learning", "ai agent", "artificial intelligence", "machine learning", "neural", "cognitive"],
+};
+
+interface AbilityAudit {
+  claimedAbilities: string[];
+  reasoningUrl: string | null;
+  reasoningStatus: "verified" | "mismatch" | "not_found" | "no_source";
+  reasoningDetail: string;
+  abilityMismatch: string | null;
+}
+
+function extractAbilitiesFromText(text: string): string[] {
+  const lower = text.toLowerCase();
+  const found: string[] = [];
+  for (const [category, keywords] of Object.entries(AGENT_ABILITY_KEYWORDS)) {
+    if (keywords.some(k => lower.includes(k))) found.push(category);
+  }
+  return found;
+}
+
+function isSafeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    const host = parsed.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "[::1]") return false;
+    if (host.startsWith("10.") || host.startsWith("192.168.") || host === "169.254.169.254") return false;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
+    if (host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".localhost")) return false;
+    return true;
+  } catch { return false; }
+}
+
+function extractUrlsFromText(text: string): string[] {
+  const urlRegex = /https?:\/\/[^\s"'<>)\]]+/gi;
+  return (text.match(urlRegex) || []).filter(u => !u.includes("x.com") && !u.includes("twitter.com") && !u.includes("t.me") && !u.includes("discord")).filter(isSafeUrl);
+}
+
+async function autoAuditAbilities(
+  twitterBio: string | null,
+  dexDescription: string | null,
+  websiteUrl: string | null,
+  contractActivity: ContractActivity,
+): Promise<AbilityAudit> {
+  const allAbilities: string[] = [];
+  const allTexts: string[] = [];
+
+  if (twitterBio) { allTexts.push(twitterBio); allAbilities.push(...extractAbilitiesFromText(twitterBio)); }
+  if (dexDescription) { allTexts.push(dexDescription); allAbilities.push(...extractAbilitiesFromText(dexDescription)); }
+
+  const claimedAbilities = [...new Set(allAbilities)];
+
+  let reasoningUrl: string | null = null;
+  let reasoningStatus: AbilityAudit["reasoningStatus"] = "no_source";
+  let reasoningDetail = "No reasoning logs or dashboard URL found.";
+
+  const candidateUrls = extractUrlsFromText(allTexts.join(" "));
+  if (websiteUrl && isSafeUrl(websiteUrl)) candidateUrls.unshift(websiteUrl);
+
+  for (const url of candidateUrls.slice(0, 3)) {
+    try {
+      const resp = await fetch(url, { signal: AbortSignal.timeout(4000), redirect: "follow" });
+      if (!resp.ok) continue;
+      const contentType = resp.headers.get("content-type") || "";
+      if (!contentType.includes("text/html") && !contentType.includes("application/json") && !contentType.includes("text/plain")) continue;
+      const reader = resp.body?.getReader();
+      if (!reader) continue;
+      let body = "";
+      const decoder = new TextDecoder();
+      while (body.length < 4000) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        body += decoder.decode(value, { stream: true });
+      }
+      reader.cancel().catch(() => {});
+      const snippet = body.slice(0, 3000).toLowerCase();
+      const hasReasoningSignals = /log|reason|decision|chose|executed|analyzed|swap|trade|thinking|action|step \d|task/i.test(snippet);
+      const hasTimestamps = /\d{4}-\d{2}-\d{2}|\d{10,13}|T\d{2}:\d{2}/.test(snippet);
+      const hasDashboardSignals = /dashboard|activity|history|transactions|agent.*status|live.*feed/i.test(snippet);
+      if (hasReasoningSignals && hasTimestamps) {
+        reasoningUrl = url;
+        reasoningStatus = "verified";
+        reasoningDetail = "Found reasoning logs with timestamped entries — consistent with autonomous operation.";
+        break;
+      } else if (hasReasoningSignals || hasDashboardSignals) {
+        reasoningUrl = url;
+        reasoningStatus = "mismatch";
+        reasoningDetail = "Found potential agent dashboard but no clear timestamped reasoning traces.";
+      }
+    } catch {}
+  }
+
+  if (!reasoningUrl && allTexts.length > 0) {
+    reasoningStatus = "not_found";
+    reasoningDetail = "Scanned linked website and social bios — no reasoning logs or agent dashboard found.";
+  }
+
+  let abilityMismatch: string | null = null;
+  if (claimedAbilities.includes("Trading") && contractActivity.txCount < 50 && contractActivity.contractAgeDays > 7) {
+    abilityMismatch = "Claims trading abilities but contract shows minimal swap/transfer activity.";
+  } else if (claimedAbilities.includes("DeFi") && contractActivity.txCount < 20 && contractActivity.contractAgeDays > 7) {
+    abilityMismatch = "Claims DeFi capabilities but near-zero protocol interactions detected.";
+  } else if (claimedAbilities.length === 0 && allTexts.length > 0) {
+    abilityMismatch = "No specific agent abilities claimed in bio or description — vague identity.";
+  }
+
+  return { claimedAbilities, reasoningUrl, reasoningStatus, reasoningDetail, abilityMismatch };
+}
+
 interface FallbackTokenData {
   holderCount: number;
   isHoneypot: boolean;
@@ -683,6 +817,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch {}
       }
 
+      let autoAbilityAudit: AbilityAudit | null = null;
+      let twitterBio: string | null = null;
+      if (wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet)) {
+        try {
+          const dexSocials = await getDexScreenerSocials(wallet);
+          let fetchedBio: string | null = null;
+          if (dexSocials.twitter) {
+            try {
+              const xRes = await fetch(`https://api.fxtwitter.com/${dexSocials.twitter}`, { signal: AbortSignal.timeout(5000) });
+              if (xRes.ok) {
+                const xData = await xRes.json() as any;
+                fetchedBio = xData?.user?.description || null;
+              }
+            } catch {}
+          }
+          twitterBio = fetchedBio;
+          autoAbilityAudit = await autoAuditAbilities(fetchedBio, dexSocials.description, dexSocials.website, contractActivity);
+        } catch {}
+      }
+
       let socialStatus: "clear" | "suspicious" | "inconclusive" = "inconclusive";
       let socialDetail = "No social link provided.";
       let socialFollowers: number | undefined;
@@ -733,11 +887,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (matches.length >= 3) contextDetail = `Strong capability claims: ${matches.slice(0, 4).join(", ")}. Claims appear detailed and specific.`;
         else if (matches.length >= 1) contextDetail = `Some capability claims: ${matches.join(", ")}. Partially verifiable.`;
         else contextDetail = "Claimed abilities are vague or don't match known agent patterns.";
+      } else if (autoAbilityAudit && autoAbilityAudit.claimedAbilities.length > 0) {
+        contextScore = Math.min(20, autoAbilityAudit.claimedAbilities.length * 5);
+        contextDetail = `Auto-detected abilities from socials/description: ${autoAbilityAudit.claimedAbilities.join(", ")}.`;
+        if (autoAbilityAudit.abilityMismatch) contextDetail += ` ⚠️ ${autoAbilityAudit.abilityMismatch}`;
       }
 
       let logsStatus: "verified" | "mismatch" | "inconclusive" = "inconclusive";
       let logsDetail = "No logs URL provided.";
       const logsArr: string[] = [];
+      if (!logsUrl && autoAbilityAudit) {
+        if (autoAbilityAudit.reasoningStatus === "verified") {
+          logsStatus = "verified";
+          logsDetail = autoAbilityAudit.reasoningDetail;
+          if (autoAbilityAudit.reasoningUrl) logsArr.push(`Auto-discovered: ${autoAbilityAudit.reasoningUrl}`);
+        } else if (autoAbilityAudit.reasoningStatus === "mismatch") {
+          logsStatus = "inconclusive";
+          logsDetail = autoAbilityAudit.reasoningDetail;
+        } else if (autoAbilityAudit.reasoningStatus === "not_found") {
+          logsStatus = "inconclusive";
+          logsDetail = autoAbilityAudit.reasoningDetail;
+        }
+      }
       if (logsUrl && logsUrl.trim()) {
         try {
           const logsRes = await fetch(logsUrl.trim(), { signal: AbortSignal.timeout(5000) });
@@ -761,6 +932,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         } catch {
           logsDetail = "Could not fetch logs URL — timeout or connection error.";
+        }
+        if (logsStatus === "inconclusive" && autoAbilityAudit?.reasoningStatus === "verified") {
+          logsStatus = "verified";
+          logsDetail = autoAbilityAudit.reasoningDetail;
+          if (autoAbilityAudit.reasoningUrl) logsArr.push(`Auto-discovered: ${autoAbilityAudit.reasoningUrl}`);
         }
       }
 
@@ -815,11 +991,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const logsScore = logsStatus === "verified" ? 20 : logsStatus === "mismatch" ? 0 : 5;
       const rawScore = speedScore + traceScore + contextScore + socialScore + logsScore + activityScore + codeSizeScore;
 
+      const hasAutoAbilities = !claimedAbilities && autoAbilityAudit && autoAbilityAudit.claimedAbilities.length > 0;
+      const hasAutoLogs = !logsUrl && autoAbilityAudit && (autoAbilityAudit.reasoningStatus === "verified" || autoAbilityAudit.reasoningStatus === "mismatch");
       const scoredTests = [
         wallet ? 1 : 0,
         socialLink ? 1 : 0,
-        logsUrl ? 1 : 0,
-        claimedAbilities ? 1 : 0,
+        (logsUrl || hasAutoLogs) ? 1 : 0,
+        (claimedAbilities || hasAutoAbilities) ? 1 : 0,
         wallet ? 1 : 0,
       ].reduce((a, b) => a + b, 0);
 
@@ -849,6 +1027,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (deployerContractCount >= 5) apolVerdict += ` ⚠️ Serial deployer detected: ${deployerContractCount} contracts from the same creator.`;
       if (treasuryEth < 0.005 && wallet) apolVerdict += " ⚠️ Creator treasury is near-empty.";
       if (!contractActivity.hasContractCode && wallet) apolVerdict += " ⚠️ No contract code found — this is a bare token with no agent logic.";
+      if (autoAbilityAudit?.abilityMismatch) apolVerdict += ` ⚠️ ${autoAbilityAudit.abilityMismatch}`;
+      if (autoAbilityAudit?.reasoningStatus === "verified") apolVerdict += " ✅ Autonomous reasoning logs detected.";
+      if (autoAbilityAudit?.reasoningStatus === "not_found" && autoAbilityAudit.claimedAbilities.length > 0) apolVerdict += " ⚠️ Claims abilities but no public reasoning logs found.";
 
       res.json({
         agentName: agentName.trim(),
@@ -870,6 +1051,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         creatorAddress: deployerAddr,
         platformName: contractScan?.protocolLocker || null,
         isKnownFactory: !!contractScan?.protocolLocker,
+        abilityAudit: autoAbilityAudit ? {
+          claimedAbilities: autoAbilityAudit.claimedAbilities,
+          reasoningUrl: autoAbilityAudit.reasoningUrl,
+          reasoningStatus: autoAbilityAudit.reasoningStatus,
+          reasoningDetail: autoAbilityAudit.reasoningDetail,
+          abilityMismatch: autoAbilityAudit.abilityMismatch,
+        } : undefined,
       });
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Agent analysis failed" });

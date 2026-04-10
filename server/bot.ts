@@ -783,7 +783,7 @@ function getProtocolUrl(platform: string | null, address: string): string | null
   return null;
 }
 
-async function getDexScreenerSocials(addr: string): Promise<{ twitter: string | null; website: string | null; telegram: string | null }> {
+async function getDexScreenerSocials(addr: string): Promise<{ twitter: string | null; website: string | null; telegram: string | null; description: string | null }> {
   try {
     const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
     const pair = data?.pairs?.[0];
@@ -792,14 +792,141 @@ async function getDexScreenerSocials(addr: string): Promise<{ twitter: string | 
     let twitter: string | null = null;
     let website: string | null = null;
     let telegram: string | null = null;
+    const description: string | null = info.description || null;
     for (const s of socials) {
       if (s.type === "twitter" && s.url) twitter = s.url.replace(/https?:\/\/(x\.com|twitter\.com)\//i, "").replace(/\/$/, "");
       if (s.type === "telegram" && s.url) telegram = s.url;
     }
     const websites = info.websites || [];
     if (websites.length > 0) website = websites[0].url || null;
-    return { twitter, website, telegram };
-  } catch { return { twitter: null, website: null, telegram: null }; }
+    return { twitter, website, telegram, description };
+  } catch { return { twitter: null, website: null, telegram: null, description: null }; }
+}
+
+const AGENT_ABILITY_KEYWORDS: Record<string, string[]> = {
+  "Trading": ["trade", "trading", "swap", "dex", "buy", "sell", "snipe", "arbitrage", "mev"],
+  "Social": ["tweet", "post", "social", "reply", "engage", "content", "community"],
+  "Analytics": ["analyze", "monitor", "track", "scan", "detect", "alert", "report", "data"],
+  "DeFi": ["yield", "farm", "lend", "borrow", "stake", "liquidity", "vault", "protocol"],
+  "Bridge": ["bridge", "cross-chain", "multichain", "transfer"],
+  "Gaming": ["game", "play", "nft", "mint", "breed"],
+  "Autonomous": ["autonomous", "self-learning", "ai agent", "artificial intelligence", "machine learning", "neural", "cognitive"],
+};
+
+interface AbilityAudit {
+  claimedAbilities: string[];
+  sourceTexts: string[];
+  reasoningUrl: string | null;
+  reasoningStatus: "verified" | "mismatch" | "not_found" | "no_source";
+  reasoningDetail: string;
+  abilityMismatch: string | null;
+}
+
+function extractAbilities(text: string): string[] {
+  const lower = text.toLowerCase();
+  const found: string[] = [];
+  for (const [category, keywords] of Object.entries(AGENT_ABILITY_KEYWORDS)) {
+    if (keywords.some(k => lower.includes(k))) found.push(category);
+  }
+  return found;
+}
+
+function extractUrls(text: string): string[] {
+  const urlRegex = /https?:\/\/[^\s"'<>)\]]+/gi;
+  return (text.match(urlRegex) || []).filter(u => !u.includes("x.com") && !u.includes("twitter.com") && !u.includes("t.me") && !u.includes("discord")).filter(isSafeUrl);
+}
+
+function isSafeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    const host = parsed.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "[::1]") return false;
+    if (host.startsWith("10.") || host.startsWith("192.168.") || host === "169.254.169.254") return false;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
+    if (host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".localhost")) return false;
+    return true;
+  } catch { return false; }
+}
+
+async function auditAgentAbilities(
+  xProfile: { bio: string; tweets: number } | null,
+  dexDescription: string | null,
+  websiteUrl: string | null,
+  contractActivity: ContractActivity,
+): Promise<AbilityAudit> {
+  const sourceTexts: string[] = [];
+  const allAbilities: string[] = [];
+
+  if (xProfile?.bio) {
+    sourceTexts.push(xProfile.bio);
+    allAbilities.push(...extractAbilities(xProfile.bio));
+  }
+  if (dexDescription) {
+    sourceTexts.push(dexDescription);
+    allAbilities.push(...extractAbilities(dexDescription));
+  }
+
+  const claimedAbilities = [...new Set(allAbilities)];
+
+  let reasoningUrl: string | null = null;
+  let reasoningStatus: AbilityAudit["reasoningStatus"] = "no_source";
+  let reasoningDetail = "No reasoning logs or dashboard URL found.";
+
+  const allText = sourceTexts.join(" ");
+  const candidateUrls = extractUrls(allText);
+  if (websiteUrl && isSafeUrl(websiteUrl)) candidateUrls.unshift(websiteUrl);
+
+  for (const url of candidateUrls.slice(0, 3)) {
+    try {
+      const resp = await fetch(url, { signal: AbortSignal.timeout(4000), redirect: "follow" });
+      if (!resp.ok) continue;
+      const contentType = resp.headers.get("content-type") || "";
+      if (!contentType.includes("text/html") && !contentType.includes("application/json") && !contentType.includes("text/plain")) continue;
+      const reader = resp.body?.getReader();
+      if (!reader) continue;
+      let body = "";
+      const decoder = new TextDecoder();
+      while (body.length < 4000) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        body += decoder.decode(value, { stream: true });
+      }
+      reader.cancel().catch(() => {});
+      const snippet = body.slice(0, 3000).toLowerCase();
+
+      const hasReasoningSignals = /log|reason|decision|chose|executed|analyzed|swap|trade|thinking|action|step \d|task/i.test(snippet);
+      const hasTimestamps = /\d{4}-\d{2}-\d{2}|\d{10,13}|T\d{2}:\d{2}/.test(snippet);
+      const hasDashboardSignals = /dashboard|activity|history|transactions|agent.*status|live.*feed/i.test(snippet);
+
+      if (hasReasoningSignals && hasTimestamps) {
+        reasoningUrl = url;
+        reasoningStatus = "verified";
+        reasoningDetail = "Found reasoning logs with timestamped entries — consistent with autonomous operation.";
+        break;
+      } else if (hasReasoningSignals || hasDashboardSignals) {
+        reasoningUrl = url;
+        reasoningStatus = "mismatch";
+        reasoningDetail = "Found potential agent dashboard but no clear timestamped reasoning traces.";
+      }
+    } catch {}
+  }
+
+  if (!reasoningUrl && sourceTexts.length > 0) {
+    reasoningStatus = "not_found";
+    reasoningDetail = "Scanned linked website and social bios — no reasoning logs or agent dashboard found.";
+  }
+
+  let abilityMismatch: string | null = null;
+  if (claimedAbilities.includes("Trading") && contractActivity.txCount < 50 && contractActivity.contractAgeDays > 7) {
+    abilityMismatch = "Claims trading abilities but contract shows minimal swap/transfer activity.";
+  } else if (claimedAbilities.includes("DeFi") && contractActivity.txCount < 20 && contractActivity.contractAgeDays > 7) {
+    abilityMismatch = "Claims DeFi capabilities but near-zero protocol interactions detected.";
+  } else if (claimedAbilities.length === 0 && sourceTexts.length > 0) {
+    abilityMismatch = "No specific agent abilities claimed in bio or description — vague identity.";
+  }
+
+  return { claimedAbilities, sourceTexts, reasoningUrl, reasoningStatus, reasoningDetail, abilityMismatch };
 }
 
 async function runAgentScan(address: string, searchedName: string | null): Promise<string> {
@@ -824,7 +951,7 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
     softTimeout(getTopHolders(address), 7000, []),
     softTimeout(getEthUsdPrice(), 7000, 0),
     softTimeout(getDexScreenerData(address), 7000, { priceUsd: 0, liquidity: 0, poolVersion: null }),
-    softTimeout(getDexScreenerSocials(address), 7000, { twitter: null, website: null, telegram: null }),
+    softTimeout(getDexScreenerSocials(address), 7000, { twitter: null, website: null, telegram: null, description: null }),
     !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
     !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
   ]);
@@ -857,6 +984,12 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
     dexSocials.twitter ? softTimeout(fetchXProfile(dexSocials.twitter), 5000, null) : Promise.resolve(null),
     softTimeout(getContractActivity(address), 6000, { txCount: 0, contractAgeDays: 0, hasContractCode: false, codeSize: 0, activityPerDay: 0 } as ContractActivity),
   ]);
+
+  const abilityAudit = await softTimeout(
+    auditAgentAbilities(xProfile, dexSocials.description, dexSocials.website, contractActivity),
+    8000,
+    { claimedAbilities: [], sourceTexts: [], reasoningUrl: null, reasoningStatus: "no_source" as const, reasoningDetail: "Timeout", abilityMismatch: null },
+  );
 
   let tokenPriceUsd = dexData.priceUsd;
   if (tokenPriceUsd === 0 && sim.tokensReceived > BigInt(0) && ethUsd > 0) {
@@ -927,6 +1060,20 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
     agentPasses.push("✅ Complex contract code — Agent logic possible");
   }
 
+  if (abilityAudit.abilityMismatch) {
+    agentFlags.push(`⚠️ Ability mismatch — ${abilityAudit.abilityMismatch}`);
+  }
+  if (abilityAudit.reasoningStatus === "verified") {
+    agentPasses.push("✅ Reasoning logs found — Autonomous operation traces detected");
+  } else if (abilityAudit.reasoningStatus === "not_found" && abilityAudit.claimedAbilities.length > 0) {
+    agentFlags.push("⚠️ No reasoning logs — Claims abilities but no public proof of autonomous decisions");
+  }
+  if (abilityAudit.claimedAbilities.length >= 3) {
+    agentPasses.push("✅ Multiple abilities claimed — Rich agent identity");
+  } else if (abilityAudit.claimedAbilities.length === 0 && dexSocials.description) {
+    agentFlags.push("🔇 No agent abilities detectable from description");
+  }
+
   let verdict = "";
   let verdictEmoji = "";
   if (isHoneypot || agentFlags.length >= 4) { verdict = "LARP DETECTED"; verdictEmoji = "🔴"; }
@@ -955,6 +1102,22 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
   lines.push(`   ⚡ Activity Rate: ${contractActivity.activityPerDay > 0 ? `${contractActivity.activityPerDay}/day` : "Inactive"}`);
   lines.push(`   📦 Code Size: ${contractActivity.hasContractCode ? `${(contractActivity.codeSize / 1024).toFixed(1)}KB` : "None"}`);
   lines.push(`   ${onChainEmoji || "⚪"} *Status: ${onChainLabel || "Unknown"}*`);
+  lines.push(``);
+
+  lines.push(`🔎 *REASONING & ABILITIES*`);
+  if (abilityAudit.claimedAbilities.length > 0) {
+    lines.push(`   🏷 Claimed: ${abilityAudit.claimedAbilities.join(", ")}`);
+  } else {
+    lines.push(`   🏷 Claimed: No specific abilities detected`);
+  }
+  const reasoningIcons: Record<string, string> = { verified: "✅", mismatch: "🟡", not_found: "🔴", no_source: "⚪" };
+  lines.push(`   ${reasoningIcons[abilityAudit.reasoningStatus] || "⚪"} Reasoning: ${abilityAudit.reasoningDetail}`);
+  if (abilityAudit.reasoningUrl) {
+    lines.push(`   📄 Logs: ${abilityAudit.reasoningUrl}`);
+  }
+  if (abilityAudit.abilityMismatch) {
+    lines.push(`   ⚠️ ${abilityAudit.abilityMismatch}`);
+  }
   lines.push(``);
 
   lines.push(`🧠 *MIND-TO-WALLET TRACE*`);

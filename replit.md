@@ -71,6 +71,9 @@ shared/
 - **On-Chain Activity Audit**: Fetches transaction count (Blockscout `/api/v2/addresses/.../counters`) + token_transfers_count. Contract age from creation tx (Blockscout) or first ERC-20 transfer block timestamp (Alchemy fallback). Activity rate = txCount / ageDays.
 - **Contract Code Check**: `eth_getCode` via RPC. Bare ERC-20 (<500 bytes) = no agent logic. Complex (>5KB) = agent logic possible.
 - **MCap vs Activity Mismatch**: $1M+ MCap with <10 transactions over >7 days = "NARRATIVE BLACK BOX" flag.
+- **Reasoning & Abilities Auto-Discovery**: Extracts claimed abilities from Twitter bio + DexScreener description using keyword matching across 7 categories (Trading, Social, Analytics, DeFi, Bridge, Gaming, Autonomous). Auto-discovers reasoning logs by fetching linked website + URLs in bios, checking for timestamped reasoning entries. Cross-references claimed abilities vs on-chain activity (e.g. "claims trading but <50 txs" = mismatch flag). Both bot and web have this.
+- **Ability Audit Keywords**: `AGENT_ABILITY_KEYWORDS` map in both `bot.ts` and `routes.ts`. Categories: Trading, Social, Analytics, DeFi, Bridge, Gaming, Autonomous.
+- **Reasoning URL Discovery**: Fetches up to 3 candidate URLs from website + social bios. Checks for: timestamped entries + reasoning words = "verified"; dashboard signals = "mismatch"; nothing found = "not_found".
 - **Verdict thresholds (bot)**: LARP DETECTED (honeypot or 4+ flags), SUSPICIOUS (2+ flags), INCONCLUSIVE (1 flag + 2 passes), LIKELY LEGITIMATE (3+ passes), INSUFFICIENT DATA (default).
 - **Web cognition score**: speedScore(30) + traceScore(20) + contextScore(20) + socialScore(20) + logsScore(20) + activityScore(15) + codeSizeScore(10). Verdict: Digital Puppet (<21), Low Autonomy (21-40), Semi-Autonomous (41-70), Fully Autonomous (71+).
 - **Caching**: DexScreener data (60s), ETH price (60s), scan results (60s), in-flight deduplication for concurrent requests.

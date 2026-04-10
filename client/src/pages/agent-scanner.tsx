@@ -107,6 +107,14 @@ type ContractScan = {
 type OnChainActivityTest = TestResult & { txCount?: number; contractAgeDays?: number; activityPerDay?: number };
 type CodeSizeTest = TestResult & { codeSize?: number; hasCode?: boolean };
 
+type AbilityAuditResult = {
+  claimedAbilities: string[];
+  reasoningUrl: string | null;
+  reasoningStatus: "verified" | "mismatch" | "not_found" | "no_source";
+  reasoningDetail: string;
+  abilityMismatch: string | null;
+};
+
 type AgentResult = {
   agentName: string;
   wallet: string | null;
@@ -124,6 +132,10 @@ type AgentResult = {
   onChainActivityTest?: OnChainActivityTest;
   codeSizeTest?: CodeSizeTest;
   contractScan: ContractScan | null;
+  abilityAudit?: AbilityAuditResult;
+  isKnownFactory?: boolean;
+  lpEscrow?: { name: string; address: string; percent: number } | null;
+  platformName?: string | null;
 };
 
 type StatusColor = "green" | "red" | "yellow" | "grey";
@@ -178,10 +190,12 @@ function getEvidenceFiling(r: AgentResult | null, formState: { wallet: string; l
   const liveStatus: StatusColor = !r.speedTest.scored ? "grey" : r.speedTest.score >= 12 ? "green" : "red";
   const reasoningStatus: StatusColor = r.logsTest.status === "verified" ? "green" : r.logsTest.status === "mismatch" ? "red" : "yellow";
   const sybilStatus: StatusColor = r.socialTest.status === "clear" ? "green" : r.socialTest.status === "suspicious" ? "red" : "grey";
+  const abilityStatus: StatusColor = r.abilityAudit ? (r.abilityAudit.claimedAbilities.length >= 2 && !r.abilityAudit.abilityMismatch ? "green" : r.abilityAudit.abilityMismatch ? "red" : r.abilityAudit.claimedAbilities.length > 0 ? "yellow" : "grey") : "grey";
   return [
     { emoji: "⛓", label: "On-Chain Activity", status: activityStatus, tag: r.onChainActivityTest?.label || "Unknown" },
     { emoji: "🕒", label: "Liveliness", status: liveStatus, tag: liveStatus === "green" ? "Active" : "Passive" },
     { emoji: "🧠", label: "Reasoning", status: reasoningStatus, tag: reasoningStatus === "green" ? "Verified" : "Unlinked" },
+    { emoji: "🔎", label: "Abilities", status: abilityStatus, tag: r.abilityAudit?.claimedAbilities.length ? `${r.abilityAudit.claimedAbilities.length} Found` : "None" },
     { emoji: "👥", label: "Sybil Check", status: sybilStatus, tag: sybilStatus === "green" ? "Clear" : sybilStatus === "red" ? "Suspicious" : "Unverified" },
   ];
 }
@@ -253,9 +267,18 @@ function AdvancedResults({ result }: { result: AgentResult }) {
 
   const maxHolderPct = cs ? Math.max(...cs.topHolders.map(h => h.percent), 1) : 1;
 
+  const abilityDetail = result.abilityAudit
+    ? [
+        result.abilityAudit.claimedAbilities.length > 0 ? `Detected abilities: ${result.abilityAudit.claimedAbilities.join(", ")}.` : "No specific abilities detected.",
+        result.abilityAudit.reasoningDetail,
+        result.abilityAudit.abilityMismatch || "",
+      ].filter(Boolean).join(" ")
+    : "";
+
   const narratives = [
     { label: "On-Chain Activity", detail: result.onChainActivityTest?.detail || "" },
     { label: "Contract Code", detail: result.codeSizeTest?.detail || "" },
+    { label: "Reasoning & Abilities", detail: abilityDetail },
     { label: "Speed Analysis", detail: result.speedTest.detail },
     { label: "Traceability", detail: result.traceabilityTest.detail },
     { label: "Context Coherence", detail: result.contextTest.detail },
@@ -368,8 +391,8 @@ function AdvancedResults({ result }: { result: AgentResult }) {
           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px" }}>
             {[
               { label: "Honeypot", value: cs.honeypot ? "DETECTED" : "CLEAR", color: cs.honeypot ? "#f87171" : G },
-              { label: "Buy Tax", value: checkResult?.taxOverride ? `Protocol Managed` : `${cs.buyTax.toFixed(1)}%`, color: checkResult?.taxOverride ? G : (cs.buyTax > 5 ? "#f87171" : cs.buyTax > 0 ? "#facc15" : G) },
-              { label: "Sell Tax", value: checkResult?.taxOverride ? `Protocol Managed` : `${cs.sellTax.toFixed(1)}%`, color: checkResult?.taxOverride ? G : (cs.sellTax > 5 ? "#f87171" : cs.sellTax > 0 ? "#facc15" : G) },
+              { label: "Buy Tax", value: isProtocolManaged ? `Protocol Managed` : `${cs.buyTax.toFixed(1)}%`, color: isProtocolManaged ? G : (cs.buyTax > 5 ? "#f87171" : cs.buyTax > 0 ? "#facc15" : G) },
+              { label: "Sell Tax", value: isProtocolManaged ? `Protocol Managed` : `${cs.sellTax.toFixed(1)}%`, color: isProtocolManaged ? G : (cs.sellTax > 5 ? "#f87171" : cs.sellTax > 0 ? "#facc15" : G) },
               { label: "Liquidity", value: lpStatus, color: lpColor },
             ].map((item, i) => (
               <div key={i}>
