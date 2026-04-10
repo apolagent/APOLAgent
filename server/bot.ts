@@ -549,12 +549,16 @@ function isContractAddress(text: string): boolean {
 
 async function runScan(address: string): Promise<string> {
   const t0 = Date.now();
+  log(`runScan START for ${address.slice(0, 10)}...`, "bot");
 
+  let phase1End = 0;
   const [simR, tokenR, deployerR] = await Promise.allSettled([
     softTimeout(simulateToken(address), 12000, { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: "Timeout" } as SimResult),
     softTimeout(getTokenInfo(address), 8000, { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18 }),
     softTimeout(getDeployer(address), 7000, null),
   ]);
+  phase1End = Date.now();
+  log(`runScan P1 ${phase1End - t0}ms sim=${simR.status} token=${tokenR.status} deployer=${deployerR.status}`, "bot");
 
   const sim: SimResult = simR.status === "fulfilled" ? simR.value
     : { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: "Simulation error" };
@@ -573,6 +577,8 @@ async function runScan(address: string): Promise<string> {
     !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
   ]);
 
+  log(`runScan P2 ${Date.now() - t0}ms holders=${holderCount} dex=$${dexData.priceUsd} ethUsd=${ethUsd}`, "bot");
+
   let holdersComplete = topHolders.length > 0;
 
   if (dexData.priceUsd === 0 || holderCount === 0) {
@@ -587,6 +593,7 @@ async function runScan(address: string): Promise<string> {
       topHolders = retries[2] as typeof topHolders;
       holdersComplete = topHolders.length > 0;
     }
+    log(`runScan P2-retry ${Date.now() - t0}ms holders=${holderCount} dex=$${dexData.priceUsd}`, "bot");
   }
 
   let fallbackData: FallbackTokenData | null = null;
@@ -662,6 +669,8 @@ async function runScan(address: string): Promise<string> {
     : flags.length > 0
       ? "🟡 CAUTION"
       : "🟢 LOW RISK";
+
+  log(`runScan DONE for ${address.slice(0, 10)}... in ${Date.now() - t0}ms — ${tokenInfo.symbol} risk=${riskLevel.includes("HIGH") ? "HIGH" : riskLevel.includes("CAUTION") ? "MID" : "LOW"} sim=${sim.simulationSuccess}`, "bot");
 
   const riskShort = riskLevel.includes("HIGH") ? "High" : riskLevel.includes("CAUTION") ? "Caution" : "Clean";
   storage.logAgentActivity({
@@ -941,6 +950,7 @@ async function auditAgentAbilities(
 
 async function runAgentScan(address: string, searchedName: string | null): Promise<string> {
   const t0 = Date.now();
+  log(`runAgentScan START for ${address.slice(0, 10)}... name=${searchedName || "none"}`, "bot");
 
   const [simR, tokenR, deployerR] = await Promise.allSettled([
     softTimeout(simulateToken(address), 12000, { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: "Timeout" } as SimResult),
@@ -1208,7 +1218,7 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
 }
 
 function esc(s: string): string {
-  return s.replace(/[_*[\]()~`>#+\-=|{}.!]/g, "\\$&");
+  return s.replace(/[_*`\[\]]/g, "");
 }
 
 async function cachedRunScan(address: string): Promise<string | null> {
@@ -1236,12 +1246,20 @@ async function cachedRunScan(address: string): Promise<string | null> {
 }
 
 async function handleScan(ctx: any, address: string): Promise<void> {
+  log(`handleScan called for ${address.slice(0, 10)}...`, "bot");
   const shortAddr = `${address.slice(0, 8)}. . .${address.slice(-6)}`;
   const loadingMsg = await ctx.reply(`🔍 *Analyzing Forensic Data...*\n\n📍 ${shortAddr}\n_Consulting APOL intelligence database. This may take a moment._`, { parse_mode: "Markdown" });
   try {
     const report = await cachedRunScan(address);
+    log(`handleScan result for ${address.slice(0, 10)}...: ${report ? `${report.length} chars` : "NULL"}`, "bot");
     if (report) {
-      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+      try {
+        await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+      } catch (mdErr: any) {
+        log(`handleScan Markdown edit failed: ${mdErr?.message?.slice(0, 120)}`, "bot");
+        const plain = report.replace(/[*_`\[\]]/g, "");
+        await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, plain.slice(0, 4000), { link_preview_options: { is_disabled: true } }).catch(() => {});
+      }
     } else {
       const scanCount = await storage.incrementLookup(address).catch(() => 0);
       await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
@@ -1302,7 +1320,7 @@ async function handleScanX(ctx: any, input: string): Promise<void> {
     const SELF_HANDLES = ["apolagent_", "apolagent", "apol_agent", "apolagentbot"];
     if (SELF_HANDLES.includes(handle.toLowerCase())) {
       await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
-        `🔍 *APOL AGENT — SCANX RESULTS*\n\n🐦 *X Handle:* @${esc(handle)}\n\n✅ *VERIFIED — This is APOL Agent*\n\n🏛 Official security protocol on Base chain\n🔗 Website: apolagent.online\n🐦 Twitter: @ApolAgent\\_\n\n⚠️ *APOL has NO official token or CA.*\nAny token using $APOL ticker is a SCAM.`,
+        `🔍 *APOL AGENT — SCANX RESULTS*\n\n🐦 *X Handle:* @${esc(handle)}\n\n✅ *VERIFIED — This is APOL Agent*\n\n🏛 Official security protocol on Base chain\n🔗 Website: apolagent.online\n🐦 Twitter: @ApolAgent_\n\n⚠️ *APOL has NO official token or CA.*\nAny token using $APOL ticker is a SCAM.`,
         { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
       return;
     }
@@ -1399,7 +1417,14 @@ async function handleScanX(ctx: any, input: string): Promise<void> {
       metadata: { handle: profile.screen_name, flags: flags.length, followers: profile.followers, ageDays: joinedDays, linkedCA: tokenResult?.address || bioCA },
     }).catch(() => {});
 
-    await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, lines.join("\n"), { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+    const msg = lines.join("\n");
+    try {
+      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, msg, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+    } catch (mdErr: any) {
+      log(`handleScanX Markdown edit failed: ${mdErr?.message?.slice(0, 120)}`, "bot");
+      const plain = msg.replace(/[*_`\[\]]/g, "");
+      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, plain.slice(0, 4000), { link_preview_options: { is_disabled: true } }).catch(() => {});
+    }
   } catch (e: any) {
     log(`ScanX error: ${e?.message}`, "bot");
     await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
@@ -1506,7 +1531,14 @@ async function handleCheckWallet(ctx: any, address: string): Promise<void> {
     lines.push(``);
     lines.push(`🔗 [View on Basescan](https://basescan.org/address/${address})`);
 
-    await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, lines.join("\n"), { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+    const msg = lines.join("\n");
+    try {
+      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, msg, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+    } catch (mdErr: any) {
+      log(`checkwallet Markdown edit failed: ${mdErr?.message?.slice(0, 120)}`, "bot");
+      const plain = msg.replace(/[*_`\[\]]/g, "");
+      await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, plain.slice(0, 4000), { link_preview_options: { is_disabled: true } }).catch(() => {});
+    }
   } catch (e: any) {
     log(`CheckWallet error: ${e?.message}`, "bot");
     await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
@@ -1564,6 +1596,7 @@ export function createBot(): Telegraf | null {
 
   bot.command("scanagent", async (ctx) => {
     const input = ctx.message.text.replace(/^\/scanagent(@\w+)?\s*/i, "").trim();
+    log(`/scanagent command: input="${input.slice(0, 30)}"`, "bot");
     if (!input) {
       ctx.reply("🤖 Send an AI agent contract address or name after /scanagent\nExample: `/scanagent 0x...` or `/scanagent AgentName`", { parse_mode: "Markdown" });
       return;
@@ -1588,8 +1621,15 @@ export function createBot(): Telegraf | null {
       }
 
       const report = await softTimeout(runAgentScan(address, searchedName), 30000, null);
+      log(`scanagent result: ${report ? `${report.length} chars` : "NULL"}`, "bot");
       if (report) {
-        await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+        try {
+          await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+        } catch (mdErr: any) {
+          log(`scanagent Markdown edit failed: ${mdErr?.message?.slice(0, 120)}`, "bot");
+          const plain = report.replace(/[*_`\[\]]/g, "");
+          await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, plain.slice(0, 4000), { link_preview_options: { is_disabled: true } }).catch(() => {});
+        }
       } else {
         await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
           `🤖 *APOL AGENT — LARP DETECTOR*\n\n⚠️ Scan timed out. Network may be congested. Try again.`,
@@ -1691,7 +1731,12 @@ export function createBot(): Telegraf | null {
     const text = ctx.message.text.trim();
     if (text.startsWith("/")) return;
     if (isContractAddress(text)) {
-      await handleScan(ctx, text);
+      log(`bot.on(text) dispatching handleScan for ${text.slice(0, 10)}...`, "bot");
+      try {
+        await handleScan(ctx, text);
+      } catch (e: any) {
+        log(`bot.on(text) handleScan THREW: ${e?.message}`, "bot");
+      }
     }
   });
 
