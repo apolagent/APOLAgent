@@ -254,6 +254,14 @@ async function getEthUsdPrice(): Promise<number> {
   } catch { return 0; }
 }
 
+async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liquidity: number }> {
+  try {
+    const data = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
+    const pair = data?.pairs?.[0];
+    return { priceUsd: parseFloat(pair?.priceUsd || "0") || 0, liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0 };
+  } catch { return { priceUsd: 0, liquidity: 0 }; }
+}
+
 interface FallbackTokenData {
   holderCount: number;
   isHoneypot: boolean;
@@ -392,6 +400,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           getHolderCount(address),
           getTopHolders(address),
           getEthUsdPrice(),
+          getDexScreenerData(address),
         ]),
         HARD_TIMEOUT,
         "detective-analyze",
@@ -403,6 +412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let holderCount = results[3].status === "fulfilled" ? results[3].value : 0;
       const topHolders = results[4].status === "fulfilled" ? results[4].value : [];
       const ethUsd = results[5].status === "fulfilled" ? results[5].value : 0;
+      let dexData = results[6].status === "fulfilled" ? results[6].value : { priceUsd: 0, liquidity: 0 };
 
       let fallbackData: FallbackTokenData | null = null;
       if (holderCount === 0 || (!sim.simulationSuccess && !deployer)) {
@@ -435,9 +445,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sellTax = fallbackData.sellTax;
         isHoneypot = fallbackData.isHoneypot;
       }
-      const tokensWholeUnits = Number(sim.tokensReceived) / (10 ** tokenInfo.decimals);
-      const tokenPriceEth = tokensWholeUnits > 0 ? 0.001 / tokensWholeUnits : 0;
-      const tokenPriceUsd = tokenPriceEth * ethUsd;
+      let tokenPriceUsd = dexData.priceUsd;
+      if (tokenPriceUsd === 0 && sim.tokensReceived > BigInt(0) && ethUsd > 0) {
+        const tokensWholeUnits = Number(sim.tokensReceived) / (10 ** tokenInfo.decimals);
+        tokenPriceUsd = tokensWholeUnits > 0 ? (0.001 / tokensWholeUnits) * ethUsd : 0;
+      }
       const mcap = Number(tokenInfo.totalSupply) * tokenPriceUsd;
 
       const nameUpper = tokenInfo.name.toUpperCase();
@@ -458,6 +470,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         holderCount,
         priceUsd: tokenPriceUsd,
         mcap,
+        liquidity: dexData.liquidity,
         deployer,
         scanCount,
         greenBadge: riskLevel === "Clean" && sim.simulationSuccess && !isFakeApol,
