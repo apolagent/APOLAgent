@@ -17,7 +17,7 @@ const SCAN_CACHE = new Map<string, { result: string; timestamp: number }>();
 const SCAN_CACHE_TTL = 60000;
 const SCAN_IN_FLIGHT = new Map<string, Promise<string>>();
 
-const DEX_CACHE = new Map<string, { data: { priceUsd: number; liquidity: number }; timestamp: number }>();
+const DEX_CACHE = new Map<string, { data: { priceUsd: number; liquidity: number; poolVersion: string | null }; timestamp: number }>();
 const DEX_CACHE_TTL = 60000;
 let ETH_PRICE_CACHE: { price: number; timestamp: number } | null = null;
 const ETH_CACHE_TTL = 60000;
@@ -228,7 +228,7 @@ async function getEthUsdPrice(): Promise<number> {
   }
 }
 
-async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liquidity: number }> {
+async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liquidity: number; poolVersion: string | null }> {
   const key = addr.toLowerCase();
   const cached = DEX_CACHE.get(key);
   if (cached && Date.now() - cached.timestamp < DEX_CACHE_TTL) {
@@ -237,11 +237,15 @@ async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liq
   try {
     const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(6000) }).then((r) => r.ok ? r.json() as any : null);
     const pair = data?.pairs?.[0];
-    const result = { priceUsd: parseFloat(pair?.priceUsd || "0") || 0, liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0 };
+    const labels: string[] = pair?.labels || [];
+    let poolVersion: string | null = null;
+    if (labels.includes("v4")) poolVersion = "v4";
+    else if (labels.includes("v3")) poolVersion = "v3";
+    const result = { priceUsd: parseFloat(pair?.priceUsd || "0") || 0, liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0, poolVersion };
     if (result.priceUsd > 0) DEX_CACHE.set(key, { data: result, timestamp: Date.now() });
     return result.priceUsd > 0 ? result : cached?.data || result;
   } catch {
-    return cached?.data || { priceUsd: 0, liquidity: 0 };
+    return cached?.data || { priceUsd: 0, liquidity: 0, poolVersion: null };
   }
 }
 
@@ -505,7 +509,7 @@ async function runScan(address: string): Promise<string> {
     softTimeout(getHolderCount(address), 7000, 0),
     softTimeout(getTopHolders(address), 7000, []),
     softTimeout(getEthUsdPrice(), 7000, 0),
-    softTimeout(getDexScreenerData(address), 7000, { priceUsd: 0, liquidity: 0 }),
+    softTimeout(getDexScreenerData(address), 7000, { priceUsd: 0, liquidity: 0, poolVersion: null }),
     !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
     !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
   ]);
@@ -514,7 +518,7 @@ async function runScan(address: string): Promise<string> {
 
   if (dexData.priceUsd === 0 || holderCount === 0) {
     const retries = await Promise.all([
-      dexData.priceUsd === 0 ? softTimeout(getDexScreenerData(address), 5000, { priceUsd: 0, liquidity: 0 }) : Promise.resolve(dexData),
+      dexData.priceUsd === 0 ? softTimeout(getDexScreenerData(address), 5000, { priceUsd: 0, liquidity: 0, poolVersion: null }) : Promise.resolve(dexData),
       holderCount === 0 ? softTimeout(getHolderCount(address), 5000, 0) : Promise.resolve(holderCount),
       topHolders.length === 0 ? softTimeout(getTopHolders(address), 5000, []) : Promise.resolve(topHolders),
     ]);
@@ -563,7 +567,8 @@ async function runScan(address: string): Promise<string> {
   const liquidity = dexData.liquidity;
 
   const hasPool = sim.simulationSuccess || isManaged || !!platform;
-  const dexStatus = hasPool ? "Live (Direct-to-V3) ✅" : "No Pool Found ⚠️";
+  const poolLabel = dexData.poolVersion === "v4" ? "Uniswap V4" : "Uniswap V3";
+  const dexStatus = hasPool ? `${poolLabel} ✅` : "No Pool Found ⚠️";
 
   let contractOwner: string | null = null;
   let isOwnerRenounced = false;
@@ -759,7 +764,7 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
     softTimeout(getHolderCount(address), 7000, 0),
     softTimeout(getTopHolders(address), 7000, []),
     softTimeout(getEthUsdPrice(), 7000, 0),
-    softTimeout(getDexScreenerData(address), 7000, { priceUsd: 0, liquidity: 0 }),
+    softTimeout(getDexScreenerData(address), 7000, { priceUsd: 0, liquidity: 0, poolVersion: null }),
     softTimeout(getDexScreenerSocials(address), 7000, { twitter: null, website: null, telegram: null }),
     !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
     !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
