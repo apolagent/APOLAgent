@@ -13,14 +13,15 @@ APOL Agent is an autonomous on-chain forensics protocol on Base blockchain. Tele
 ## Project Structure
 ```
 server/
-  index.ts    - Express server + webhook registration + bot launcher
-  routes.ts   - API endpoints + simulation engine (rpcAlchemySimulate)
-  bot.ts      - Telegram bot /scan command + simulation engine (botAlchemySimulate)
-  storage.ts  - Database operations (DatabaseStorage)
-  db.ts       - PostgreSQL connection
-client/src/   - React frontend
+  constants.ts - SINGLE SOURCE OF TRUTH: all addresses, maps, endpoints, protocol configs (Object.freeze + as const)
+  index.ts     - Express server + webhook registration + bot launcher
+  routes.ts    - API endpoints + simulation engine (imports from constants.ts)
+  bot.ts       - Telegram bot /scan command + simulation engine (imports from constants.ts)
+  storage.ts   - Database operations (DatabaseStorage)
+  db.ts        - PostgreSQL connection
+client/src/    - React frontend
 shared/
-  schema.ts   - Drizzle ORM schemas (scanLookups table for scan counter)
+  schema.ts    - Drizzle ORM schemas (scanLookups table for scan counter)
 ```
 
 ## Simulation-First Engine

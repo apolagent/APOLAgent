@@ -1,5 +1,10 @@
 import { Telegraf } from "telegraf";
 import { storage } from "./storage";
+import {
+  WETH, QUOTER_V2, V3_FACTORY, SIM_AMOUNT, MICRO_AMOUNT, FEE_TIERS,
+  BURN_ADDRS, PLATFORM_MAP, LOCKER_MAP, CREATION_LOG_SIGNATURES, MANAGED_PROTOCOLS,
+  DEPLOYER_CHAIN_KEYWORDS, BLOCKSCOUT_BASE, DEXSCREENER_BASE, GOPLUS_BASE, BASE_CHAIN_ID,
+} from "./constants";
 
 function log(message: string, source = "bot") {
   const t = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true });
@@ -7,47 +12,6 @@ function log(message: string, source = "bot") {
 }
 
 const BASE_RPC = process.env.BASE_RPC_URL || "";
-const WETH = "0x4200000000000000000000000000000000000006";
-const QUOTER_V2 = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a";
-const V3_FACTORY = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD";
-const SIM_AMOUNT = BigInt("1000000000000000");
-const BURN_ADDRS = new Set(["0x0000000000000000000000000000000000000000", "0x000000000000000000000000000000000000dead"]);
-
-const PLATFORM_MAP: Record<string, string> = {
-  "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
-  "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
-  "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
-  "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker",
-  "0x2a787b2362021cc3eea3c24c4748a6cd5b687382": "Clanker",
-  "0xe85a08cf16f07b0b6e8b1f5e4918f6e9dab3a5c0": "Clanker",
-  "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker",
-  "0x6a53f8b799be11a2a3264ef0bff183dcb12d9571": "Flaunch",
-  "0xce0e4e4d2dc0033ce2dd0ec79abe6186106f0462": "Flaunch",
-  "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore",
-  "0xade20c0cc8482c404a57da404ed1f3f2a1f6fe6f": "ApeStore",
-  "0xade256e1c2763b8766efe1eeb7c578d93f621f6f": "ApeStore",
-  "0xb1900f41d78d330a2a35c6771b3a6088a1b51309": "ApeStore",
-  "0x39112541720078c70164ea4deb61f0a4811910f9": "Flaunch",
-  "0xc785de52b739930ab0864b0ae7896ed6e327628a": "Flaunch",
-  "0x45edccb44da8aa1bf4b9e4f2baae61760d1c8fb9": "Flaunch",
-};
-
-const LOCKER_MAP: Record<string, string> = {
-  "0xe85a59c628f7d27878aceb4bf3b35733630083a9": "Clanker",
-  "0x2a787b2362021cc3eea3c24c4748a6cd5b687382": "Clanker",
-  "0xe85a08cf16f07b0b6e8b1f5e4918f6e9dab3a5c0": "Clanker",
-  "0xf3622742b1e446d92e45e22923ef11c2fcd55d68": "Clanker",
-  "0x663a5c229c09b049e36dcc11a9b0d4a8eb9db214": "Unicrypt",
-  "0x71b5759d73262fbb223956913ecf4ecc51057641": "PinkLock",
-  "0xe2fe530c047f2d85298b07d9333c05737f1435fb": "Team Finance",
-  "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore",
-  "0xade20c0cc8482c404a57da404ed1f3f2a1f6fe6f": "ApeStore",
-  "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
-  "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
-  "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
-  "0x6a53f8b799be11a2a3264ef0bff183dcb12d9571": "Flaunch",
-  "0xce0e4e4d2dc0033ce2dd0ec79abe6186106f0462": "Flaunch",
-};
 
 interface SimResult {
   isHoneypot: boolean;
@@ -91,8 +55,7 @@ function softTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 async function findBestPool(token: string): Promise<{ pool: string; fee: number } | null> {
   const addr = token.toLowerCase();
   const [t0, t1] = addr < WETH.toLowerCase() ? [addr, WETH.toLowerCase()] : [WETH.toLowerCase(), addr];
-  const fees = [500, 3000, 10000, 100];
-  const calls = fees.map((fee) => ({
+  const calls = FEE_TIERS.map((fee) => ({
     method: "eth_call" as const,
     params: [{ to: V3_FACTORY, data: "0x1698ee82" + pad32(t0) + pad32(t1) + uint256Hex(BigInt(fee)) }, "latest"],
   }));
@@ -102,7 +65,7 @@ async function findBestPool(token: string): Promise<{ pool: string; fee: number 
     if (!r || r === "0x" || r === "0x" + "0".repeat(64)) continue;
     const poolAddr = "0x" + r.slice(26, 66);
     if (poolAddr === "0x0000000000000000000000000000000000000000") continue;
-    return { pool: poolAddr, fee: fees[i] };
+    return { pool: poolAddr, fee: FEE_TIERS[i] };
   }
   return null;
 }
@@ -135,7 +98,6 @@ async function simulateToken(tokenAddress: string): Promise<SimResult> {
   const { fee } = poolInfo;
   const expectedPoolFees = (fee / 10000) * 2;
 
-  const MICRO_AMOUNT = BigInt("1000000000000");
   let taxFromMicro: number | null = null;
 
   const microResult = await simulateRoundTrip(addr, MICRO_AMOUNT, fee);
@@ -222,7 +184,7 @@ async function getDeployer(addr: string): Promise<string | null> {
   }
 
   try {
-    const data = await fetch(`https://base.blockscout.com/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch(`${BLOCKSCOUT_BASE}/api/v2/addresses/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
     if (data?.creator_address_hash) return data.creator_address_hash.toLowerCase();
   } catch {}
   return null;
@@ -230,14 +192,14 @@ async function getDeployer(addr: string): Promise<string | null> {
 
 async function getHolderCount(addr: string): Promise<number> {
   try {
-    const data = await fetch(`https://base.blockscout.com/api/v2/tokens/${addr}/counters`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch(`${BLOCKSCOUT_BASE}/api/v2/tokens/${addr}/counters`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok ? r.json() as any : null);
     return parseInt(data?.token_holders_count || "0", 10);
   } catch { return 0; }
 }
 
 async function getTopHolders(addr: string): Promise<{ address: string; percent: number }[]> {
   try {
-    const data = await fetch(`https://base.blockscout.com/api/v2/tokens/${addr}/holders?limit=10`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch(`${BLOCKSCOUT_BASE}/api/v2/tokens/${addr}/holders?limit=10`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok ? r.json() as any : null);
     if (!data?.items) return [];
     return data.items.map((h: any) => ({ address: (h.address?.hash || "").toLowerCase(), percent: parseFloat(h.percentage || "0") }));
   } catch { return []; }
@@ -245,14 +207,14 @@ async function getTopHolders(addr: string): Promise<{ address: string; percent: 
 
 async function getEthUsdPrice(): Promise<number> {
   try {
-    const data = await fetch("https://api.dexscreener.com/latest/dex/tokens/0x4200000000000000000000000000000000000006", { signal: AbortSignal.timeout(3000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${WETH}`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok ? r.json() as any : null);
     return parseFloat(data?.pairs?.[0]?.priceUsd || "0") || 0;
   } catch { return 0; }
 }
 
 async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liquidity: number }> {
   try {
-    const data = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok ? r.json() as any : null);
     const pair = data?.pairs?.[0];
     return { priceUsd: parseFloat(pair?.priceUsd || "0") || 0, liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0 };
   } catch { return { priceUsd: 0, liquidity: 0 }; }
@@ -271,7 +233,7 @@ interface FallbackTokenData {
 
 async function getFallbackTokenData(addr: string): Promise<FallbackTokenData | null> {
   try {
-    const resp = await fetch(`https://api.gopluslabs.io/api/v1/token_security/8453?contract_addresses=${addr}`, { signal: AbortSignal.timeout(5000) });
+    const resp = await fetch(`${GOPLUS_BASE}/api/v1/token_security/${BASE_CHAIN_ID}?contract_addresses=${addr}`, { signal: AbortSignal.timeout(5000) });
     if (!resp.ok) return null;
     const data = await resp.json() as any;
     const token = data?.result?.[addr.toLowerCase()];
@@ -291,7 +253,7 @@ async function getFallbackTokenData(addr: string): Promise<FallbackTokenData | n
 
 async function searchDexScreener(query: string): Promise<{ address: string; name: string; symbol: string; chain: string } | null> {
   try {
-    const data = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(query)}`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/search?q=${encodeURIComponent(query)}`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
     const pair = data?.pairs?.find((p: any) => p.chainId === "base");
     if (!pair) return null;
     return { address: pair.baseToken?.address || "", name: pair.baseToken?.name || "", symbol: pair.baseToken?.symbol || "", chain: "base" };
@@ -401,12 +363,6 @@ async function getWalletInfo(addr: string): Promise<WalletInfo> {
   } catch { return { balance: "0", txCount: 0, isContract: false, firstTx: null, firstTxHash: null, firstTxFrom: null, firstTxFromName: null, inflow: 0, outflow: 0 }; }
 }
 
-const CREATION_LOG_SIGNATURES: Record<string, string> = {
-  "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
-  "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
-  "0x97cf38bb06da57b6418083998b09976ec40a90a3": "Virtuals",
-};
-
 async function detectPlatformFromCreationTx(tokenAddr: string): Promise<string | null> {
   try {
     const transfers = await rpcCall("alchemy_getAssetTransfers", [{
@@ -430,7 +386,7 @@ async function detectPlatformFromCreationTx(tokenAddr: string): Promise<string |
 
 async function detectPlatformFromDeployerChain(deployer: string): Promise<string | null> {
   try {
-    const resp = await fetch(`https://base.blockscout.com/api/v2/addresses/${deployer}`);
+    const resp = await fetch(`${BLOCKSCOUT_BASE}/api/v2/addresses/${deployer}`);
     if (!resp.ok) return null;
     const data = await resp.json() as any;
     if (data.is_contract) {
@@ -439,23 +395,22 @@ async function detectPlatformFromDeployerChain(deployer: string): Promise<string
         if (PLATFORM_MAP[creator]) return PLATFORM_MAP[creator];
       }
       const name = (data.name || "").toLowerCase();
-      if (name.includes("flaunch") || name.includes("flayer")) return "Flaunch";
-      if (name.includes("clanker")) return "Clanker";
-      if (name.includes("apestore") || name.includes("ape.store")) return "ApeStore";
-      if (name.includes("virtuals")) return "Virtuals";
+      for (const [platform, kw] of Object.entries(DEPLOYER_CHAIN_KEYWORDS)) {
+        if (kw.names.some((n: string) => name.includes(n))) return platform;
+      }
 
       try {
-        const srcResp = await fetch(`https://base.blockscout.com/api/v2/smart-contracts/${deployer}`);
+        const srcResp = await fetch(`${BLOCKSCOUT_BASE}/api/v2/smart-contracts/${deployer}`);
         if (srcResp.ok) {
           const srcData = await srcResp.json() as any;
           const contractName = (srcData.name || "").toLowerCase();
-          if (contractName.includes("flaunch") || contractName.includes("flayer")) return "Flaunch";
-          if (contractName.includes("clanker")) return "Clanker";
-          if (contractName.includes("apestore") || contractName.includes("ape.store")) return "ApeStore";
-          if (contractName.includes("virtuals")) return "Virtuals";
+          for (const [platform, kw] of Object.entries(DEPLOYER_CHAIN_KEYWORDS)) {
+            if (kw.names.some((n: string) => contractName.includes(n))) return platform;
+          }
           const src = (srcData.source_code || "").slice(0, 5000).toLowerCase();
-          if (src.includes("@flaunch/") || src.includes("flaunchzap")) return "Flaunch";
-          if (src.includes("clanker")) return "Clanker";
+          for (const [platform, kw] of Object.entries(DEPLOYER_CHAIN_KEYWORDS)) {
+            if (kw.sourcePatterns.some((p: string) => src.includes(p))) return platform;
+          }
         }
       } catch {}
     }
@@ -470,8 +425,6 @@ function detectPlatform(addr: string, deployer: string | null, holders: { addres
   for (const h of holders) { if (PLATFORM_MAP[h.address]) return PLATFORM_MAP[h.address]; }
   return null;
 }
-
-const MANAGED_PROTOCOLS = new Set(["Virtuals", "Clanker", "Flaunch"]);
 
 function detectLpStatus(holders: { address: string; percent: number }[], platform: string | null, holdersComplete: boolean): string {
   if (platform && MANAGED_PROTOCOLS.has(platform)) return `${platform} Managed ✅`;
@@ -683,7 +636,7 @@ async function runScan(address: string): Promise<string> {
 
 async function getDeployerContracts(deployer: string): Promise<{ count: number; tokens: { address: string; name: string; age: number }[] }> {
   try {
-    const data = await fetch(`https://base.blockscout.com/api/v2/addresses/${deployer}/tokens?type=ERC-20&limit=50`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch(`${BLOCKSCOUT_BASE}/api/v2/addresses/${deployer}/tokens?type=ERC-20&limit=50`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
     const items = data?.items || [];
     const tokens: { address: string; name: string; age: number }[] = [];
     for (const item of items) {
@@ -718,7 +671,7 @@ async function getDeployerCreatedContracts(deployer: string): Promise<number> {
     } catch {}
   }
   try {
-    const data = await fetch(`https://base.blockscout.com/api/v2/addresses/${deployer}/counters`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch(`${BLOCKSCOUT_BASE}/api/v2/addresses/${deployer}/counters`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
     return data?.token_transfers_count ? Math.min(parseInt(data.token_transfers_count), 50) : 0;
   } catch { return 0; }
 }
@@ -743,7 +696,7 @@ function getProtocolUrl(platform: string | null, address: string): string | null
 
 async function getDexScreenerSocials(addr: string): Promise<{ twitter: string | null; website: string | null; telegram: string | null }> {
   try {
-    const data = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
     const pair = data?.pairs?.[0];
     const info = pair?.info || {};
     const socials = info.socials || [];
