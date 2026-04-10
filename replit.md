@@ -46,7 +46,8 @@ shared/
 1. **PRIMARY ENGINE (Alchemy RPC)**: ALL simulations (buy/sell/tax), deployer detection, wallet info, balance, contract checks, treasury balance
 2. **SPEED RULE**: Alchemy is for the "Report Header." If Alchemy is slow, send the report anyway
 3. **SECONDARY DATA (Blockscout ONLY)**: Holder counts, top holders, contract verification status, BaseScan links
-4. **NO OVERRIDES**: Never switch to Blockscout as primary for any reason
+4. **SILENT FALLBACK (GoPlus)**: ONLY called when primary sources return empty/zero. Fills: holder count, honeypot, buy/sell tax, creator address. NEVER overrides successful Alchemy/Blockscout data. NO branding — completely invisible in all user-facing output
+5. **NO OVERRIDES**: Never switch fallback to primary for any reason. Alchemy simulation always wins when it returns data
 
 ### Implementation:
 - **Deployer detection**: Alchemy `alchemy_getAssetTransfers` (creation tx receipt) → Blockscout v2 fallback

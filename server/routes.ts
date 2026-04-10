@@ -254,6 +254,37 @@ async function getEthUsdPrice(): Promise<number> {
   } catch { return 0; }
 }
 
+interface FallbackTokenData {
+  holderCount: number;
+  isHoneypot: boolean;
+  buyTax: number;
+  sellTax: number;
+  totalSupply: string;
+  ownerAddress: string | null;
+  creatorAddress: string | null;
+  lpHolderCount: number;
+}
+
+async function getFallbackTokenData(addr: string): Promise<FallbackTokenData | null> {
+  try {
+    const resp = await fetch(`https://api.gopluslabs.io/api/v1/token_security/8453?contract_addresses=${addr}`, { signal: AbortSignal.timeout(5000) });
+    if (!resp.ok) return null;
+    const data = await resp.json() as any;
+    const token = data?.result?.[addr.toLowerCase()];
+    if (!token) return null;
+    return {
+      holderCount: parseInt(token.holder_count || "0", 10),
+      isHoneypot: token.is_honeypot === "1",
+      buyTax: parseFloat(token.buy_tax || "0") * 100,
+      sellTax: parseFloat(token.sell_tax || "0") * 100,
+      totalSupply: token.total_supply || "0",
+      ownerAddress: token.owner_address || null,
+      creatorAddress: token.creator_address || null,
+      lpHolderCount: parseInt(token.lp_holder_count || "0", 10),
+    };
+  } catch { return null; }
+}
+
 const CREATION_LOG_SIGNATURES: Record<string, string> = {
   "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": "Virtuals",
   "0xdad686299fb562f89e55da05f1d96fabeb2a2e32": "Virtuals",
@@ -368,10 +399,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const sim = results[0].status === "fulfilled" ? results[0].value : { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0) };
       const tokenInfo = results[1].status === "fulfilled" ? results[1].value : { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18 };
-      const deployer = results[2].status === "fulfilled" ? results[2].value : null;
-      const holderCount = results[3].status === "fulfilled" ? results[3].value : 0;
+      let deployer = results[2].status === "fulfilled" ? results[2].value : null;
+      let holderCount = results[3].status === "fulfilled" ? results[3].value : 0;
       const topHolders = results[4].status === "fulfilled" ? results[4].value : [];
       const ethUsd = results[5].status === "fulfilled" ? results[5].value : 0;
+
+      let fallbackData: FallbackTokenData | null = null;
+      if (holderCount === 0 || (!sim.simulationSuccess && !deployer)) {
+        fallbackData = await getFallbackTokenData(address).catch(() => null);
+        if (fallbackData) {
+          if (holderCount === 0 && fallbackData.holderCount > 0) holderCount = fallbackData.holderCount;
+          if (!deployer && fallbackData.creatorAddress) deployer = fallbackData.creatorAddress.toLowerCase();
+        }
+      }
 
       let platform = detectPlatform(address, deployer, topHolders);
       if (!platform) {
@@ -386,9 +426,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isVirtuals = platform === "Virtuals";
       const isManaged = !!(platform && MANAGED_PROTOCOLS.has(platform));
 
-      const buyTax = isManaged ? 0 : sim.buyTax;
-      const sellTax = isManaged ? 0 : sim.sellTax;
-      const isHoneypot = isManaged ? false : sim.isHoneypot;
+      let buyTax = isManaged ? 0 : sim.buyTax;
+      let sellTax = isManaged ? 0 : sim.sellTax;
+      let isHoneypot = isManaged ? false : sim.isHoneypot;
+
+      if (!isManaged && !sim.simulationSuccess && fallbackData) {
+        buyTax = fallbackData.buyTax;
+        sellTax = fallbackData.sellTax;
+        isHoneypot = fallbackData.isHoneypot;
+      }
       const tokensWholeUnits = Number(sim.tokensReceived) / (10 ** tokenInfo.decimals);
       const tokenPriceEth = tokensWholeUnits > 0 ? 0.001 / tokensWholeUnits : 0;
       const tokenPriceUsd = tokenPriceEth * ethUsd;

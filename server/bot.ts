@@ -258,6 +258,37 @@ async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liq
   } catch { return { priceUsd: 0, liquidity: 0 }; }
 }
 
+interface FallbackTokenData {
+  holderCount: number;
+  isHoneypot: boolean;
+  buyTax: number;
+  sellTax: number;
+  totalSupply: string;
+  ownerAddress: string | null;
+  creatorAddress: string | null;
+  lpHolderCount: number;
+}
+
+async function getFallbackTokenData(addr: string): Promise<FallbackTokenData | null> {
+  try {
+    const resp = await fetch(`https://api.gopluslabs.io/api/v1/token_security/8453?contract_addresses=${addr}`, { signal: AbortSignal.timeout(5000) });
+    if (!resp.ok) return null;
+    const data = await resp.json() as any;
+    const token = data?.result?.[addr.toLowerCase()];
+    if (!token) return null;
+    return {
+      holderCount: parseInt(token.holder_count || "0", 10),
+      isHoneypot: token.is_honeypot === "1",
+      buyTax: parseFloat(token.buy_tax || "0") * 100,
+      sellTax: parseFloat(token.sell_tax || "0") * 100,
+      totalSupply: token.total_supply || "0",
+      ownerAddress: token.owner_address || null,
+      creatorAddress: token.creator_address || null,
+      lpHolderCount: parseInt(token.lp_holder_count || "0", 10),
+    };
+  } catch { return null; }
+}
+
 async function searchDexScreener(query: string): Promise<{ address: string; name: string; symbol: string; chain: string } | null> {
   try {
     const data = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(query)}`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
@@ -488,7 +519,7 @@ async function runScan(address: string): Promise<string> {
     : { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: "Simulation error" };
   const tokenInfo = tokenR.status === "fulfilled" ? tokenR.value
     : { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18 };
-  const deployer = deployerR.status === "fulfilled" ? deployerR.value : null;
+  let deployer = deployerR.status === "fulfilled" ? deployerR.value : null;
 
   const platformFromDeployer = detectPlatform(address, deployer, []);
 
@@ -517,6 +548,16 @@ async function runScan(address: string): Promise<string> {
     }
   }
 
+  let fallbackData: FallbackTokenData | null = null;
+  const needsFallback = holderCount === 0 || (!sim.simulationSuccess && !deployer);
+  if (needsFallback) {
+    fallbackData = await softTimeout(getFallbackTokenData(address), 5000, null);
+    if (fallbackData) {
+      if (holderCount === 0 && fallbackData.holderCount > 0) holderCount = fallbackData.holderCount;
+      if (!deployer && fallbackData.creatorAddress) deployer = fallbackData.creatorAddress.toLowerCase();
+    }
+  }
+
   const scanCount = await storage.incrementLookup(address, tokenInfo.name, tokenInfo.symbol);
 
   const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || creationPlatform || deployerChainPlatform;
@@ -524,9 +565,15 @@ async function runScan(address: string): Promise<string> {
   const isVirtuals = platform === "Virtuals";
   const isManaged = !!(platform && MANAGED_PROTOCOLS.has(platform));
 
-  const buyTax = isManaged ? 0 : sim.buyTax;
-  const sellTax = isManaged ? 0 : sim.sellTax;
-  const isHoneypot = isManaged ? false : sim.isHoneypot;
+  let buyTax = isManaged ? 0 : sim.buyTax;
+  let sellTax = isManaged ? 0 : sim.sellTax;
+  let isHoneypot = isManaged ? false : sim.isHoneypot;
+
+  if (!isManaged && !sim.simulationSuccess && fallbackData) {
+    buyTax = fallbackData.buyTax;
+    sellTax = fallbackData.sellTax;
+    isHoneypot = fallbackData.isHoneypot;
+  }
 
   let tokenPriceUsd = dexData.priceUsd;
   if (tokenPriceUsd === 0 && sim.tokensReceived > BigInt(0) && ethUsd > 0) {
@@ -726,11 +773,11 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
     : { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: "Simulation error" };
   const tokenInfo = tokenR.status === "fulfilled" ? tokenR.value
     : { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18 };
-  const deployer = deployerR.status === "fulfilled" ? deployerR.value : null;
+  let deployer = deployerR.status === "fulfilled" ? deployerR.value : null;
 
   const platformFromDeployer = detectPlatform(address, deployer, []);
 
-  const [holderCount, topHolders, ethUsd, dexData, dexSocials, creationPlatform, deployerChainPlatform] = await Promise.all([
+  let [holderCount, topHolders, ethUsd, dexData, dexSocials, creationPlatform, deployerChainPlatform] = await Promise.all([
     softTimeout(getHolderCount(address), 7000, 0),
     softTimeout(getTopHolders(address), 7000, []),
     softTimeout(getEthUsdPrice(), 7000, 0),
@@ -740,12 +787,27 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
     !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
   ]);
 
+  let fallbackData: FallbackTokenData | null = null;
+  if (holderCount === 0 || (!sim.simulationSuccess && !deployer)) {
+    fallbackData = await softTimeout(getFallbackTokenData(address), 5000, null);
+    if (fallbackData) {
+      if (holderCount === 0 && fallbackData.holderCount > 0) holderCount = fallbackData.holderCount;
+      if (!deployer && fallbackData.creatorAddress) deployer = fallbackData.creatorAddress.toLowerCase();
+    }
+  }
+
   const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || creationPlatform || deployerChainPlatform;
   const isVirtuals = platform === "Virtuals";
   const isManaged = !!(platform && MANAGED_PROTOCOLS.has(platform));
-  const buyTax = isManaged ? 0 : sim.buyTax;
-  const sellTax = isManaged ? 0 : sim.sellTax;
-  const isHoneypot = isManaged ? false : sim.isHoneypot;
+  let buyTax = isManaged ? 0 : sim.buyTax;
+  let sellTax = isManaged ? 0 : sim.sellTax;
+  let isHoneypot = isManaged ? false : sim.isHoneypot;
+
+  if (!isManaged && !sim.simulationSuccess && fallbackData) {
+    buyTax = fallbackData.buyTax;
+    sellTax = fallbackData.sellTax;
+    isHoneypot = fallbackData.isHoneypot;
+  }
 
   const [treasuryBal, deployerContracts, xProfile] = await Promise.all([
     deployer ? softTimeout(getTreasuryBalance(deployer), 4000, { eth: 0, usd: 0 }) : Promise.resolve({ eth: 0, usd: 0 }),
