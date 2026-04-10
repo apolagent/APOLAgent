@@ -207,20 +207,38 @@ async function getTopHolders(addr: string): Promise<{ address: string; percent: 
   } catch { return []; }
 }
 
+const routesDexCache = new Map<string, { data: { priceUsd: number; liquidity: number }; timestamp: number }>();
+let routesEthCache: { price: number; timestamp: number } | null = null;
+const ROUTES_CACHE_TTL = 60000;
+
 async function getEthUsdPrice(): Promise<number> {
+  if (routesEthCache && Date.now() - routesEthCache.timestamp < ROUTES_CACHE_TTL) {
+    return routesEthCache.price;
+  }
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${WETH}`, { signal: AbortSignal.timeout(5000) })
+    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${WETH}`, { signal: AbortSignal.timeout(6000) })
       .then((r) => (r.ok ? (r.json() as any) : null));
-    return parseFloat(data?.pairs?.[0]?.priceUsd || "0") || 0;
-  } catch { return 0; }
+    const price = parseFloat(data?.pairs?.[0]?.priceUsd || "0") || 0;
+    if (price > 0) routesEthCache = { price, timestamp: Date.now() };
+    return price || routesEthCache?.price || 0;
+  } catch { return routesEthCache?.price || 0; }
 }
 
 async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liquidity: number }> {
+  const key = addr.toLowerCase();
+  const cached = routesDexCache.get(key);
+  if (cached && Date.now() - cached.timestamp < ROUTES_CACHE_TTL) {
+    return cached.data;
+  }
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(6000) }).then((r) => r.ok ? r.json() as any : null);
     const pair = data?.pairs?.[0];
-    return { priceUsd: parseFloat(pair?.priceUsd || "0") || 0, liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0 };
-  } catch { return { priceUsd: 0, liquidity: 0 }; }
+    const result = { priceUsd: parseFloat(pair?.priceUsd || "0") || 0, liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0 };
+    if (result.priceUsd > 0) routesDexCache.set(key, { data: result, timestamp: Date.now() });
+    return result.priceUsd > 0 ? result : cached?.data || result;
+  } catch {
+    return cached?.data || { priceUsd: 0, liquidity: 0 };
+  }
 }
 
 interface FallbackTokenData {

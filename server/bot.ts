@@ -14,8 +14,13 @@ function log(message: string, source = "bot") {
 const BASE_RPC = process.env.BASE_RPC_URL || "";
 
 const SCAN_CACHE = new Map<string, { result: string; timestamp: number }>();
-const SCAN_CACHE_TTL = 30000;
+const SCAN_CACHE_TTL = 60000;
 const SCAN_IN_FLIGHT = new Map<string, Promise<string>>();
+
+const DEX_CACHE = new Map<string, { data: { priceUsd: number; liquidity: number }; timestamp: number }>();
+const DEX_CACHE_TTL = 60000;
+let ETH_PRICE_CACHE: { price: number; timestamp: number } | null = null;
+const ETH_CACHE_TTL = 60000;
 
 interface SimResult {
   isHoneypot: boolean;
@@ -210,18 +215,34 @@ async function getTopHolders(addr: string): Promise<{ address: string; percent: 
 }
 
 async function getEthUsdPrice(): Promise<number> {
+  if (ETH_PRICE_CACHE && Date.now() - ETH_PRICE_CACHE.timestamp < ETH_CACHE_TTL) {
+    return ETH_PRICE_CACHE.price;
+  }
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${WETH}`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok ? r.json() as any : null);
-    return parseFloat(data?.pairs?.[0]?.priceUsd || "0") || 0;
-  } catch { return 0; }
+    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${WETH}`, { signal: AbortSignal.timeout(6000) }).then((r) => r.ok ? r.json() as any : null);
+    const price = parseFloat(data?.pairs?.[0]?.priceUsd || "0") || 0;
+    if (price > 0) ETH_PRICE_CACHE = { price, timestamp: Date.now() };
+    return price || ETH_PRICE_CACHE?.price || 0;
+  } catch {
+    return ETH_PRICE_CACHE?.price || 0;
+  }
 }
 
 async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liquidity: number }> {
+  const key = addr.toLowerCase();
+  const cached = DEX_CACHE.get(key);
+  if (cached && Date.now() - cached.timestamp < DEX_CACHE_TTL) {
+    return cached.data;
+  }
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(6000) }).then((r) => r.ok ? r.json() as any : null);
     const pair = data?.pairs?.[0];
-    return { priceUsd: parseFloat(pair?.priceUsd || "0") || 0, liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0 };
-  } catch { return { priceUsd: 0, liquidity: 0 }; }
+    const result = { priceUsd: parseFloat(pair?.priceUsd || "0") || 0, liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0 };
+    if (result.priceUsd > 0) DEX_CACHE.set(key, { data: result, timestamp: Date.now() });
+    return result.priceUsd > 0 ? result : cached?.data || result;
+  } catch {
+    return cached?.data || { priceUsd: 0, liquidity: 0 };
+  }
 }
 
 interface FallbackTokenData {
