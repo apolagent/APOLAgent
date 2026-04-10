@@ -630,7 +630,7 @@ async function runScan(address: string): Promise<string> {
   }
 
   lines.push(``);
-  lines.push(`🔍 [Full Scan](https://apolagent.online)   🏛 [Wall of Shame](https://apolagent.online)`);
+  lines.push(`🔍 [Full Scan](https://apolagent.online/agent-scanner)   🏛 [Wall of Shame](https://apolagent.online/report-scam)`);
   lines.push(`🔗 [View on Basescan](https://basescan.org/address/${address})`);
   lines.push(``);
   lines.push(`⚡ ${elapsed}s · APOL Forensic Engine`);
@@ -1307,10 +1307,10 @@ export function createBot(): Telegraf | null {
       for (const f of flagged) {
         lines.push(`🚩 \`${f.address.slice(0, 8)}...${f.address.slice(-6)}\` — ${f.reason || "Flagged"}`);
       }
-      lines.push(`\n🔗 [View Full Map](https://apolagent.online)`);
+      lines.push(`\n🔗 [View Full Map](https://apolagent.online/report-scam)`);
       ctx.reply(lines.join("\n"), { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
     } catch {
-      ctx.reply("🏛 *APOL Wall of Shame*\n\n🔗 [View on Web](https://apolagent.online)", { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+      ctx.reply("🏛 *APOL Wall of Shame*\n\n🔗 [View on Web](https://apolagent.online/report-scam)", { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
     }
   });
 
