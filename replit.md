@@ -85,11 +85,19 @@ shared/
 - `/scanx <@handle or URL>` — X/Twitter profile forensic analysis
 - `/start` — Welcome message
 
+## Activity Logging
+- **Table**: `agent_activity_logs` — action, target, detail, verdict, source, metadata, createdAt
+- **Auto-logged from**: detective/analyze (web), agent/analyze (web), scanx (web), /scan (telegram)
+- **Public page**: `/logs` — Real-time reasoning log showing all autonomous decisions
+- **API**: `GET /api/agent/activity?limit=50&offset=0` — Paginated activity feed
+- **Purpose**: Proves autonomous operation to other agent scanners. Timestamped reasoning traces with verdicts.
+
 ## API Endpoints
 - `GET /health` — Health check
 - `GET /api/detective/flagged` — Recently flagged addresses
 - `GET /api/detective/analyze?address=&chain=` — Full forensic analysis (JSON)
 - `POST /api/agent/analyze` — Agent LARP Detector (body: agentName, wallet, socialLink, claimedAbilities, logsUrl)
+- `GET /api/agent/activity?limit=&offset=` — Public activity/reasoning logs (paginated)
 
 ## Telegram Output Format
 ```

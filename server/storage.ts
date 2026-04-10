@@ -1,4 +1,4 @@
-import { users, scamReports, heroNominations, votes, flaggedWallets, verificationRequests, scanLookups, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet, type InsertVerificationRequest, type VerificationRequest, type ScanLookup } from "@shared/schema";
+import { users, scamReports, heroNominations, votes, flaggedWallets, verificationRequests, scanLookups, agentActivityLogs, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet, type InsertVerificationRequest, type VerificationRequest, type ScanLookup, type AgentActivityLog } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, gte, or, and, sql, sum } from "drizzle-orm";
 
@@ -35,6 +35,9 @@ export interface IStorage {
   getLookupCount(address: string): Promise<number>;
   getTotalLookups(): Promise<number>;
   getRecentLookups(limit?: number): Promise<ScanLookup[]>;
+  logAgentActivity(data: { action: string; target: string; detail: string; verdict?: string; source: string; metadata?: any }): Promise<AgentActivityLog>;
+  getAgentActivityLogs(limit?: number, offset?: number): Promise<AgentActivityLog[]>;
+  getAgentActivityLogCount(): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -248,6 +251,36 @@ export class DatabaseStorage implements IStorage {
 
   async getRecentLookups(limit = 5): Promise<ScanLookup[]> {
     return await db.select().from(scanLookups).orderBy(desc(scanLookups.lastScannedAt)).limit(limit);
+  }
+
+  async logAgentActivity(data: { action: string; target: string; detail: string; verdict?: string; source: string; metadata?: any }): Promise<AgentActivityLog> {
+    const [row] = await db
+      .insert(agentActivityLogs)
+      .values({
+        action: data.action,
+        target: data.target,
+        detail: data.detail,
+        verdict: data.verdict || null,
+        source: data.source,
+        metadata: data.metadata || null,
+        createdAt: new Date(),
+      })
+      .returning();
+    return row;
+  }
+
+  async getAgentActivityLogs(limit = 50, offset = 0): Promise<AgentActivityLog[]> {
+    return await db
+      .select()
+      .from(agentActivityLogs)
+      .orderBy(desc(agentActivityLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getAgentActivityLogCount(): Promise<number> {
+    const [row] = await db.select({ count: sql<number>`count(*)::int` }).from(agentActivityLogs);
+    return row?.count ?? 0;
   }
 
   async checkInternalReports(address: string): Promise<boolean> {

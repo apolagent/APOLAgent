@@ -663,6 +663,16 @@ async function runScan(address: string): Promise<string> {
       ? "🟡 CAUTION"
       : "🟢 LOW RISK";
 
+  const riskShort = riskLevel.includes("HIGH") ? "High" : riskLevel.includes("CAUTION") ? "Caution" : "Clean";
+  storage.logAgentActivity({
+    action: "contract_scan",
+    target: address,
+    detail: `Analyzed ${tokenInfo.symbol || "unknown"} via Telegram. Simulation: ${sim.simulationSuccess ? "success" : "failed"}. Risk: ${riskShort}. ${isHoneypot ? "Honeypot detected." : ""} ${buyTax > 0 || sellTax > 0 ? `Tax: ${buyTax}%/${sellTax}%.` : "No tax."} ${platform ? `Platform: ${platform}.` : ""} Holders: ${holderCount}.`.replace(/\s+/g, " ").trim(),
+    verdict: riskShort,
+    source: "telegram",
+    metadata: { tokenSymbol: tokenInfo.symbol, tokenName: tokenInfo.name, isHoneypot, buyTax, sellTax, platform, holderCount, mcap },
+  }).catch(() => {});
+
   const shortAddr = address.slice(0, 8) + "..." + address.slice(-6);
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 

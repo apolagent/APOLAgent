@@ -124,6 +124,19 @@ export const scanLookups = pgTable("scan_lookups", {
 
 export type ScanLookup = typeof scanLookups.$inferSelect;
 
+export const agentActivityLogs = pgTable("agent_activity_logs", {
+  id: serial("id").primaryKey(),
+  action: text("action").notNull(),
+  target: text("target").notNull(),
+  detail: text("detail").notNull(),
+  verdict: text("verdict"),
+  source: text("source").notNull(),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type AgentActivityLog = typeof agentActivityLogs.$inferSelect;
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,

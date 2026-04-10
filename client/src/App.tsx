@@ -15,6 +15,7 @@ import VerifyCertificate from "@/pages/verify-certificate";
 import VerifiedBuilders from "@/pages/verified-builders";
 import Whitepaper from "@/pages/whitepaper";
 import Docs from "@/pages/docs";
+import ActivityLogs from "@/pages/activity-logs";
 import NotFound from "@/pages/not-found";
 import ApolAgent from "@/components/apol-agent";
 
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/verified-builders" component={VerifiedBuilders} />
       <Route path="/whitepaper" component={Whitepaper} />
       <Route path="/docs" component={Docs} />
+      <Route path="/logs" component={ActivityLogs} />
       <Route component={NotFound} />
     </Switch>
   );

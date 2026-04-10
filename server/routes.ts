@@ -569,6 +569,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  app.get("/api/agent/activity", async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+      const offset = parseInt(req.query.offset as string) || 0;
+      const [logs, total] = await Promise.all([
+        storage.getAgentActivityLogs(limit, offset),
+        storage.getAgentActivityLogCount(),
+      ]);
+      res.json({ agent: "APOL Agent", version: "1.0", total, entries: logs });
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch activity logs" });
+    }
+  });
+
   app.get("/api/detective/flagged", async (_req, res) => {
     try { res.json(await storage.getFlaggedWallets(20)); } catch { res.json([]); }
   });
@@ -646,6 +660,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isFakeApol = symbolUpper === "APOL" || nameUpper === "APOL" || nameUpper === "APOL AGENT" || nameUpper.includes("APOLAGENT");
 
       const riskLevel = isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10 ? "High" : buyTax > 0 || sellTax > 0 ? "Caution" : "Clean";
+
+      storage.logAgentActivity({
+        action: "contract_scan",
+        target: address,
+        detail: `Analyzed ${tokenInfo.symbol || "unknown"} contract. Simulation: ${sim.simulationSuccess ? "success" : "failed"}. Risk: ${riskLevel}. ${isHoneypot ? "Honeypot detected." : ""} ${buyTax > 0 || sellTax > 0 ? `Tax: ${buyTax}%/${sellTax}%.` : "No tax."} ${platform ? `Platform: ${platform}.` : ""} Holders: ${holderCount}.`.replace(/\s+/g, " ").trim(),
+        verdict: riskLevel,
+        source: "web",
+        metadata: { tokenSymbol: tokenInfo.symbol, tokenName: tokenInfo.name, isHoneypot, buyTax, sellTax, platform, holderCount, mcap },
+      }).catch(() => {});
 
       res.json({
         address, chain, addressType: "contract",
@@ -1033,6 +1056,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (autoAbilityAudit?.reasoningStatus === "verified") apolVerdict += " ✅ Autonomous reasoning logs detected.";
       if (autoAbilityAudit?.reasoningStatus === "not_found" && autoAbilityAudit.claimedAbilities.length > 0) apolVerdict += " ⚠️ Claims abilities but no public reasoning logs found.";
 
+      storage.logAgentActivity({
+        action: "agent_verification",
+        target: agentName.trim(),
+        detail: `Verified agent "${agentName.trim()}". Cognition score: ${cognitionScore ?? "N/A"}. Tests scored: ${scoredTests}. ${traceIsContract ? "On-chain contract verified." : "No on-chain contract."} ${autoAbilityAudit?.claimedAbilities?.length ? `Abilities: ${autoAbilityAudit.claimedAbilities.join(", ")}.` : ""} ${autoAbilityAudit?.reasoningStatus === "verified" ? "Reasoning logs verified." : autoAbilityAudit?.reasoningStatus === "mismatch" ? "Reasoning logs mismatch." : "No reasoning logs found."}`.replace(/\s+/g, " ").trim(),
+        verdict,
+        source: "web",
+        metadata: { cognitionScore, scoredTests, wallet, socialLink, abilities: autoAbilityAudit?.claimedAbilities },
+      }).catch(() => {});
+
       res.json({
         agentName: agentName.trim(),
         wallet: wallet || null,
@@ -1173,6 +1205,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         verdict += " Autonomous reasoning logs detected at linked endpoint.";
         if (verdictLevel !== "red") verdictLevel = "green";
       }
+
+      storage.logAgentActivity({
+        action: "x_agent_scan",
+        target: `@${u.screen_name || handle}`,
+        detail: `Scanned X agent @${u.screen_name || handle}. ${flags.length} risk flags. ${abilities.length > 0 ? `Abilities: ${abilities.join(", ")}.` : "No abilities detected."} ${abilityAudit.reasoningStatus === "verified" ? "Reasoning logs verified." : abilityAudit.reasoningStatus === "mismatch" ? "Dashboard found but no reasoning traces." : "No reasoning logs."} ${linkedCA ? `Linked token: ${linkedSymbol} (${linkedCA}).` : "No linked token."}`.replace(/\s+/g, " ").trim(),
+        verdict: verdictLevel === "red" ? "LARP Indicators" : verdictLevel === "green" ? "Clean" : "Caution",
+        source: "web",
+        metadata: { handle: u.screen_name || handle, flags: flags.length, abilities, linkedCA, linkedSymbol, reasoningStatus: abilityAudit.reasoningStatus },
+      }).catch(() => {});
 
       res.json({
         username: u.screen_name || handle,
