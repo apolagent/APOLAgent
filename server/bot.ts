@@ -240,7 +240,10 @@ async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liq
   }
   try {
     const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(6000) }).then((r) => r.ok ? r.json() as any : null);
-    const pair = data?.pairs?.[0];
+    const pairs = data?.pairs || [];
+    const pair = pairs.length > 1
+      ? pairs.reduce((best: any, p: any) => (parseFloat(p?.liquidity?.usd || "0") > parseFloat(best?.liquidity?.usd || "0") ? p : best), pairs[0])
+      : pairs[0] || null;
     const labels: string[] = pair?.labels || [];
     let poolVersion: string | null = null;
     if (labels.includes("v4")) poolVersion = "v4";
