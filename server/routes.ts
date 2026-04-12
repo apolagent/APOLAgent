@@ -1353,6 +1353,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/skill/skill.md", (_req, res) => {
+    const filePath = new URL("../client/public/skill/skill.md", import.meta.url).pathname;
+    res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.sendFile(filePath, (err) => {
+      if (err) res.status(404).send("Skill file not found");
+    });
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

@@ -92,12 +92,24 @@ shared/
 - **API**: `GET /api/agent/activity?limit=50&offset=0` — Paginated activity feed
 - **Purpose**: Proves autonomous operation to other agent scanners. Timestamped reasoning traces with verdicts.
 
+## Clanker Integration
+- **Clanker API**: `https://clanker.world/api/tokens/search?q={address}` — free, no API key
+- **Data fetched**: volume24h, marketCap, warnings, tags (champagne/verified/knownInterfaceDeployer), rewards availability
+- **Bot output**: Shows 24h volume, rewards status, and warnings in TOKEN HEALTH section for Clanker tokens
+- **Web response**: `clankerData` field in agent/analyze response
+- **Serial deployer**: `checkRecentDeployerTokens(deployer)` — uses Alchemy `alchemy_getAssetTransfers` + `eth_getBlockByNumber` timestamps. 3+ tokens in 2 days = "POTENTIAL SERIAL DEPLOYER" warning
+- **Constants**: `SERIAL_DEPLOYER_THRESHOLD` (3), `SERIAL_DEPLOYER_WINDOW_DAYS` (2), `CLANKER_API_BASE` in constants.ts
+- **Deep Scan button**: Bot agent scan includes inline keyboard "Deep Scan X Profile" linking to `apolagent.online/agent-scanner?scanx={handle}` when twitter is found
+- **Skill file**: `GET /skill/skill.md` — Clanker-compatible agent skill manifest describing APOL's API. Accessible at `apolagent.online/skill/skill.md`
+
 ## API Endpoints
 - `GET /health` — Health check
 - `GET /api/detective/flagged` — Recently flagged addresses
 - `GET /api/detective/analyze?address=&chain=` — Full forensic analysis (JSON)
 - `POST /api/agent/analyze` — Agent LARP Detector (body: agentName, wallet, socialLink, claimedAbilities, logsUrl)
 - `GET /api/agent/activity?limit=&offset=` — Public activity/reasoning logs (paginated)
+- `GET /api/scanx?username=` — X/Twitter profile forensic scan
+- `GET /skill/skill.md` — APOL agent skill manifest (Clanker-compatible)
 
 ## Telegram Output Format
 ```
