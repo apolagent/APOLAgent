@@ -92,6 +92,42 @@
   --destructive-border: hsl(var(--destructive));
 }
 
+html.light {
+  --background: 210 20% 98%;
+  --foreground: 220 15% 15%;
+  --muted: 210 15% 92%;
+  --muted-foreground: 220 10% 42%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 15% 15%;
+  --card: 210 15% 96%;
+  --card-foreground: 220 15% 15%;
+  --card-border: 150 60% 40%;
+  --border: 210 15% 85%;
+  --input: 210 15% 90%;
+  --primary: 150 80% 32%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 15% 92%;
+  --secondary-foreground: 220 15% 15%;
+  --accent: 210 15% 92%;
+  --accent-foreground: 220 15% 15%;
+  --destructive: 0 84% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --ring: 150 80% 32%;
+
+  --electric-blue: 217 85% 45%;
+  --jungle-green: 153 70% 35%;
+  --warning-yellow: 45 95% 48%;
+  --deep-navy: 220 30% 92%;
+  --neon-pink: 330 70% 50%;
+  --police-blue: 225 60% 50%;
+
+  --button-outline: rgba(0,0,0, .10);
+  --badge-outline: rgba(0,0,0, .06);
+  --opaque-button-border-intensity: 9;
+  --elevate-1: rgba(0,0,0, .03);
+  --elevate-2: rgba(0,0,0, .06);
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -103,7 +139,10 @@
     background-image: none !important;
   }
 
-  /* Fixed grid overlay — always the same opacity regardless of what is underneath */
+  html.light body {
+    background-color: hsl(210 20% 98%) !important;
+  }
+
   body::before {
     content: '';
     position: fixed;
@@ -117,6 +156,13 @@
       linear-gradient(rgba(0,255,0,0.06) 1px, transparent 1px),
       linear-gradient(90deg, rgba(0,255,0,0.06) 1px, transparent 1px);
     background-size: 60px 60px;
+    transition: opacity 0.3s ease;
+  }
+
+  html.light body::before {
+    background-image:
+      linear-gradient(rgba(0,120,60,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,120,60,0.04) 1px, transparent 1px);
   }
 }
 
@@ -128,23 +174,20 @@
     background-color: transparent !important;
     background-image: none !important;
   }
-  /* Remap all Tailwind slate backgrounds from blue-tinted to neutral black */
-  [class*="bg-slate-9"] { background-color: #0c0c0c !important; }
-  [class*="bg-slate-8"] { background-color: #141414 !important; }
-  [class*="bg-slate-7"] { background-color: #1c1c1c !important; }
-  [class*="bg-slate-6"] { background-color: #242424 !important; }
-  [class*="bg-slate-5"] { background-color: #303030 !important; }
-  [class*="bg-slate-4"] { background-color: #3d3d3d !important; }
-  /* Also remap blue-* and indigo-* backgrounds */
-  [class*="bg-blue-9"] { background-color: #0c0c0c !important; }
-  [class*="bg-blue-8"] { background-color: #141414 !important; }
-  [class*="bg-blue-7"] { background-color: #1c1c1c !important; }
-  /* Remap text-slate/gray muted colors to white-based (brighter) */
-  [class*="text-slate-6"], [class*="text-slate-5"], [class*="text-slate-4"] { color: rgba(255,255,255,0.65) !important; }
-  [class*="text-slate-3"] { color: rgba(255,255,255,0.82) !important; }
-  [class*="text-slate-2"] { color: rgba(255,255,255,0.92) !important; }
-  [class*="text-gray-4"], [class*="text-gray-5"] { color: rgba(255,255,255,0.65) !important; }
-  [class*="text-gray-3"] { color: rgba(255,255,255,0.82) !important; }
+  html:not(.light) [class*="bg-slate-9"] { background-color: #0c0c0c !important; }
+  html:not(.light) [class*="bg-slate-8"] { background-color: #141414 !important; }
+  html:not(.light) [class*="bg-slate-7"] { background-color: #1c1c1c !important; }
+  html:not(.light) [class*="bg-slate-6"] { background-color: #242424 !important; }
+  html:not(.light) [class*="bg-slate-5"] { background-color: #303030 !important; }
+  html:not(.light) [class*="bg-slate-4"] { background-color: #3d3d3d !important; }
+  html:not(.light) [class*="bg-blue-9"] { background-color: #0c0c0c !important; }
+  html:not(.light) [class*="bg-blue-8"] { background-color: #141414 !important; }
+  html:not(.light) [class*="bg-blue-7"] { background-color: #1c1c1c !important; }
+  html:not(.light) [class*="text-slate-6"], html:not(.light) [class*="text-slate-5"], html:not(.light) [class*="text-slate-4"] { color: rgba(255,255,255,0.65) !important; }
+  html:not(.light) [class*="text-slate-3"] { color: rgba(255,255,255,0.82) !important; }
+  html:not(.light) [class*="text-slate-2"] { color: rgba(255,255,255,0.92) !important; }
+  html:not(.light) [class*="text-gray-4"], html:not(.light) [class*="text-gray-5"] { color: rgba(255,255,255,0.65) !important; }
+  html:not(.light) [class*="text-gray-3"] { color: rgba(255,255,255,0.82) !important; }
 }
 
 @layer utilities {

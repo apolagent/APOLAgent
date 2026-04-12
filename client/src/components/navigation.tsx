@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
-import { Menu, X, Bot, Wallet, AlertTriangle, ChevronDown } from "lucide-react";
+import { Menu, X, Bot, Wallet, AlertTriangle, ChevronDown, Sun, Moon } from "lucide-react";
 
 import { useWalletContext, type EIP6963ProviderDetail } from "@/hooks/use-wallet";
+import { useTheme } from "@/components/theme-provider";
 import { useQuery } from "@tanstack/react-query";
 
 const G = "#00ff00";
@@ -193,8 +194,65 @@ function WalletButton({ compact = false }: { compact?: boolean }) {
 }
 
 
+function ThemeToggle({ size = 16 }: { size?: number }) {
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
+
+  return (
+    <button
+      onClick={toggleTheme}
+      data-testid="button-theme-toggle"
+      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      style={{
+        position: "relative",
+        width: 36,
+        height: 36,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "transparent",
+        border: `1px solid ${isDark ? "rgba(0,255,0,0.25)" : "rgba(0,100,50,0.25)"}`,
+        cursor: "pointer",
+        transition: "all 0.3s ease",
+        flexShrink: 0,
+        overflow: "hidden",
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.borderColor = isDark ? "rgba(0,255,0,0.6)" : "rgba(0,100,50,0.5)";
+        e.currentTarget.style.background = isDark ? "rgba(0,255,0,0.06)" : "rgba(0,100,50,0.06)";
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = isDark ? "rgba(0,255,0,0.25)" : "rgba(0,100,50,0.25)";
+        e.currentTarget.style.background = "transparent";
+      }}
+    >
+      <Sun
+        size={size}
+        style={{
+          position: "absolute",
+          color: isDark ? "rgba(255,255,255,0.35)" : "#d97706",
+          transform: isDark ? "rotate(-90deg) scale(0)" : "rotate(0deg) scale(1)",
+          transition: "transform 0.4s cubic-bezier(0.34,1.56,0.64,1), color 0.3s ease",
+        }}
+      />
+      <Moon
+        size={size - 2}
+        style={{
+          position: "absolute",
+          color: isDark ? "#00ff00" : "rgba(0,0,0,0.25)",
+          transform: isDark ? "rotate(0deg) scale(1)" : "rotate(90deg) scale(0)",
+          transition: "transform 0.4s cubic-bezier(0.34,1.56,0.64,1), color 0.3s ease",
+        }}
+      />
+    </button>
+  );
+}
+
 export default function Navigation() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const themeG = isDark ? G : "#006838";
 
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
@@ -206,7 +264,12 @@ export default function Navigation() {
 
   return (
     <nav
-      style={{ background: "#000000", borderBottom: "1px solid rgba(0,255,0,0.2)" }}
+      style={{
+        background: isDark ? "#000000" : "rgba(255,255,255,0.92)",
+        borderBottom: `1px solid ${isDark ? "rgba(0,255,0,0.2)" : "rgba(0,100,50,0.15)"}`,
+        backdropFilter: isDark ? "none" : "blur(12px)",
+        transition: "background 0.3s ease, border-color 0.3s ease",
+      }}
       className="fixed top-0 w-full z-50"
       data-testid="navigation"
     >
@@ -246,6 +309,7 @@ export default function Navigation() {
 
           {/* Right actions */}
           <div className="flex items-center gap-2 justify-self-end">
+            <ThemeToggle />
             <Link href="/agent-scanner">
               <span style={actionBtnStyle} data-testid="link-nav-agent-scanner">
                 <Bot size={11} />
@@ -274,19 +338,22 @@ export default function Navigation() {
               <span className="font-meme text-base" style={{ color: G }}>APOL AGENT</span>
             </div>
           </Link>
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            data-testid="button-mobile-menu"
-            style={{ background: "none", border: "none", cursor: "pointer", padding: "4px" }}
-          >
-            {isMobileMenuOpen ? <X size={22} color="#fff" /> : <Menu size={22} color="#fff" />}
-          </button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle size={14} />
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              data-testid="button-mobile-menu"
+              style={{ background: "none", border: "none", cursor: "pointer", padding: "4px" }}
+            >
+              {isMobileMenuOpen ? <X size={22} color={isDark ? "#fff" : "#222"} /> : <Menu size={22} color={isDark ? "#fff" : "#222"} />}
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Mobile dropdown */}
       {isMobileMenuOpen && (
-        <div style={{ background: "#000000", borderTop: "1px solid rgba(0,255,0,0.2)" }}>
+        <div style={{ background: isDark ? "#000000" : "rgba(255,255,255,0.98)", borderTop: `1px solid ${isDark ? "rgba(0,255,0,0.2)" : "rgba(0,100,50,0.15)"}` }}>
           <div className="px-4 pt-3 pb-5 flex flex-col gap-1">
             <Link href="/" onClick={() => setIsMobileMenuOpen(false)}>
               <span
