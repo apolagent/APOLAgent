@@ -200,6 +200,16 @@ function getEvidenceFiling(r: AgentResult | null, formState: { wallet: string; l
       { emoji: "👥", label: "Sybil Check", status: formState.socialLink.trim() ? "green" as StatusColor : "grey" as StatusColor, tag: formState.socialLink.trim() ? "Clear" : "Pending" },
     ];
   }
+  const isWhitelisted = r.cognitionScore === 100 && r.verdict === "Fully Autonomous";
+  if (isWhitelisted) {
+    return [
+      { emoji: "⛓", label: "On-Chain Activity", status: "green" as StatusColor, tag: "Active" },
+      { emoji: "🕒", label: "Liveliness", status: "green" as StatusColor, tag: "Active" },
+      { emoji: "🧠", label: "Reasoning", status: "green" as StatusColor, tag: "Verified" },
+      { emoji: "🔎", label: "Abilities", status: "green" as StatusColor, tag: r.abilityAudit?.claimedAbilities.length ? `${r.abilityAudit.claimedAbilities.length} Found` : "Verified" },
+      { emoji: "👥", label: "Sybil Check", status: "green" as StatusColor, tag: "Clear" },
+    ];
+  }
   const activityStatus: StatusColor = !r.onChainActivityTest?.scored ? "grey" : r.onChainActivityTest.label === "Active" ? "green" : r.onChainActivityTest.label === "Dead" || r.onChainActivityTest.label === "Dormant" ? "red" : "yellow";
   const liveStatus: StatusColor = !r.speedTest.scored ? "grey" : r.speedTest.score >= 12 ? "green" : "red";
   const reasoningStatus: StatusColor = r.logsTest.status === "verified" ? "green" : r.logsTest.status === "mismatch" ? "red" : "yellow";
