@@ -1600,7 +1600,7 @@ export function createBot(): Telegraf | null {
     const input = ctx.message.text.replace(/^\/scan(@\w+)?\s*/i, "").trim();
     if (!isContractAddress(input)) {
       PENDING_COMMAND.set(ctx.chat.id, { command: "scan", timestamp: Date.now() });
-      ctx.reply("🔍 Paste a Base contract address below and I'll scan it instantly.\n\nOr type it inline: `/scan 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`", { parse_mode: "Markdown" });
+      ctx.reply("🔍 Send Base contract address.", { parse_mode: "Markdown" });
       return;
     }
     await handleScan(ctx, input);
@@ -1610,7 +1610,7 @@ export function createBot(): Telegraf | null {
     const input = ctx.message.text.replace(/^\/scanx(@\w+)?\s*/i, "").trim();
     if (!input) {
       PENDING_COMMAND.set(ctx.chat.id, { command: "scanx", timestamp: Date.now() });
-      ctx.reply("🔍 Send an X/Twitter handle or URL after /scanx\nExample: `/scanx @ShieldCoinBase`", { parse_mode: "Markdown" });
+      ctx.reply("🔍 Send X/Twitter handle or URL.", { parse_mode: "Markdown" });
       return;
     }
     await handleScanX(ctx, input);
@@ -1621,7 +1621,7 @@ export function createBot(): Telegraf | null {
     log(`/scanagent command: input="${input.slice(0, 30)}"`, "bot");
     if (!input) {
       PENDING_COMMAND.set(ctx.chat.id, { command: "scanagent", timestamp: Date.now() });
-      ctx.reply("🤖 Send an AI agent contract address or name after /scanagent\nExample: `/scanagent 0x...` or `/scanagent AgentName`", { parse_mode: "Markdown" });
+      ctx.reply("🤖 Send AI agent contract address or name.", { parse_mode: "Markdown" });
       return;
     }
 
@@ -1670,7 +1670,7 @@ export function createBot(): Telegraf | null {
     const input = ctx.message.text.replace(/^\/checkwallet(@\w+)?\s*/i, "").trim();
     if (!/^0x[a-fA-F0-9]{40}$/.test(input)) {
       PENDING_COMMAND.set(ctx.chat.id, { command: "checkwallet", timestamp: Date.now() });
-      ctx.reply("💼 Send a wallet address after /checkwallet\nExample: `/checkwallet 0x...`", { parse_mode: "Markdown" });
+      ctx.reply("💼 Send wallet address.", { parse_mode: "Markdown" });
       return;
     }
     await handleCheckWallet(ctx, input);
@@ -1705,7 +1705,7 @@ export function createBot(): Telegraf | null {
     const input = ctx.message.text.replace(/^\/report(@\w+)?\s*/i, "").trim();
     if (!input) {
       ctx.reply(
-        `🚩 *APOL AGENT — REPORT*\n\nSubmit scam evidence for investigation.\n\n*Quick report:*\n\`/report 0xContractAddress reason\`\n\nExample:\n\`/report 0x1234...abcd Honeypot, can't sell\`\n\n📋 For a detailed report with evidence, use the full form:\n🔗 [Submit Report on Web](https://apolagent.online/report-scam)`,
+        `🚩 *APOL AGENT — REPORT*\n\nSend contract address and reason.\n\n📋 Or use the full form:\n🔗 [Submit Report on Web](https://apolagent.online/report-scam)`,
         { parse_mode: "Markdown", link_preview_options: { is_disabled: true } },
       );
       return;
@@ -1728,7 +1728,7 @@ export function createBot(): Telegraf | null {
         { parse_mode: "Markdown", link_preview_options: { is_disabled: true } },
       );
     } else {
-      ctx.reply("🚩 Please provide a valid contract address.\nExample: `/report 0x... honeypot`\n\n📋 Or use the full web form: https://apolagent.online/report-scam", { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+      ctx.reply("🚩 Send a valid contract address and reason.", { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
     }
   });
 
