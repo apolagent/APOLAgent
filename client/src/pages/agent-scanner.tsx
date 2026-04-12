@@ -733,7 +733,7 @@ export default function AgentScanner() {
                   className="bg-slate-800 border-slate-600 text-white placeholder-slate-500" data-testid="input-social-link" />
               </div>
               <div>
-                <label className="text-sm text-slate-300 mb-1.5 block font-medium">Logs URL / API Endpoint <span className="text-slate-500 text-xs font-normal">· Reasoning check</span></label>
+                <label className="text-sm text-slate-300 mb-1.5 block font-medium">Logs URL / API Endpoint <span className="text-slate-500 text-xs font-normal">· Optional · Reasoning check</span></label>
                 <Input placeholder="https://agent-logs.example.com/api/last" value={logsUrl} onChange={e => setLogsUrl(e.target.value)}
                   className="bg-slate-800 border-slate-600 text-white placeholder-slate-500" data-testid="input-logs-url" />
               </div>
