@@ -66,6 +66,13 @@ export const DEPLOYER_CHAIN_KEYWORDS: Readonly<Record<string, { names: readonly 
   Virtuals: { names: Object.freeze(["virtuals"]), sourcePatterns: Object.freeze([]) },
 });
 
+export const VERIFIED_AGENTS: Readonly<Record<string, { name: string; symbol: string; protocol: string }>> = Object.freeze({
+  "0x55cd6469f597452b5a7536e2cd98fde4c1247ee4": { name: "Luna", symbol: "LUNA", protocol: "Virtuals" },
+  "0x4f9fd6be4a90f2620860d680c0d4d5fb53d1a825": { name: "aixbt", symbol: "AIXBT", protocol: "Virtuals" },
+  "0x1c4cca7c5db003824208adda61bd749e55f463a3": { name: "Game", symbol: "GAME", protocol: "Virtuals" },
+  "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b": { name: "Virtuals Protocol", symbol: "VIRTUAL", protocol: "Virtuals" },
+});
+
 export const BLOCKSCOUT_BASE = "https://base.blockscout.com" as const;
 export const DEXSCREENER_BASE = "https://api.dexscreener.com" as const;
 export const GOPLUS_BASE = "https://api.gopluslabs.io" as const;

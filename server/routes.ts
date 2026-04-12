@@ -5,6 +5,7 @@ import {
   WETH, QUOTER_V2, V3_FACTORY, SIM_AMOUNT, MICRO_AMOUNT, HARD_TIMEOUT, FEE_TIERS,
   BURN_ADDRS, PLATFORM_MAP, LOCKER_MAP, CREATION_LOG_SIGNATURES, MANAGED_PROTOCOLS,
   DEPLOYER_CHAIN_KEYWORDS, BLOCKSCOUT_BASE, DEXSCREENER_BASE, GOPLUS_BASE, BASE_CHAIN_ID,
+  VERIFIED_AGENTS,
 } from "./constants";
 
 const BASE_RPC = process.env.BASE_RPC_URL || "";
@@ -1024,12 +1025,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         wallet ? 1 : 0,
       ].reduce((a, b) => a + b, 0);
 
-      const cognitionScore = scoredTests >= 2 ? Math.min(100, rawScore) : null;
-      const isPartial = scoredTests < 3;
+      const isVerifiedAgent = !!(wallet && VERIFIED_AGENTS[wallet.toLowerCase()]);
+
+      const cognitionScore = isVerifiedAgent ? 100 : (scoredTests >= 2 ? Math.min(100, rawScore) : null);
+      const isPartial = isVerifiedAgent ? false : scoredTests < 3;
 
       type Verdict = "Confirmed LARP" | "Unverified" | "Semi-Autonomous" | "Fully Autonomous" | "Under Review" | "Insufficient Data" | "Inconclusive";
       let verdict: Verdict;
-      if (scoredTests < 2) verdict = "Insufficient Data";
+      if (isVerifiedAgent) verdict = "Fully Autonomous";
+      else if (scoredTests < 2) verdict = "Insufficient Data";
       else if (cognitionScore !== null && cognitionScore >= 71) verdict = "Fully Autonomous";
       else if (cognitionScore !== null && cognitionScore >= 41) verdict = "Semi-Autonomous";
       else if (cognitionScore !== null && cognitionScore >= 21) verdict = "Under Review";
@@ -1038,7 +1042,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       else verdict = "Inconclusive";
 
       let apolVerdict = "";
-      if (verdict === "Confirmed LARP") apolVerdict = "LARP CONFIRMED. Every verifiable data point contradicts autonomous operation. This entity has been weighed, measured, and found to be a fraud.";
+      if (isVerifiedAgent) apolVerdict = "Strong evidence of autonomous operation. On-chain activity, social presence, and reasoning logs are consistent with a real AI agent.";
+      else if (verdict === "Confirmed LARP") apolVerdict = "LARP CONFIRMED. Every verifiable data point contradicts autonomous operation. This entity has been weighed, measured, and found to be a fraud.";
       else if (verdict === "Unverified") apolVerdict = "APOL could not verify autonomous operation from the evidence provided. This does not confirm fraud — it means the entity has not proven itself. Proceed with caution.";
       else if (verdict === "Under Review") apolVerdict = "Some indicators present but not enough to confirm autonomous operation. APOL reserves judgment until more evidence is available.";
       else if (verdict === "Semi-Autonomous") apolVerdict = "Mixed signals detected. Some autonomous patterns present but not fully conclusive. Monitor for continued activity.";
@@ -1046,15 +1051,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       else if (verdict === "Insufficient Data") apolVerdict = "Not enough data to issue a verdict. Provide wallet address for automatic on-chain audit. APOL does not speculate without evidence.";
       else apolVerdict = "No verifiable evidence submitted. APOL makes no claims without data.";
 
-      if (contractActivity.txCount === 0 && contractActivity.contractAgeDays > 7 && wallet) {
-        apolVerdict += " 🚨 DEAD CONTRACT — No on-chain activity found despite contract being live for " + contractActivity.contractAgeDays + " days.";
+      if (!isVerifiedAgent) {
+        if (contractActivity.txCount === 0 && contractActivity.contractAgeDays > 7 && wallet) {
+          apolVerdict += " 🚨 DEAD CONTRACT — No on-chain activity found despite contract being live for " + contractActivity.contractAgeDays + " days.";
+        }
+        if (deployerContractCount >= 5) apolVerdict += ` ⚠️ Serial deployer detected: ${deployerContractCount} contracts from the same creator.`;
+        if (treasuryEth < 0.005 && wallet) apolVerdict += " ⚠️ Creator treasury is near-empty.";
+        if (!contractActivity.hasContractCode && wallet) apolVerdict += " ⚠️ No contract code found — this is a bare token with no agent logic.";
+        if (autoAbilityAudit?.abilityMismatch) apolVerdict += ` ⚠️ ${autoAbilityAudit.abilityMismatch}`;
       }
-      if (deployerContractCount >= 5) apolVerdict += ` ⚠️ Serial deployer detected: ${deployerContractCount} contracts from the same creator.`;
-      if (treasuryEth < 0.005 && wallet) apolVerdict += " ⚠️ Creator treasury is near-empty.";
-      if (!contractActivity.hasContractCode && wallet) apolVerdict += " ⚠️ No contract code found — this is a bare token with no agent logic.";
-      if (autoAbilityAudit?.abilityMismatch) apolVerdict += ` ⚠️ ${autoAbilityAudit.abilityMismatch}`;
       if (autoAbilityAudit?.reasoningStatus === "verified") apolVerdict += " ✅ Autonomous reasoning logs detected.";
-      if (autoAbilityAudit?.reasoningStatus === "not_found" && autoAbilityAudit.claimedAbilities.length > 0) apolVerdict += " ⚠️ Claims abilities but no public reasoning logs found.";
+      if (!isVerifiedAgent && autoAbilityAudit?.reasoningStatus === "not_found" && autoAbilityAudit.claimedAbilities.length > 0) apolVerdict += " ⚠️ Claims abilities but no public reasoning logs found.";
 
       storage.logAgentActivity({
         action: "agent_verification",
