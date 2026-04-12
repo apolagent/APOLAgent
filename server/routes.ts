@@ -225,7 +225,7 @@ async function getEthUsdPrice(): Promise<number> {
   } catch { return routesEthCache?.price || 0; }
 }
 
-async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liquidity: number }> {
+async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liquidity: number; dexMcap: number; dexFdv: number }> {
   const key = addr.toLowerCase();
   const cached = routesDexCache.get(key);
   if (cached && Date.now() - cached.timestamp < ROUTES_CACHE_TTL) {
@@ -234,11 +234,16 @@ async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liq
   try {
     const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(6000) }).then((r) => r.ok ? r.json() as any : null);
     const pair = data?.pairs?.[0];
-    const result = { priceUsd: parseFloat(pair?.priceUsd || "0") || 0, liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0 };
+    const result = {
+      priceUsd: parseFloat(pair?.priceUsd || "0") || 0,
+      liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0,
+      dexMcap: parseFloat(pair?.marketCap || "0") || 0,
+      dexFdv: parseFloat(pair?.fdv || "0") || 0,
+    };
     if (result.priceUsd > 0) routesDexCache.set(key, { data: result, timestamp: Date.now() });
     return result.priceUsd > 0 ? result : cached?.data || result;
   } catch {
-    return cached?.data || { priceUsd: 0, liquidity: 0 };
+    return cached?.data || { priceUsd: 0, liquidity: 0, dexMcap: 0, dexFdv: 0 };
   }
 }
 
@@ -725,7 +730,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const tokensWholeUnits = Number(sim.tokensReceived) / (10 ** tokenInfo.decimals);
         tokenPriceUsd = tokensWholeUnits > 0 ? (0.001 / tokensWholeUnits) * ethUsd : 0;
       }
-      const mcap = Number(tokenInfo.totalSupply) * tokenPriceUsd;
+      const calculatedMcap = Number(tokenInfo.totalSupply) * tokenPriceUsd;
+      const mcap = dexData.dexMcap > 0 ? dexData.dexMcap : (dexData.dexFdv > 0 ? dexData.dexFdv : calculatedMcap);
 
       const nameUpper = tokenInfo.name.toUpperCase();
       const symbolUpper = tokenInfo.symbol.toUpperCase();
