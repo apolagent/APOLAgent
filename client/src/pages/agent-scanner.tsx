@@ -136,6 +136,19 @@ type AgentResult = {
   isKnownFactory?: boolean;
   lpEscrow?: { name: string; address: string; percent: number } | null;
   platformName?: string | null;
+  clankerData?: {
+    volume24h: number;
+    marketCap: number;
+    rewardsAvailable: boolean;
+    warnings: string[];
+    tags: { champagne: boolean; verified: boolean; knownInterfaceDeployer: boolean };
+  };
+  serialDeployer?: {
+    recentCount: number;
+    windowDays: number;
+    recentTokens: { name: string; address: string; ageDays: number }[];
+  };
+  twitterHandle?: string;
 };
 
 type StatusColor = "green" | "red" | "yellow" | "grey";
@@ -409,6 +422,84 @@ function AdvancedResults({ result }: { result: AgentResult }) {
         </div>
       )}
 
+      {/* ── Serial Deployer Alert ── */}
+      {result.serialDeployer && (
+        <div data-testid="div-serial-deployer-alert" style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(248,113,113,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+            <AlertTriangle size={14} color="#f87171" />
+            <span style={{ fontSize: "10px", color: "#f87171", fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+              Potential Serial Deployer
+            </span>
+          </div>
+          <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.8)", lineHeight: 1.6, marginBottom: "8px" }}>
+            Creator has launched <span style={{ color: "#f87171", fontWeight: 700 }}>{result.serialDeployer.recentCount} tokens</span> in the last {result.serialDeployer.windowDays} days. This is a common pattern for rug-pull operations.
+          </div>
+          {result.serialDeployer.recentTokens.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              {result.serialDeployer.recentTokens.slice(0, 5).map((t, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "10px" }}>
+                  <span style={{ color: "#f87171", fontFamily: "'JetBrains Mono', monospace" }}>{t.address.slice(0, 8)}…{t.address.slice(-4)}</span>
+                  <span style={{ color: "rgba(255,255,255,0.5)" }}>{t.name || "Unknown"}</span>
+                  <span style={{ color: "rgba(255,255,255,0.3)" }}>({t.ageDays < 1 ? "<1d" : `${t.ageDays}d`} ago)</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Clanker Data ── */}
+      {result.clankerData && (
+        <div data-testid="div-clanker-data" style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px" }}>
+            <Zap size={12} color={G} />
+            <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.6)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Clanker Protocol Data</span>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px" }}>
+            <div>
+              <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>24h Volume</div>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: result.clankerData.volume24h > 0 ? G : "rgba(255,255,255,0.5)" }}>
+                {result.clankerData.volume24h > 0 ? `$${result.clankerData.volume24h.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "N/A"}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>Rewards</div>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: result.clankerData.rewardsAvailable ? G : "rgba(255,255,255,0.5)" }}>
+                {result.clankerData.rewardsAvailable ? "Available" : "None"}
+              </div>
+            </div>
+            {result.clankerData.tags.verified && (
+              <div>
+                <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>Status</div>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: G }}>Verified</div>
+              </div>
+            )}
+          </div>
+          {result.clankerData.warnings.length > 0 && (
+            <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "3px" }}>
+              {result.clankerData.warnings.map((w, i) => (
+                <div key={i} style={{ fontSize: "10px", color: "#facc15", display: "flex", alignItems: "center", gap: "4px" }}>
+                  <AlertTriangle size={10} /> {w}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── X/Twitter Deep Scan Link ── */}
+      {result.twitterHandle && (
+        <div data-testid="div-twitter-link" style={{ padding: "10px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <a
+            href={`/agent-scanner?scanx=${encodeURIComponent(result.twitterHandle)}`}
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "11px", color: G, textDecoration: "none", fontWeight: 600 }}
+            data-testid="link-deep-scan-twitter"
+          >
+            <Search size={12} /> Deep Scan X Profile: @{result.twitterHandle}
+          </a>
+        </div>
+      )}
+
       {/* ── Top Holders ── */}
       {cs && cs.topHolders.length > 0 && (
         <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
@@ -543,6 +634,21 @@ export default function AgentScanner() {
     fetch(`/api/contracts/verified/${result.wallet.toLowerCase()}`)
       .then(r => r.json()).then(setApolCertified).catch(() => setApolCertified(null));
   }, [result?.wallet, result?.traceabilityTest.isContract]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const scanxParam = params.get("scanx");
+    if (scanxParam && !scanXResult && !isScanningX) {
+      setScanXHandle(scanxParam);
+      setIsScanningX(true);
+      setScanXError(null);
+      fetch(`/api/scanx?username=${encodeURIComponent(scanxParam)}`)
+        .then(r => r.json())
+        .then(data => { setScanXResult(data); })
+        .catch(() => { setScanXError("Network error."); })
+        .finally(() => { setIsScanningX(false); });
+    }
+  }, []);
 
   const handleCheckAddress = async () => {
     if (!checkAddress.trim()) return;

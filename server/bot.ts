@@ -4,7 +4,7 @@ import {
   WETH, QUOTER_V2, V3_FACTORY, SIM_AMOUNT, MICRO_AMOUNT, FEE_TIERS,
   BURN_ADDRS, PLATFORM_MAP, LOCKER_MAP, CREATION_LOG_SIGNATURES, MANAGED_PROTOCOLS,
   DEPLOYER_CHAIN_KEYWORDS, BLOCKSCOUT_BASE, DEXSCREENER_BASE, GOPLUS_BASE, BASE_CHAIN_ID,
-  VERIFIED_AGENTS,
+  VERIFIED_AGENTS, CLANKER_API_BASE, SERIAL_DEPLOYER_THRESHOLD, SERIAL_DEPLOYER_WINDOW_DAYS,
 } from "./constants";
 
 function log(message: string, source = "bot") {
@@ -616,6 +616,9 @@ async function runScan(address: string): Promise<string> {
   const lpStatus = detectLpStatus(topHolders, platform, holdersComplete);
   const isVirtuals = platform === "Virtuals";
   const isManaged = !!(platform && MANAGED_PROTOCOLS.has(platform));
+  const isClanker = platform === "Clanker";
+
+  const clankerData = isClanker ? await softTimeout(fetchClankerData(address), 5000, null) : null;
 
   let buyTax = isManaged ? 0 : sim.buyTax;
   let sellTax = isManaged ? 0 : sim.sellTax;
@@ -708,10 +711,17 @@ async function runScan(address: string): Promise<string> {
     `🔒 *LP Status:* ${lpStatus}`,
     `👥 *Holders:* ${holderStr}`,
     `💰 *Buy Tax:* ${buyTax.toFixed(1)}%  |  *Sell Tax:* ${sellTax.toFixed(1)}%`,
-    ``,
-    `*RISK LEVEL:* ${riskLevel}`,
-    ``,
   ];
+
+  if (clankerData) {
+    if (clankerData.volume24h > 0) lines.push(`📈 *24h Volume:* ${formatUsd(clankerData.volume24h)}`);
+    if (clankerData.rewardsAvailable) lines.push(`💎 *Clanker Rewards:* Available`);
+    if (clankerData.warnings.length > 0) lines.push(`⚠️ *Clanker Warnings:* ${clankerData.warnings.join(", ")}`);
+  }
+
+  lines.push(``);
+  lines.push(`*RISK LEVEL:* ${riskLevel}`);
+  lines.push(``);
 
   if (isManaged || platform) {
     lines.push(`📋 *DEPLOYER*`);
@@ -824,6 +834,77 @@ async function getDexScreenerSocials(addr: string): Promise<{ twitter: string | 
     if (websites.length > 0) website = websites[0].url || null;
     return { twitter, website, telegram, description };
   } catch { return { twitter: null, website: null, telegram: null, description: null }; }
+}
+
+interface ClankerData {
+  volume24h: number;
+  marketCap: number;
+  warnings: string[];
+  tags: { champagne: boolean; verified: boolean; knownInterfaceDeployer: boolean };
+  poolAddress: string | null;
+  deployedAt: string | null;
+  admin: string | null;
+  rewardsAvailable: boolean;
+}
+
+async function fetchClankerData(addr: string): Promise<ClankerData | null> {
+  try {
+    const resp = await fetch(`${CLANKER_API_BASE}/api/tokens/search?q=${addr}`, { signal: AbortSignal.timeout(5000) });
+    if (!resp.ok) return null;
+    const data = await resp.json() as any;
+    const tokens = data?.data || [];
+    const token = tokens.find((t: any) => t.contract_address?.toLowerCase() === addr.toLowerCase());
+    if (!token) return null;
+    return {
+      volume24h: token.related?.market?.volume24h || 0,
+      marketCap: token.related?.market?.marketCap || 0,
+      warnings: token.warnings || [],
+      tags: { champagne: !!token.tags?.champagne, verified: !!token.tags?.verified, knownInterfaceDeployer: !!token.tags?.knownInterfaceDeployer },
+      poolAddress: token.pool_address || null,
+      deployedAt: token.deployed_at || null,
+      admin: token.admin || null,
+      rewardsAvailable: !!token.position_id,
+    };
+  } catch { return null; }
+}
+
+async function checkRecentDeployerTokens(deployer: string): Promise<{ recentCount: number; recentTokens: { name: string; address: string; ageDays: number }[] }> {
+  if (!BASE_RPC) return { recentCount: 0, recentTokens: [] };
+  try {
+    const resp = await fetch(BASE_RPC, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "alchemy_getAssetTransfers",
+        params: [{ fromBlock: "0x0", toBlock: "latest", fromAddress: deployer, category: ["erc20"], maxCount: "0x32", excludeZeroValue: false }] }),
+      signal: AbortSignal.timeout(6000),
+    });
+    const data = await resp.json() as any;
+    const transfers = data?.result?.transfers || [];
+    const now = Date.now();
+    const windowMs = SERIAL_DEPLOYER_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+    const tokenMap = new Map<string, { name: string; blockNum: string }>();
+    for (const t of transfers) {
+      const tAddr = t.rawContract?.address?.toLowerCase();
+      if (tAddr && !tokenMap.has(tAddr)) {
+        tokenMap.set(tAddr, { name: t.asset || "Unknown", blockNum: t.blockNum });
+      }
+    }
+    const entries = [...tokenMap.entries()].slice(0, 15);
+    const blockChecks = entries.map(async ([tokenAddr, info]) => {
+      try {
+        const blockData = await rpcCall("eth_getBlockByNumber", [info.blockNum, false]);
+        if (blockData?.timestamp) {
+          const created = parseInt(blockData.timestamp, 16) * 1000;
+          const ageDays = Math.max(0, Math.floor((now - created) / (1000 * 60 * 60 * 24)));
+          if (now - created <= windowMs) {
+            return { name: info.name, address: tokenAddr, ageDays };
+          }
+        }
+      } catch {}
+      return null;
+    });
+    const results = (await Promise.all(blockChecks)).filter((r): r is { name: string; address: string; ageDays: number } => r !== null);
+    return { recentCount: results.length, recentTokens: results };
+  } catch { return { recentCount: 0, recentTokens: [] }; }
 }
 
 const AGENT_ABILITY_KEYWORDS: Record<string, string[]> = {
@@ -952,7 +1033,7 @@ async function auditAgentAbilities(
   return { claimedAbilities, sourceTexts, reasoningUrl, reasoningStatus, reasoningDetail, abilityMismatch };
 }
 
-async function runAgentScan(address: string, searchedName: string | null): Promise<string> {
+async function runAgentScan(address: string, searchedName: string | null): Promise<{ text: string; twitterHandle: string | null }> {
   const t0 = Date.now();
   log(`runAgentScan START for ${address.slice(0, 10)}... name=${searchedName || "none"}`, "bot");
 
@@ -992,6 +1073,7 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
   const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || creationPlatform || deployerChainPlatform;
   const isVirtuals = platform === "Virtuals";
   const isManaged = !!(platform && MANAGED_PROTOCOLS.has(platform));
+  const isClanker = platform === "Clanker";
   let buyTax = isManaged ? 0 : sim.buyTax;
   let sellTax = isManaged ? 0 : sim.sellTax;
   let isHoneypot = isManaged ? false : sim.isHoneypot;
@@ -1002,11 +1084,13 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
     isHoneypot = fallbackData.isHoneypot;
   }
 
-  const [treasuryBal, deployerContracts, xProfile, contractActivity] = await Promise.all([
+  const [treasuryBal, deployerContracts, xProfile, contractActivity, clankerData, recentDeployer] = await Promise.all([
     deployer ? softTimeout(getTreasuryBalance(deployer), 4000, { eth: 0, usd: 0 }) : Promise.resolve({ eth: 0, usd: 0 }),
     deployer ? softTimeout(getDeployerCreatedContracts(deployer), 5000, 0) : Promise.resolve(0),
     dexSocials.twitter ? softTimeout(fetchXProfile(dexSocials.twitter), 5000, null) : Promise.resolve(null),
     softTimeout(getContractActivity(address), 6000, { txCount: 0, contractAgeDays: 0, hasContractCode: false, codeSize: 0, activityPerDay: 0 } as ContractActivity),
+    isClanker ? softTimeout(fetchClankerData(address), 5000, null) : Promise.resolve(null),
+    deployer ? softTimeout(checkRecentDeployerTokens(deployer), 6000, { recentCount: 0, recentTokens: [] }) : Promise.resolve({ recentCount: 0, recentTokens: [] }),
   ]);
 
   const abilityAudit = await softTimeout(
@@ -1044,6 +1128,9 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
   else if (treasuryBal.eth >= 0.1) agentPasses.push("✅ Treasury funded — Active maintenance");
   else agentPasses.push("🟡 Treasury has some funds");
 
+  if (recentDeployer.recentCount >= SERIAL_DEPLOYER_THRESHOLD) {
+    agentFlags.push(`🚨 POTENTIAL SERIAL DEPLOYER — ${recentDeployer.recentCount} tokens launched in the last ${SERIAL_DEPLOYER_WINDOW_DAYS} days`);
+  }
   if (deployerContracts >= 5) agentFlags.push(`⚠️ Serial deployer — ${deployerContracts} contracts created`);
   else if (deployerContracts >= 3) agentFlags.push(`🟡 Multiple deployments — ${deployerContracts} contracts from this creator`);
   else if (deployerContracts <= 1) agentPasses.push("✅ Focused creator — Single deployment");
@@ -1180,9 +1267,13 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
   lines.push(`🔬 *CREATOR FORENSIC*`);
   if (deployer) {
     lines.push(`   Contracts deployed: ${deployerContracts}`);
+    if (recentDeployer.recentCount >= SERIAL_DEPLOYER_THRESHOLD) {
+      lines.push(`   🚨 *POTENTIAL SERIAL DEPLOYER*`);
+      lines.push(`   ${recentDeployer.recentCount} tokens in last ${SERIAL_DEPLOYER_WINDOW_DAYS} days`);
+    }
     if (deployerContracts >= 5) lines.push(`   🔴 Serial deployer — High rug risk`);
     else if (deployerContracts >= 3) lines.push(`   🟡 Multiple projects — Monitor closely`);
-    else lines.push(`   ✅ Focused creator`);
+    else if (recentDeployer.recentCount < SERIAL_DEPLOYER_THRESHOLD) lines.push(`   ✅ Focused creator`);
   } else {
     lines.push(`   ⚠️ Cannot analyze — Deployer unknown`);
   }
@@ -1194,6 +1285,11 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
   lines.push(`   💧 Liquidity: ${dexData.liquidity > 0 ? formatUsd(dexData.liquidity) : "N/A"}`);
   lines.push(`   👥 Holders: ${holderCount > 0 ? holderCount.toLocaleString() : "N/A"}`);
   lines.push(`   💰 Tax: Buy ${buyTax.toFixed(1)}% / Sell ${sellTax.toFixed(1)}%`);
+  if (clankerData) {
+    if (clankerData.volume24h > 0) lines.push(`   📈 24h Vol: ${formatUsd(clankerData.volume24h)}`);
+    if (clankerData.rewardsAvailable) lines.push(`   💎 Clanker Rewards: Available`);
+    if (clankerData.warnings.length > 0) lines.push(`   ⚠️ Clanker: ${clankerData.warnings.join(", ")}`);
+  }
   if (isHoneypot) lines.push(`   🚨 HONEYPOT DETECTED`);
 
   storage.logAgentActivity({
@@ -1230,7 +1326,7 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
   lines.push(``);
   lines.push(`⚡ ${elapsed}s · APOL Larp Detector`);
 
-  return lines.join("\n");
+  return { text: lines.join("\n"), twitterHandle: dexSocials.twitter || null };
 }
 
 function esc(s: string): string {
@@ -1643,14 +1739,18 @@ export function createBot(): Telegraf | null {
         searchedName = found.name;
       }
 
-      const report = await softTimeout(runAgentScan(address, searchedName), 30000, null);
-      log(`scanagent result: ${report ? `${report.length} chars` : "NULL"}`, "bot");
-      if (report) {
+      const result = await softTimeout(runAgentScan(address, searchedName), 30000, null);
+      log(`scanagent result: ${result ? `${result.text.length} chars` : "NULL"}`, "bot");
+      if (result) {
+        const opts: any = { parse_mode: "Markdown", link_preview_options: { is_disabled: true } };
+        if (result.twitterHandle) {
+          opts.reply_markup = { inline_keyboard: [[{ text: "🔍 Deep Scan X Profile", url: `https://apolagent.online/agent-scanner?scanx=${encodeURIComponent(result.twitterHandle)}` }]] };
+        }
         try {
-          await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+          await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, result.text, opts);
         } catch (mdErr: any) {
           log(`scanagent Markdown edit failed: ${mdErr?.message?.slice(0, 120)}`, "bot");
-          const plain = report.replace(/[*_`\[\]]/g, "");
+          const plain = result.text.replace(/[*_`\[\]]/g, "");
           await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined, plain.slice(0, 4000), { link_preview_options: { is_disabled: true } }).catch(() => {});
         }
       } else {
@@ -1775,14 +1875,18 @@ export function createBot(): Telegraf | null {
             const displayId = `${text.slice(0, 8)}. . .${text.slice(-6)}`;
             const loadingMsg = await ctx.reply(`🔍 *Analyzing Forensic Data...*\n\n📍 ${displayId}\n_Consulting APOL intelligence database. This may take a moment._`, { parse_mode: "Markdown" });
             try {
-              const report = await softTimeout(runAgentScan(text, null), 30000, null);
-              log(`scanagent result: ${report ? `${report.length} chars` : "NULL"}`, "bot");
-              if (report) {
+              const result = await softTimeout(runAgentScan(text, null), 30000, null);
+              log(`scanagent result: ${result ? `${result.text.length} chars` : "NULL"}`, "bot");
+              if (result) {
+                const opts: any = { parse_mode: "Markdown", link_preview_options: { is_disabled: true } };
+                if (result.twitterHandle) {
+                  opts.reply_markup = { inline_keyboard: [[{ text: "🔍 Deep Scan X Profile", url: `https://apolagent.online/agent-scanner?scanx=${encodeURIComponent(result.twitterHandle)}` }]] };
+                }
                 try {
-                  await ctx.telegram.editMessageText(chatId, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+                  await ctx.telegram.editMessageText(chatId, loadingMsg.message_id, undefined, result.text, opts);
                 } catch (mdErr: any) {
                   log(`scanagent Markdown edit failed: ${mdErr?.message?.slice(0, 120)}`, "bot");
-                  const plain = report.replace(/[*_`\[\]]/g, "");
+                  const plain = result.text.replace(/[*_`\[\]]/g, "");
                   await ctx.telegram.editMessageText(chatId, loadingMsg.message_id, undefined, plain.slice(0, 4000), { link_preview_options: { is_disabled: true } }).catch(() => {});
                 }
               } else {
@@ -1803,12 +1907,16 @@ export function createBot(): Telegraf | null {
             const displayId = `${found.address.slice(0, 8)}. . .${found.address.slice(-6)}`;
             const loadingMsg = await ctx.reply(`🔍 *Analyzing Forensic Data...*\n\n📍 ${displayId}\n_Consulting APOL intelligence database..._`, { parse_mode: "Markdown" });
             try {
-              const report = await softTimeout(runAgentScan(found.address, found.name), 30000, null);
-              if (report) {
+              const result = await softTimeout(runAgentScan(found.address, found.name), 30000, null);
+              if (result) {
+                const opts: any = { parse_mode: "Markdown", link_preview_options: { is_disabled: true } };
+                if (result.twitterHandle) {
+                  opts.reply_markup = { inline_keyboard: [[{ text: "🔍 Deep Scan X Profile", url: `https://apolagent.online/agent-scanner?scanx=${encodeURIComponent(result.twitterHandle)}` }]] };
+                }
                 try {
-                  await ctx.telegram.editMessageText(chatId, loadingMsg.message_id, undefined, report, { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+                  await ctx.telegram.editMessageText(chatId, loadingMsg.message_id, undefined, result.text, opts);
                 } catch (mdErr: any) {
-                  const plain = report.replace(/[*_`\[\]]/g, "");
+                  const plain = result.text.replace(/[*_`\[\]]/g, "");
                   await ctx.telegram.editMessageText(chatId, loadingMsg.message_id, undefined, plain.slice(0, 4000), { link_preview_options: { is_disabled: true } }).catch(() => {});
                 }
               } else {

@@ -76,4 +76,7 @@ export const VERIFIED_AGENTS: Readonly<Record<string, { name: string; symbol: st
 export const BLOCKSCOUT_BASE = "https://base.blockscout.com" as const;
 export const DEXSCREENER_BASE = "https://api.dexscreener.com" as const;
 export const GOPLUS_BASE = "https://api.gopluslabs.io" as const;
+export const CLANKER_API_BASE = "https://clanker.world" as const;
 export const BASE_CHAIN_ID = "8453" as const;
+export const SERIAL_DEPLOYER_THRESHOLD = 3 as const;
+export const SERIAL_DEPLOYER_WINDOW_DAYS = 2 as const;

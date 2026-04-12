@@ -5,7 +5,7 @@ import {
   WETH, QUOTER_V2, V3_FACTORY, SIM_AMOUNT, MICRO_AMOUNT, HARD_TIMEOUT, FEE_TIERS,
   BURN_ADDRS, PLATFORM_MAP, LOCKER_MAP, CREATION_LOG_SIGNATURES, MANAGED_PROTOCOLS,
   DEPLOYER_CHAIN_KEYWORDS, BLOCKSCOUT_BASE, DEXSCREENER_BASE, GOPLUS_BASE, BASE_CHAIN_ID,
-  VERIFIED_AGENTS,
+  VERIFIED_AGENTS, CLANKER_API_BASE, SERIAL_DEPLOYER_THRESHOLD, SERIAL_DEPLOYER_WINDOW_DAYS,
 } from "./constants";
 
 const BASE_RPC = process.env.BASE_RPC_URL || "";
@@ -258,6 +258,77 @@ async function getDexScreenerSocials(addr: string): Promise<{ twitter: string | 
     if (websites.length > 0) website = websites[0].url || null;
     return { twitter, website, description };
   } catch { return { twitter: null, website: null, description: null }; }
+}
+
+interface ClankerData {
+  volume24h: number;
+  marketCap: number;
+  warnings: string[];
+  tags: { champagne: boolean; verified: boolean; knownInterfaceDeployer: boolean };
+  poolAddress: string | null;
+  deployedAt: string | null;
+  admin: string | null;
+  rewardsAvailable: boolean;
+}
+
+async function fetchClankerData(addr: string): Promise<ClankerData | null> {
+  try {
+    const resp = await fetch(`${CLANKER_API_BASE}/api/tokens/search?q=${addr}`, { signal: AbortSignal.timeout(5000) });
+    if (!resp.ok) return null;
+    const data = await resp.json() as any;
+    const tokens = data?.data || [];
+    const token = tokens.find((t: any) => t.contract_address?.toLowerCase() === addr.toLowerCase());
+    if (!token) return null;
+    return {
+      volume24h: token.related?.market?.volume24h || 0,
+      marketCap: token.related?.market?.marketCap || 0,
+      warnings: token.warnings || [],
+      tags: { champagne: !!token.tags?.champagne, verified: !!token.tags?.verified, knownInterfaceDeployer: !!token.tags?.knownInterfaceDeployer },
+      poolAddress: token.pool_address || null,
+      deployedAt: token.deployed_at || null,
+      admin: token.admin || null,
+      rewardsAvailable: !!token.position_id,
+    };
+  } catch { return null; }
+}
+
+async function checkRecentDeployerTokens(deployer: string): Promise<{ recentCount: number; recentTokens: { name: string; address: string; ageDays: number }[] }> {
+  if (!BASE_RPC) return { recentCount: 0, recentTokens: [] };
+  try {
+    const resp = await fetch(BASE_RPC, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "alchemy_getAssetTransfers",
+        params: [{ fromBlock: "0x0", toBlock: "latest", fromAddress: deployer, category: ["erc20"], maxCount: "0x32", excludeZeroValue: false }] }),
+      signal: AbortSignal.timeout(6000),
+    });
+    const data = await resp.json() as any;
+    const transfers = data?.result?.transfers || [];
+    const now = Date.now();
+    const windowMs = SERIAL_DEPLOYER_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+    const tokenMap = new Map<string, { name: string; blockNum: string }>();
+    for (const t of transfers) {
+      const addr = t.rawContract?.address?.toLowerCase();
+      if (addr && !tokenMap.has(addr)) {
+        tokenMap.set(addr, { name: t.asset || "Unknown", blockNum: t.blockNum });
+      }
+    }
+    const entries = [...tokenMap.entries()].slice(0, 15);
+    const blockChecks = entries.map(async ([addr, info]) => {
+      try {
+        const blockData = await rpcCall("eth_getBlockByNumber", [info.blockNum, false]);
+        if (blockData?.timestamp) {
+          const created = parseInt(blockData.timestamp, 16) * 1000;
+          const ageDays = Math.max(0, Math.floor((now - created) / (1000 * 60 * 60 * 24)));
+          if (now - created <= windowMs) {
+            return { name: info.name, address: addr, ageDays };
+          }
+        }
+      } catch {}
+      return null;
+    });
+    const results = (await Promise.all(blockChecks)).filter((r): r is { name: string; address: string; ageDays: number } => r !== null);
+    return { recentCount: results.length, recentTokens: results };
+  } catch { return { recentCount: 0, recentTokens: [] }; }
 }
 
 const AGENT_ABILITY_KEYWORDS: Record<string, string[]> = {
@@ -835,21 +906,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       let contractActivity: ContractActivity = { txCount: 0, contractAgeDays: 0, hasContractCode: false, codeSize: 0, activityPerDay: 0 };
+      const isClankerPlatform = contractScan?.protocolLocker === "Clanker";
+      let clankerData: ClankerData | null = null;
+      let recentDeployerData: { recentCount: number; recentTokens: { name: string; address: string; ageDays: number }[] } = { recentCount: 0, recentTokens: [] };
+      let dexSocialData: { twitter: string | null; website: string | null; description: string | null } = { twitter: null, website: null, description: null };
+
       if (wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet)) {
-        try {
-          contractActivity = await getContractActivity(wallet);
-        } catch {}
+        const [activityResult, clankerResult, recentDeployerResult, dexSocialsResult] = await Promise.allSettled([
+          getContractActivity(wallet),
+          isClankerPlatform ? fetchClankerData(wallet) : Promise.resolve(null),
+          deployerAddr ? checkRecentDeployerTokens(deployerAddr) : Promise.resolve({ recentCount: 0, recentTokens: [] }),
+          getDexScreenerSocials(wallet),
+        ]);
+        if (activityResult.status === "fulfilled") contractActivity = activityResult.value;
+        if (clankerResult.status === "fulfilled" && clankerResult.value) clankerData = clankerResult.value;
+        if (recentDeployerResult.status === "fulfilled") recentDeployerData = recentDeployerResult.value;
+        if (dexSocialsResult.status === "fulfilled") dexSocialData = dexSocialsResult.value;
       }
 
       let autoAbilityAudit: AbilityAudit | null = null;
       let twitterBio: string | null = null;
       if (wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet)) {
         try {
-          const dexSocials = await getDexScreenerSocials(wallet);
           let fetchedBio: string | null = null;
-          if (dexSocials.twitter) {
+          if (dexSocialData.twitter) {
             try {
-              const xRes = await fetch(`https://api.fxtwitter.com/${dexSocials.twitter}`, { signal: AbortSignal.timeout(5000) });
+              const xRes = await fetch(`https://api.fxtwitter.com/${dexSocialData.twitter}`, { signal: AbortSignal.timeout(5000) });
               if (xRes.ok) {
                 const xData = await xRes.json() as any;
                 fetchedBio = xData?.user?.description || null;
@@ -857,7 +939,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } catch {}
           }
           twitterBio = fetchedBio;
-          autoAbilityAudit = await autoAuditAbilities(fetchedBio, dexSocials.description, dexSocials.website, contractActivity);
+          autoAbilityAudit = await autoAuditAbilities(fetchedBio, dexSocialData.description, dexSocialData.website, contractActivity);
         } catch {}
       }
 
@@ -1055,6 +1137,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (contractActivity.txCount === 0 && contractActivity.contractAgeDays > 7 && wallet) {
           apolVerdict += " 🚨 DEAD CONTRACT — No on-chain activity found despite contract being live for " + contractActivity.contractAgeDays + " days.";
         }
+        if (recentDeployerData.recentCount >= SERIAL_DEPLOYER_THRESHOLD) {
+          apolVerdict += ` 🚨 POTENTIAL SERIAL DEPLOYER — ${recentDeployerData.recentCount} tokens launched in the last ${SERIAL_DEPLOYER_WINDOW_DAYS} days.`;
+        }
         if (deployerContractCount >= 5) apolVerdict += ` ⚠️ Serial deployer detected: ${deployerContractCount} contracts from the same creator.`;
         if (treasuryEth < 0.005 && wallet) apolVerdict += " ⚠️ Creator treasury is near-empty.";
         if (!contractActivity.hasContractCode && wallet) apolVerdict += " ⚠️ No contract code found — this is a bare token with no agent logic.";
@@ -1099,6 +1184,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           reasoningDetail: autoAbilityAudit.reasoningDetail,
           abilityMismatch: autoAbilityAudit.abilityMismatch,
         } : undefined,
+        clankerData: clankerData ? {
+          volume24h: clankerData.volume24h,
+          marketCap: clankerData.marketCap,
+          rewardsAvailable: clankerData.rewardsAvailable,
+          warnings: clankerData.warnings,
+          tags: clankerData.tags,
+        } : undefined,
+        serialDeployer: recentDeployerData.recentCount >= SERIAL_DEPLOYER_THRESHOLD ? {
+          recentCount: recentDeployerData.recentCount,
+          windowDays: SERIAL_DEPLOYER_WINDOW_DAYS,
+          recentTokens: recentDeployerData.recentTokens,
+        } : undefined,
+        twitterHandle: dexSocialData.twitter || undefined,
       });
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Agent analysis failed" });
