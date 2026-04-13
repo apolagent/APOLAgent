@@ -251,12 +251,14 @@ export default function Navigation() {
               </span>
             </Link>
             <WalletButton />
-            <button
-              style={{ ...actionBtnStyle, background: G, border: `1px solid ${G}`, color: "#000", padding: "5px 14px", fontWeight: 900 }}
-              data-testid="link-buy-apol"
-            >
-              Buy $APOL
-            </button>
+            <a href="https://app.uniswap.org/explore/tokens/base/0x7d8817AcEa5c58a3675088d779a3b5a0CaA57B07" target="_blank" rel="noopener noreferrer">
+              <button
+                style={{ ...actionBtnStyle, background: G, border: `1px solid ${G}`, color: "#000", padding: "5px 14px", fontWeight: 900 }}
+                data-testid="link-buy-apol"
+              >
+                Buy $APOL
+              </button>
+            </a>
           </div>
         </div>
 
@@ -314,12 +316,14 @@ export default function Navigation() {
               </Link>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 <WalletButton />
-                <button
-                  style={{ ...actionBtnStyle, background: G, border: `1px solid ${G}`, color: "#000", padding: "7px 16px", fontWeight: 900 }}
-                  data-testid="link-buy-apol-mobile"
-                >
-                  Buy $APOL
-                </button>
+                <a href="https://app.uniswap.org/explore/tokens/base/0x7d8817AcEa5c58a3675088d779a3b5a0CaA57B07" target="_blank" rel="noopener noreferrer">
+                  <button
+                    style={{ ...actionBtnStyle, background: G, border: `1px solid ${G}`, color: "#000", padding: "7px 16px", fontWeight: 900 }}
+                    data-testid="link-buy-apol-mobile"
+                  >
+                    Buy $APOL
+                  </button>
+                </a>
               </div>
             </div>
           </div>

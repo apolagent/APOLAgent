@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Copy, Check, ExternalLink } from "lucide-react";
 
-const CONTRACT_ADDRESS = "TBA";
+const CONTRACT_ADDRESS = "0x7d8817AcEa5c58a3675088d779a3b5a0CaA57B07";
 const CHAIN = "Base";
 
 const rows = [
@@ -11,7 +11,7 @@ const rows = [
   },
   {
     key: "TOTAL SUPPLY",
-    value: "1,000,000,000",
+    value: "100,000,000,000",
     tag: "HARD CAPPED",
     tagColor: "text-slate-400",
   },

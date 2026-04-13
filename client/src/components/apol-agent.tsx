@@ -17,7 +17,7 @@ const KB: { patterns: RegExp[]; answer: string }[] = [
   },
   {
     patterns: [/\$apol|apol token|tokenomics|supply|tax/i],
-    answer: "$APOL :: Total Supply: 1,000,000,000 [HARD CAPPED] :: Buy/Sell Tax: 0% [IMMUTABLE] :: Chain: Base :: Liquidity: BURNED/LOCKED. See Network Specifications section for full data.",
+    answer: "$APOL :: Total Supply: 100,000,000,000 [HARD CAPPED] :: Buy/Sell Tax: 0% [IMMUTABLE] :: Chain: Base :: Liquidity: BURNED/LOCKED. See Network Specifications section for full data.",
   },
   {
     patterns: [/report.*(scam|fraud|rug)|scam report|how.*report/i],

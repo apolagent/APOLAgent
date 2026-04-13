@@ -330,7 +330,7 @@ function Page4() {
         </thead>
         <tbody>
           {([
-            ["Total Supply", "1,000,000,000 (Hard Capped)"],
+            ["Total Supply", "100,000,000,000 (Hard Capped)"],
             ["Public Circulation", "100%"],
             ["Team Reserve", "0%"],
             ["Marketing Tax", "0%"],
