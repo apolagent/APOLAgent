@@ -630,7 +630,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/test-agent-logs/autonomous", (_req, res) => {
     const now = Date.now();
     const logs = [
-      { timestamp: new Date(now - 3600000 * 24).toISOString(), action: "market_scan", detail: "Analyzing ETH/USDC liquidity depth on Uniswap V3. Calculated optimal entry at $1,847.32 based on 4h VWAP crossover." },
+      { timestamp: new Date(now - 3600000 * 24).toISOString(), action: "market_scan", detail: "Analyzing ETH/USDC liquidity depth on Uniswap. Calculated optimal entry at $1,847.32 based on 4h VWAP crossover." },
       { timestamp: new Date(now - 3600000 * 20).toISOString(), action: "risk_assessment", detail: "Decided against PEPE position — sell tax detected at 5.2% via simulation. Chose to skip and monitor." },
       { timestamp: new Date(now - 3600000 * 16).toISOString(), action: "trade_execution", detail: "Executed swap: 0.5 ETH → 1,247,000 AERO via Aerodrome. Slippage 0.3%. Gas optimized to 0.0008 ETH." },
       { timestamp: new Date(now - 3600000 * 12).toISOString(), action: "portfolio_rebalance", detail: "Analyzing portfolio weights. VIRTUAL allocation at 34% exceeds 25% target. Calculated rebalance: sold 15% VIRTUAL, bought GAME and LUNA." },

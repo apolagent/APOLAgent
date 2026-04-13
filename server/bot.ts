@@ -108,7 +108,7 @@ async function simulateToken(tokenAddress: string): Promise<SimResult> {
   const fail = (reason: string): SimResult => ({ isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: reason });
 
   const poolInfo = await findBestPool(addr);
-  if (!poolInfo) return fail("No Uniswap V3 pool found");
+  if (!poolInfo) return fail("No Uniswap liquidity pool found");
   const { fee } = poolInfo;
   const expectedPoolFees = (fee / 10000) * 2;
 
@@ -651,7 +651,7 @@ async function runScan(address: string): Promise<string> {
   const liquidity = dexData.liquidity;
 
   const hasPool = sim.simulationSuccess || isManaged || !!platform;
-  const poolLabel = dexData.poolVersion === "v4" ? "Uniswap V4" : "Uniswap V3";
+  const poolLabel = "Uniswap";
   const dexStatus = hasPool ? `${poolLabel} ✅` : "No Pool Found ⚠️";
 
   let contractOwner: string | null = null;
@@ -681,7 +681,7 @@ async function runScan(address: string): Promise<string> {
   if (buyTax > 5 || sellTax > 5) flags.push(`💰 High tax: Buy ${buyTax}% / Sell ${sellTax}%`);
   if (!isRealApol && holderCount > 0 && holderCount < 100) flags.push("👥 Low holder count");
   if (!isRealApol && liquidity > 0 && liquidity < 10000) flags.push("💧 Very Low Liquidity");
-  if (!isRealApol && !hasPool) flags.push("⚠️ No Uniswap V3 liquidity pool");
+  if (!isRealApol && !hasPool) flags.push("⚠️ No Uniswap liquidity pool");
 
   const riskLevel = isRealApol ? "🟢 LOW RISK"
     : isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10
