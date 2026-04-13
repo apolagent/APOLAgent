@@ -2,6 +2,12 @@ const CHAIN = "Base";
 
 const rows = [
   {
+    key: "CONTRACT",
+    value: "TBA",
+    tag: null,
+    tagColor: "",
+  },
+  {
     key: "TOTAL SUPPLY",
     value: "100,000,000,000",
     tag: "HARD CAPPED",
