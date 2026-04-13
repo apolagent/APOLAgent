@@ -1,14 +1,6 @@
-import { useState } from "react";
-import { Copy, Check, ExternalLink } from "lucide-react";
-
-const CONTRACT_ADDRESS = "0x7d8817AcEa5c58a3675088d779a3b5a0CaA57B07";
 const CHAIN = "Base";
 
 const rows = [
-  {
-    key: "CONTRACT",
-    isCA: true,
-  },
   {
     key: "TOTAL SUPPLY",
     value: "100,000,000,000",
@@ -31,19 +23,10 @@ const rows = [
 ];
 
 export default function TokenomicsSection() {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(CONTRACT_ADDRESS).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
     <section id="tokenomics" className="py-20 bg-gradient-to-r from-slate-900 to-blue-900">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
 
-        {/* Header */}
         <div className="text-center mb-12">
           <h2 className="font-meme text-2xl sm:text-3xl md:text-5xl lg:text-6xl gradient-text mb-4">
             Network Specifications
@@ -51,7 +34,6 @@ export default function TokenomicsSection() {
           <p className="text-slate-400 text-sm uppercase tracking-widest">$APOL · {CHAIN}</p>
         </div>
 
-        {/* Data grid */}
         <div className="bg-slate-900/70 border border-slate-700/60 rounded-xl overflow-hidden">
           {rows.map((row, i) => (
             <div
@@ -59,39 +41,21 @@ export default function TokenomicsSection() {
               className="flex items-center gap-3 px-4 sm:px-6 py-3 sm:py-4 text-sm"
               style={{ borderBottom: i < rows.length - 1 ? "1px solid rgba(255,255,255,0.06)" : undefined }}
             >
-              {/* Label */}
               <span className="text-slate-500 text-xs font-semibold uppercase tracking-widest w-24 sm:w-36 flex-shrink-0">
                 {row.key}
               </span>
-
-              {/* Value */}
-              {row.isCA ? (
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <span className="text-slate-300 truncate">{CONTRACT_ADDRESS}</span>
-                  <button
-                    onClick={handleCopy}
-                    className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border border-slate-700 text-slate-400 hover:text-white hover:border-slate-500 transition-colors flex-shrink-0"
-                    data-testid="button-copy-ca"
-                  >
-                    {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                    {copied ? "Copied" : "Copy"}
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3 flex-1 flex-wrap">
-                  <span className="text-white font-semibold">{row.value}</span>
-                  {row.tag && (
-                    <span className={`text-xs ${row.tagColor} ${row.tagSmall ? "opacity-70" : "font-bold"}`}>
-                      [{row.tag}]
-                    </span>
-                  )}
-                </div>
-              )}
+              <div className="flex items-center gap-3 flex-1 flex-wrap">
+                <span className="text-white font-semibold">{row.value}</span>
+                {row.tag && (
+                  <span className={`text-xs ${row.tagColor} ${row.tagSmall ? "opacity-70" : "font-bold"}`}>
+                    [{row.tag}]
+                  </span>
+                )}
+              </div>
             </div>
           ))}
         </div>
 
-        {/* Distribution summary */}
         <div
           className="mt-4 bg-slate-900/70 border border-slate-700/60 rounded-xl px-6 py-5"
           style={{ borderLeft: "3px solid rgba(148,163,184,0.3)" }}
