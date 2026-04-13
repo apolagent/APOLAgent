@@ -40,8 +40,8 @@ const cards = [
     cta: "NETWORK ACCESS",
     gradient: "from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700",
     textColor: "text-slate-900",
-    href: "https://app.uniswap.org/explore/tokens/base/0x7d8817AcEa5c58a3675088d779a3b5a0CaA57B07",
-    external: true,
+    href: null,
+    external: false,
   },
 ];
 

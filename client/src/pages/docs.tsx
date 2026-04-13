@@ -398,7 +398,7 @@ function ApiDocs() {
 }
 
 const APOL_PREMIUM_THRESHOLD = 100000;
-const UNISWAP_BUY_URL = "https://app.uniswap.org/explore/tokens/base/0x7d8817AcEa5c58a3675088d779a3b5a0CaA57B07";
+const UNISWAP_BUY_URL = "https://app.uniswap.org/swap?chain=base";
 
 function useApolBalance(address: string | null) {
   const [balance, setBalance] = useState<number | null>(null);
