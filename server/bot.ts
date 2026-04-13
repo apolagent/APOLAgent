@@ -5,6 +5,7 @@ import {
   BURN_ADDRS, PLATFORM_MAP, LOCKER_MAP, CREATION_LOG_SIGNATURES, MANAGED_PROTOCOLS,
   DEPLOYER_CHAIN_KEYWORDS, BLOCKSCOUT_BASE, DEXSCREENER_BASE, GOPLUS_BASE, BASE_CHAIN_ID,
   VERIFIED_AGENTS, CLANKER_API_BASE, SERIAL_DEPLOYER_THRESHOLD, SERIAL_DEPLOYER_WINDOW_DAYS,
+  APOL_CA,
 } from "./constants";
 
 function log(message: string, source = "bot") {
@@ -671,21 +672,23 @@ async function runScan(address: string): Promise<string> {
 
   const nameUpper = tokenInfo.name.toUpperCase();
   const symbolUpper = tokenInfo.symbol.toUpperCase();
-  const isFakeApol = symbolUpper === "APOL" || nameUpper === "APOL" || nameUpper === "APOL AGENT" || nameUpper.includes("APOLAGENT");
+  const isRealApol = address.toLowerCase() === APOL_CA;
+  const isFakeApol = !isRealApol && (symbolUpper === "APOL" || nameUpper === "APOL" || nameUpper === "APOL AGENT" || nameUpper.includes("APOLAGENT"));
 
   const flags: string[] = [];
-  if (isFakeApol) flags.push("🚨 FAKE $APOL — APOL has NO official token. This is a SCAM.");
+  if (isFakeApol) flags.push("🚨 FAKE $APOL — The real APOL CA is 0x7d8817AcEa5c58a3675088d779a3b5a0CaA57B07.");
   if (isHoneypot) flags.push("🚨 Honeypot — SELL BLOCKED");
   if (buyTax > 5 || sellTax > 5) flags.push(`💰 High tax: Buy ${buyTax}% / Sell ${sellTax}%`);
-  if (holderCount > 0 && holderCount < 100) flags.push("👥 Low holder count");
-  if (liquidity > 0 && liquidity < 10000) flags.push("💧 Very Low Liquidity");
-  if (!hasPool) flags.push("⚠️ No Uniswap V3 liquidity pool");
+  if (!isRealApol && holderCount > 0 && holderCount < 100) flags.push("👥 Low holder count");
+  if (!isRealApol && liquidity > 0 && liquidity < 10000) flags.push("💧 Very Low Liquidity");
+  if (!isRealApol && !hasPool) flags.push("⚠️ No Uniswap V3 liquidity pool");
 
-  const riskLevel = isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10
-    ? "🔴 HIGH RISK"
-    : flags.length > 0
-      ? "🟡 CAUTION"
-      : "🟢 LOW RISK";
+  const riskLevel = isRealApol ? "🟢 LOW RISK"
+    : isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10
+      ? "🔴 HIGH RISK"
+      : flags.length > 0
+        ? "🟡 CAUTION"
+        : "🟢 LOW RISK";
 
   log(`runScan DONE for ${address.slice(0, 10)}... in ${Date.now() - t0}ms — ${tokenInfo.symbol} risk=${riskLevel.includes("HIGH") ? "HIGH" : riskLevel.includes("CAUTION") ? "MID" : "LOW"} sim=${sim.simulationSuccess}`, "bot");
 
@@ -1443,7 +1446,7 @@ async function handleScanX(ctx: any, input: string): Promise<void> {
     const SELF_HANDLES = ["apolagent_", "apolagent", "apol_agent", "apolagentbot"];
     if (SELF_HANDLES.includes(handle.toLowerCase())) {
       await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
-        `🔍 *APOL AGENT — SCANX RESULTS*\n\n🐦 *X Handle:* @${esc(handle)}\n\n✅ *VERIFIED — This is APOL Agent*\n\n🏛 Official security protocol on Base chain\n🔗 Website: apolagent.online\n🐦 Twitter: @ApolAgent_\n\n⚠️ *APOL has NO official token or CA.*\nAny token using $APOL ticker is a SCAM.`,
+        `🔍 *APOL AGENT — SCANX RESULTS*\n\n🐦 *X Handle:* @${esc(handle)}\n\n✅ *VERIFIED — This is APOL Agent*\n\n🏛 Official security protocol on Base chain\n🔗 Website: apolagent.online\n🐦 Twitter: @ApolAgent_\n\n✅ *Official CA:* \`0x7d8817AcEa5c58a3675088d779a3b5a0CaA57B07\`\nAny other token using $APOL ticker is a SCAM.`,
         { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
       return;
     }

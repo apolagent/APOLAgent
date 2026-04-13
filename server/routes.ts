@@ -8,6 +8,7 @@ import {
   BURN_ADDRS, PLATFORM_MAP, LOCKER_MAP, CREATION_LOG_SIGNATURES, MANAGED_PROTOCOLS,
   DEPLOYER_CHAIN_KEYWORDS, BLOCKSCOUT_BASE, DEXSCREENER_BASE, GOPLUS_BASE, BASE_CHAIN_ID,
   VERIFIED_AGENTS, CLANKER_API_BASE, SERIAL_DEPLOYER_THRESHOLD, SERIAL_DEPLOYER_WINDOW_DAYS,
+  APOL_CA,
 } from "./constants";
 
 const BASE_RPC = process.env.BASE_RPC_URL || "";
@@ -740,9 +741,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const nameUpper = tokenInfo.name.toUpperCase();
       const symbolUpper = tokenInfo.symbol.toUpperCase();
-      const isFakeApol = symbolUpper === "APOL" || nameUpper === "APOL" || nameUpper === "APOL AGENT" || nameUpper.includes("APOLAGENT");
+      const isRealApol = address.toLowerCase() === APOL_CA;
+      const isFakeApol = !isRealApol && (symbolUpper === "APOL" || nameUpper === "APOL" || nameUpper === "APOL AGENT" || nameUpper.includes("APOLAGENT"));
 
-      const riskLevel = isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10 ? "High" : buyTax > 0 || sellTax > 0 ? "Caution" : "Clean";
+      const riskLevel = isRealApol ? "Clean" : isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10 ? "High" : buyTax > 0 || sellTax > 0 ? "Caution" : "Clean";
 
       storage.logAgentActivity({
         action: "contract_scan",
@@ -768,9 +770,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         liquidity: dexData.liquidity,
         deployer,
         scanCount,
-        greenBadge: riskLevel === "Clean" && sim.simulationSuccess && !isFakeApol,
+        greenBadge: isRealApol || (riskLevel === "Clean" && sim.simulationSuccess && !isFakeApol),
         isFakeApol,
-        fakeApolWarning: isFakeApol ? "APOL has NO official token. Any $APOL token is a SCAM." : null,
+        isVerifiedApol: isRealApol,
+        fakeApolWarning: isFakeApol ? "This is NOT the official $APOL token. The real CA is 0x7d8817AcEa5c58a3675088d779a3b5a0CaA57B07." : null,
       });
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Scan failed" });
@@ -1225,10 +1228,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const SELF_HANDLES = ["apolagent_", "apolagent", "apol_agent", "apolagentbot"];
       if (SELF_HANDLES.includes(handle.toLowerCase())) {
         return res.json({
-          username: handle, displayName: "APOL Agent", bio: "Official security protocol on Base chain. APOL has NO official token.", followers: 0, following: 0,
+          username: handle, displayName: "APOL Agent", bio: "Official security protocol on Base chain. CA: 0x7d8817AcEa5c58a3675088d779a3b5a0CaA57B07", followers: 0, following: 0,
           followRatio: "0:0", joinedDate: "", ageDays: 0, totalTweets: 0, isVerified: true, profileImage: null,
           engagement: { rating: "N/A", avgLikes: 0, avgRetweets: 0 }, flags: [], verdict: "VERIFIED — Official APOL Agent",
-          verdictLevel: "green", linkedCA: null, linkedSymbol: null,
+          verdictLevel: "green", linkedCA: "0x7d8817AcEa5c58a3675088d779a3b5a0CaA57B07", linkedSymbol: "APOL",
           agentAbilities: [], reasoningStatus: "no_source" as const, reasoningDetail: "Official protocol — not applicable.", abilityMismatch: null, reasoningUrl: null,
         });
       }
