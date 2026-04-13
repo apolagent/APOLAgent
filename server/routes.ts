@@ -1,5 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import path from "path";
+import fs from "fs";
 import { storage } from "./storage";
 import {
   WETH, QUOTER_V2, V3_FACTORY, SIM_AMOUNT, MICRO_AMOUNT, HARD_TIMEOUT, FEE_TIERS,
@@ -1363,7 +1365,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/skill/skill.md", (_req, res) => {
-    const filePath = new URL("../client/public/skill/skill.md", import.meta.url).pathname;
+    const cwd = process.cwd();
+    const devPath = path.resolve(cwd, "client/public/skill/skill.md");
+    const prodPath = path.resolve(cwd, "dist/public/skill/skill.md");
+    const filePath = fs.existsSync(devPath) ? devPath : prodPath;
     res.setHeader("Content-Type", "text/markdown; charset=utf-8");
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.sendFile(filePath, (err) => {
