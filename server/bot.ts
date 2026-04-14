@@ -1443,7 +1443,7 @@ async function handleScanX(ctx: any, input: string): Promise<void> {
     const SELF_HANDLES = ["apolagent_", "apolagent", "apol_agent", "apolagentbot"];
     if (SELF_HANDLES.includes(handle.toLowerCase())) {
       await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
-        `🔍 *APOL AGENT — SCANX RESULTS*\n\n🐦 *X Handle:* @${esc(handle)}\n\n✅ *VERIFIED — This is APOL Agent*\n\n🏛 Official security protocol on Base chain\n🔗 Website: apolagent.online\n🐦 Twitter: @ApolAgent_\n\n⚠️ *APOL does NOT have an official token or CA yet.*\nAny token using $APOL ticker is a SCAM.`,
+        `🔍 *APOL AGENT — SCANX RESULTS*\n\n🐦 *X Handle:* @${esc(handle)}\n\n✅ *VERIFIED — This is APOL Agent*\n\n🏛 Official security protocol on Base chain\n🔗 Website: apolagent.online\n🐦 Twitter: @ApolAgent_\n\n✅ *Official CA:* \`0x7d8817AcEa5c58a3675088d779a3b5a0CaA57B07\`\nAny other token using $APOL ticker is a SCAM.`,
         { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
       return;
     }
