@@ -71,6 +71,8 @@ export default function HeroSection() {
               fontFamily: "'JetBrains Mono', monospace",
               boxSizing: "border-box",
               transition: "background-color 0.15s ease, color 0.15s ease",
+              textDecoration: "none",
+              WebkitTapHighlightColor: "transparent",
             }}
           >
             <Send size={16} />
