@@ -1207,9 +1207,17 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
     isHoneypot = false;
   }
 
+  const zeroAgentFootprint = !isVerifiedAgent
+    && (!contractActivity.hasContractCode || contractActivity.codeSize < 500)
+    && contractActivity.txCount === 0
+    && !xProfile
+    && abilityAudit.reasoningStatus !== "verified"
+    && abilityAudit.claimedAbilities.length === 0;
+
   let verdict = "";
   let verdictEmoji = "";
   if (isVerifiedAgent) { verdict = "LIKELY LEGITIMATE"; verdictEmoji = "🟢"; }
+  else if (zeroAgentFootprint) { verdict = "100% LARP — ZERO AGENT FOOTPRINT"; verdictEmoji = "🔴"; }
   else if (isHoneypot || agentFlags.length >= 4) { verdict = "LARP DETECTED"; verdictEmoji = "🔴"; }
   else if (agentFlags.length >= 2) { verdict = "SUSPICIOUS — Possible Larp"; verdictEmoji = "🟡"; }
   else if (agentFlags.length === 1 && agentPasses.length >= 2) { verdict = "INCONCLUSIVE — Minor concerns"; verdictEmoji = "🟡"; }

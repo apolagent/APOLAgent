@@ -1120,12 +1120,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const isVerifiedAgent = !!(wallet && VERIFIED_AGENTS[wallet.toLowerCase()]);
 
-      const cognitionScore = isVerifiedAgent ? 100 : (scoredTests >= 2 ? Math.min(100, rawScore) : null);
-      const isPartial = isVerifiedAgent ? false : scoredTests < 3;
+      const hasWallet = !!(wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet));
+      const zeroAgentTrace = !isVerifiedAgent && hasWallet
+        && speedScore === 0
+        && codeSizeScore === 0
+        && activityScore <= 5
+        && socialStatus !== "clear"
+        && logsStatus !== "verified"
+        && (!autoAbilityAudit || autoAbilityAudit.claimedAbilities.length === 0)
+        && !traceIsContract;
+
+      const cognitionScore = isVerifiedAgent ? 100 : zeroAgentTrace ? 0 : (scoredTests >= 2 ? Math.min(100, rawScore) : null);
+      const isPartial = isVerifiedAgent ? false : zeroAgentTrace ? false : scoredTests < 3;
 
       type Verdict = "Confirmed LARP" | "Unverified" | "Semi-Autonomous" | "Fully Autonomous" | "Under Review" | "Insufficient Data" | "Inconclusive";
       let verdict: Verdict;
       if (isVerifiedAgent) verdict = "Fully Autonomous";
+      else if (zeroAgentTrace) verdict = "Confirmed LARP";
       else if (scoredTests < 2) verdict = "Insufficient Data";
       else if (cognitionScore !== null && cognitionScore >= 71) verdict = "Fully Autonomous";
       else if (cognitionScore !== null && cognitionScore >= 41) verdict = "Semi-Autonomous";
@@ -1136,6 +1147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let apolVerdict = "";
       if (isVerifiedAgent) apolVerdict = "Strong evidence of autonomous operation. On-chain activity, social presence, and reasoning logs are consistent with a real AI agent.";
+      else if (zeroAgentTrace) apolVerdict = "🚨 100% LARP — ZERO AGENT FOOTPRINT. No on-chain agent activity. No autonomous behavior. No verifiable reasoning. No social presence. No agent logic in contract code. This is a bare token cosplaying as an AI agent. APOL has weighed, measured, and found this to be a complete fraud.";
       else if (verdict === "Confirmed LARP") apolVerdict = "LARP CONFIRMED. Every verifiable data point contradicts autonomous operation. This entity has been weighed, measured, and found to be a fraud.";
       else if (verdict === "Unverified") apolVerdict = "APOL could not verify autonomous operation from the evidence provided. This does not confirm fraud — it means the entity has not proven itself. Proceed with caution.";
       else if (verdict === "Under Review") apolVerdict = "Some indicators present but not enough to confirm autonomous operation. APOL reserves judgment until more evidence is available.";
