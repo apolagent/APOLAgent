@@ -1402,6 +1402,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const PAYMENT_RECEIVER = "0x857aca6a8a743c9262d64819d239f509a1cd0a85";
+  const SUBSCRIPTION_PRICE_WEI = BigInt("20000000000000000");
+  const SUBSCRIPTION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
+
+  async function verifyOnChainPayment(txHash: string): Promise<{ ok: true; from: string; valueWei: bigint } | { ok: false; reason: string }> {
+    if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) return { ok: false, reason: "Invalid transaction hash format." };
+    try {
+      const res = await fetch(`${BLOCKSCOUT_BASE}/api/v2/transactions/${txHash}`, { signal: AbortSignal.timeout(10000) });
+      if (!res.ok) return { ok: false, reason: `Transaction not found on Base (status ${res.status}).` };
+      const data: any = await res.json();
+      const status = (data?.status || "").toLowerCase();
+      const result = (data?.result || "").toLowerCase();
+      const txTo = (data?.to?.hash || "").toLowerCase();
+      const txFrom = (data?.from?.hash || "").toLowerCase();
+      const valueStr = String(data?.value || "0");
+      let valueWei: bigint;
+      try { valueWei = BigInt(valueStr); } catch { return { ok: false, reason: "Could not parse transaction value." }; }
+      const statusOk = status === "ok" || result === "success";
+      if (!statusOk) return { ok: false, reason: `Transaction not confirmed (status: "${status || result || "unknown"}"). Wait for it to be mined.` };
+      if (txTo !== PAYMENT_RECEIVER) return { ok: false, reason: `Transaction was sent to ${txTo.slice(0, 10)}..., not the APOL payment address.` };
+      if (valueWei < SUBSCRIPTION_PRICE_WEI) {
+        const sentEth = (Number(valueWei) / 1e18).toFixed(6);
+        return { ok: false, reason: `Payment too low — sent ${sentEth} ETH, need 0.02 ETH.` };
+      }
+      return { ok: true, from: txFrom, valueWei };
+    } catch (e: any) {
+      return { ok: false, reason: `Verification failed: ${e?.message?.slice(0, 80) || "Network error"}` };
+    }
+  }
+
+  app.get("/api/subscription/status", async (req, res) => {
+    try {
+      const wallet = String(req.query.wallet || "").trim();
+      if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) return res.json({ paid: false });
+      const sub = await storage.getActiveSubscriptionByWallet(wallet);
+      if (!sub) return res.json({ paid: false });
+      return res.json({ paid: true, expiresAt: sub.expiresAt, txHash: sub.txHash });
+    } catch (e: any) {
+      res.status(500).json({ paid: false, error: e?.message || "Status check failed" });
+    }
+  });
+
+  app.post("/api/subscription/verify", async (req, res) => {
+    try {
+      const { txHash, wallet } = req.body || {};
+      if (typeof txHash !== "string" || typeof wallet !== "string") {
+        return res.status(400).json({ ok: false, reason: "Missing txHash or wallet." });
+      }
+      if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
+        return res.status(400).json({ ok: false, reason: "Invalid wallet address." });
+      }
+      const lowerWallet = wallet.toLowerCase();
+      const existing = await storage.getSubscriptionByTxHash(txHash);
+      if (existing) {
+        const ownerMatches =
+          (existing.walletAddress && existing.walletAddress.toLowerCase() === lowerWallet) ||
+          (existing.fromAddress && existing.fromAddress.toLowerCase() === lowerWallet);
+        if (!ownerMatches) {
+          return res.status(403).json({ ok: false, reason: "This transaction has already been claimed by another wallet." });
+        }
+        const stillActive = new Date(existing.expiresAt).getTime() > Date.now();
+        if (stillActive) return res.json({ ok: true, expiresAt: existing.expiresAt, alreadyClaimed: true });
+        return res.status(400).json({ ok: false, reason: "This transaction has already been used and the subscription has expired." });
+      }
+      const verify = await verifyOnChainPayment(txHash);
+      if (!verify.ok) return res.status(400).json({ ok: false, reason: verify.reason });
+      if (verify.from !== wallet.toLowerCase()) {
+        return res.status(400).json({ ok: false, reason: `This transaction was sent from ${verify.from.slice(0, 10)}..., but you are connected as ${wallet.slice(0, 10)}.... Connect the wallet that paid.` });
+      }
+      const expiresAt = new Date(Date.now() + SUBSCRIPTION_DURATION_MS);
+      const sub = await storage.createWebSubscription({
+        walletAddress: wallet,
+        txHash,
+        fromAddress: verify.from,
+        amountWei: verify.valueWei.toString(),
+        expiresAt,
+      });
+      res.json({ ok: true, expiresAt: sub.expiresAt });
+    } catch (e: any) {
+      const msg = String(e?.message || "");
+      if (msg.includes("unique") || msg.includes("duplicate")) {
+        return res.status(400).json({ ok: false, reason: "This transaction has already been used." });
+      }
+      res.status(500).json({ ok: false, reason: e?.message || "Verification failed" });
+    }
+  });
+
   app.get("/skill/skill.md", (_req, res) => {
     const cwd = process.cwd();
     const devPath = path.resolve(cwd, "client/public/skill/skill.md");

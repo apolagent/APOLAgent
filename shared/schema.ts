@@ -139,7 +139,8 @@ export type AgentActivityLog = typeof agentActivityLogs.$inferSelect;
 
 export const subscriptions = pgTable("subscriptions", {
   id: serial("id").primaryKey(),
-  telegramUserId: text("telegram_user_id").notNull().unique(),
+  telegramUserId: text("telegram_user_id").unique(),
+  walletAddress: text("wallet_address"),
   txHash: text("tx_hash").notNull().unique(),
   fromAddress: text("from_address"),
   amountWei: text("amount_wei").notNull(),

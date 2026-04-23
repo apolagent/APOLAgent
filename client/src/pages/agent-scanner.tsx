@@ -25,7 +25,7 @@ async function waitForReceipt(txHash: string, timeoutMs = 90_000): Promise<boole
     } catch {}
     await new Promise(r => setTimeout(r, 2500));
   }
-  return true;
+  return false;
 }
 
 
@@ -625,6 +625,46 @@ export default function AgentScanner() {
   const [deepDiveTxHash, setDeepDiveTxHash] = useState<string | null>(null);
   const [deepDiveError, setDeepDiveError] = useState<string | null>(null);
   const [deepDiveHover, setDeepDiveHover] = useState(false);
+  const [subscriptionExpiresAt, setSubscriptionExpiresAt] = useState<string | null>(null);
+  const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (IS_INNER_CIRCLE_TEST_MODE) return;
+    const eth = getSelectedProvider();
+    if (!eth) return;
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const accounts: string[] = await eth.request({ method: "eth_accounts" });
+        const addr = accounts?.[0];
+        if (!addr) return;
+        if (cancelled) return;
+        setConnectedWallet(addr);
+        const res = await fetch(`/api/subscription/status?wallet=${addr}`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (data?.paid) {
+          setDeepDiveUnlocked(true);
+          setSubscriptionExpiresAt(data.expiresAt || null);
+        }
+      } catch {}
+    };
+    check();
+    const handler = (accounts: string[]) => {
+      const addr = accounts?.[0] || null;
+      setConnectedWallet(addr);
+      if (!addr) { setDeepDiveUnlocked(false); setSubscriptionExpiresAt(null); return; }
+      fetch(`/api/subscription/status?wallet=${addr}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d?.paid) { setDeepDiveUnlocked(true); setSubscriptionExpiresAt(d.expiresAt || null); }
+          else { setDeepDiveUnlocked(false); setSubscriptionExpiresAt(null); }
+        })
+        .catch(() => {});
+    };
+    eth.on?.("accountsChanged", handler);
+    return () => { cancelled = true; eth.removeListener?.("accountsChanged", handler); };
+  }, []);
 
   const [apolCertified, setApolCertified] = useState<{ certified: boolean; project?: any } | null>(null);
 
@@ -719,7 +759,7 @@ export default function AgentScanner() {
   const handleScan = async () => {
     if (!agentName.trim()) { setScanError("Agent name is required."); return; }
     setIsScanning(true); setScanError(null); setResult(null);
-    setDeepDiveUnlocked(IS_INNER_CIRCLE_TEST_MODE); setDeepDiveTxHash(null); setDeepDiveError(null);
+    setDeepDiveTxHash(null); setDeepDiveError(null);
     try {
       const res = await fetch("/api/agent/analyze", {
         method: "POST",
@@ -765,11 +805,36 @@ export default function AgentScanner() {
       });
       setDeepDiveTxHash(tx.hash);
       const success = await waitForReceipt(tx.hash);
-      if (success) {
-        setDeepDiveUnlocked(true);
-        setTimeout(() => document.getElementById("advanced-results")?.scrollIntoView({ behavior: "smooth", block: "start" }), 200);
-      } else {
+      if (!success) {
         setDeepDiveError("Transaction reverted on-chain. Deep Dive not unlocked.");
+        return;
+      }
+      const userWallet = accounts[0];
+      setConnectedWallet(userWallet);
+      let verifiedOk = false;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          const verifyRes = await fetch("/api/subscription/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ txHash: tx.hash, wallet: userWallet }),
+          });
+          const verifyData = await verifyRes.json();
+          if (verifyRes.ok && verifyData.ok) {
+            setDeepDiveUnlocked(true);
+            setSubscriptionExpiresAt(verifyData.expiresAt || null);
+            verifiedOk = true;
+            setTimeout(() => document.getElementById("advanced-results")?.scrollIntoView({ behavior: "smooth", block: "start" }), 200);
+            break;
+          }
+          if (attempt === 3) {
+            setDeepDiveError(verifyData.reason || "Could not register subscription. Save your tx hash and contact support.");
+          }
+        } catch {}
+        await new Promise(r => setTimeout(r, 3000));
+      }
+      if (!verifiedOk && !deepDiveError) {
+        setDeepDiveError("Payment confirmed but registration failed. Save your tx hash and refresh in a minute.");
       }
     } catch (e: any) {
       if (e.code === 4001 || e.code === "ACTION_REJECTED" || e.message?.includes("rejected")) {
@@ -940,11 +1005,11 @@ export default function AgentScanner() {
                   }}
                 >
                   {deepDiveUnlocked ? (
-                    <><CheckCircle size={15} />Unlocked</>
+                    <><CheckCircle size={15} />Subscribed{subscriptionExpiresAt ? ` · expires ${new Date(subscriptionExpiresAt).toLocaleDateString()}` : ""}</>
                   ) : deepDivePending ? (
                     <><Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} />Confirming…</>
                   ) : (
-                    <><Zap size={15} />Deep Dive Scan ({PAYMENT.deepDiveFee} ETH)</>
+                    <><Zap size={15} />Unlock Deep Dive · 30 days ({PAYMENT.deepDiveFee} ETH)</>
                   )}
                 </button>
               )}

@@ -22,20 +22,20 @@ const NETWORKS = {
 } as const;
 
 // ── CHANGE THIS ONE LINE TO SWITCH THE ENTIRE SITE BETWEEN NETWORKS ──────────
-const CURRENT_NETWORK: keyof typeof NETWORKS = "sepolia";
+const CURRENT_NETWORK: keyof typeof NETWORKS = "mainnet";
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Active network — all chain references pull from here. */
 export const CHAIN = NETWORKS[CURRENT_NETWORK];
 
-// ── SET TO false FOR PUBLIC LAUNCH TO RE-ACTIVATE THE 0.005 ETH DEEP DIVE PAYWALL ──
-export const IS_INNER_CIRCLE_TEST_MODE = true;
+// ── PUBLIC LAUNCH: PAYWALL ACTIVE (0.02 ETH / 30 days) ──
+export const IS_INNER_CIRCLE_TEST_MODE = false;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Payment configuration — wallet address + fees in ETH. */
 export const PAYMENT = {
   platformWallet: "0x857aca6A8A743C9262d64819D239f509a1Cd0A85",
-  deepDiveFee: "0.005",  // ETH — Deep Dive Scan (bypassed when IS_INNER_CIRCLE_TEST_MODE = true)
+  deepDiveFee: "0.02",   // ETH — 30-day Deep Dive subscription (matches Telegram bot)
   verifyFee:   "0.05",   // ETH — Get Verified submission
 } as const;
 

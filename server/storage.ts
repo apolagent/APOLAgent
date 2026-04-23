@@ -39,8 +39,10 @@ export interface IStorage {
   getAgentActivityLogs(limit?: number, offset?: number): Promise<AgentActivityLog[]>;
   getAgentActivityLogCount(): Promise<number>;
   getActiveSubscription(telegramUserId: string): Promise<Subscription | null>;
+  getActiveSubscriptionByWallet(walletAddress: string): Promise<Subscription | null>;
   getSubscriptionByTxHash(txHash: string): Promise<Subscription | null>;
   upsertSubscription(data: { telegramUserId: string; txHash: string; fromAddress: string | null; amountWei: string; expiresAt: Date }): Promise<Subscription>;
+  createWebSubscription(data: { walletAddress: string; txHash: string; fromAddress: string | null; amountWei: string; expiresAt: Date }): Promise<Subscription>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -294,6 +296,36 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
     if (!row) return null;
     if (new Date(row.expiresAt).getTime() < Date.now()) return null;
+    return row;
+  }
+
+  async getActiveSubscriptionByWallet(walletAddress: string): Promise<Subscription | null> {
+    const lower = walletAddress.toLowerCase();
+    const rows = await db
+      .select()
+      .from(subscriptions)
+      .where(or(eq(subscriptions.walletAddress, lower), eq(subscriptions.fromAddress, lower)))
+      .orderBy(desc(subscriptions.expiresAt))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    if (new Date(row.expiresAt).getTime() < Date.now()) return null;
+    return row;
+  }
+
+  async createWebSubscription(data: { walletAddress: string; txHash: string; fromAddress: string | null; amountWei: string; expiresAt: Date }): Promise<Subscription> {
+    const [row] = await db
+      .insert(subscriptions)
+      .values({
+        telegramUserId: null,
+        walletAddress: data.walletAddress.toLowerCase(),
+        txHash: data.txHash.toLowerCase(),
+        fromAddress: data.fromAddress?.toLowerCase() || null,
+        amountWei: data.amountWei,
+        expiresAt: data.expiresAt,
+        paidAt: new Date(),
+      })
+      .returning();
     return row;
   }
 
