@@ -1,4 +1,4 @@
-import { users, scamReports, heroNominations, votes, flaggedWallets, verificationRequests, scanLookups, agentActivityLogs, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet, type InsertVerificationRequest, type VerificationRequest, type ScanLookup, type AgentActivityLog } from "@shared/schema";
+import { users, scamReports, heroNominations, votes, flaggedWallets, verificationRequests, scanLookups, agentActivityLogs, subscriptions, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet, type InsertVerificationRequest, type VerificationRequest, type ScanLookup, type AgentActivityLog, type Subscription } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, gte, or, and, sql, sum } from "drizzle-orm";
 
@@ -38,6 +38,9 @@ export interface IStorage {
   logAgentActivity(data: { action: string; target: string; detail: string; verdict?: string; source: string; metadata?: any }): Promise<AgentActivityLog>;
   getAgentActivityLogs(limit?: number, offset?: number): Promise<AgentActivityLog[]>;
   getAgentActivityLogCount(): Promise<number>;
+  getActiveSubscription(telegramUserId: string): Promise<Subscription | null>;
+  getSubscriptionByTxHash(txHash: string): Promise<Subscription | null>;
+  upsertSubscription(data: { telegramUserId: string; txHash: string; fromAddress: string | null; amountWei: string; expiresAt: Date }): Promise<Subscription>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -281,6 +284,51 @@ export class DatabaseStorage implements IStorage {
   async getAgentActivityLogCount(): Promise<number> {
     const [row] = await db.select({ count: sql<number>`count(*)::int` }).from(agentActivityLogs);
     return row?.count ?? 0;
+  }
+
+  async getActiveSubscription(telegramUserId: string): Promise<Subscription | null> {
+    const [row] = await db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.telegramUserId, telegramUserId))
+      .limit(1);
+    if (!row) return null;
+    if (new Date(row.expiresAt).getTime() < Date.now()) return null;
+    return row;
+  }
+
+  async getSubscriptionByTxHash(txHash: string): Promise<Subscription | null> {
+    const [row] = await db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.txHash, txHash.toLowerCase()))
+      .limit(1);
+    return row ?? null;
+  }
+
+  async upsertSubscription(data: { telegramUserId: string; txHash: string; fromAddress: string | null; amountWei: string; expiresAt: Date }): Promise<Subscription> {
+    const [row] = await db
+      .insert(subscriptions)
+      .values({
+        telegramUserId: data.telegramUserId,
+        txHash: data.txHash.toLowerCase(),
+        fromAddress: data.fromAddress?.toLowerCase() || null,
+        amountWei: data.amountWei,
+        expiresAt: data.expiresAt,
+        paidAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: subscriptions.telegramUserId,
+        set: {
+          txHash: data.txHash.toLowerCase(),
+          fromAddress: data.fromAddress?.toLowerCase() || null,
+          amountWei: data.amountWei,
+          expiresAt: data.expiresAt,
+          paidAt: new Date(),
+        },
+      })
+      .returning();
+    return row;
   }
 
   async checkInternalReports(address: string): Promise<boolean> {

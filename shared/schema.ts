@@ -137,6 +137,18 @@ export const agentActivityLogs = pgTable("agent_activity_logs", {
 
 export type AgentActivityLog = typeof agentActivityLogs.$inferSelect;
 
+export const subscriptions = pgTable("subscriptions", {
+  id: serial("id").primaryKey(),
+  telegramUserId: text("telegram_user_id").notNull().unique(),
+  txHash: text("tx_hash").notNull().unique(),
+  fromAddress: text("from_address"),
+  amountWei: text("amount_wei").notNull(),
+  paidAt: timestamp("paid_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+});
+
+export type Subscription = typeof subscriptions.$inferSelect;
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
