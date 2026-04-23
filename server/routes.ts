@@ -564,7 +564,32 @@ async function detectPlatformFromCreationTx(tokenAddr: string): Promise<string |
     for (const l of receipt.logs) {
       const logAddr = (l.address || "").toLowerCase();
       if (CREATION_LOG_SIGNATURES[logAddr]) return CREATION_LOG_SIGNATURES[logAddr];
+      if (PLATFORM_MAP[logAddr]) return PLATFORM_MAP[logAddr];
     }
+    return null;
+  } catch { return null; }
+}
+
+async function detectPlatformFromProxyImpl(tokenAddr: string): Promise<string | null> {
+  try {
+    const code = await rpcCall("eth_getCode", [tokenAddr, "latest"]);
+    if (!code || code === "0x") return null;
+    const c = code.toLowerCase();
+    let impl: string | null = null;
+    if (c.startsWith("0x363d3d373d3d3d363d73") && c.length >= 62) {
+      impl = "0x" + c.slice(22, 62);
+    } else if (c.startsWith("0x3d3d3d3d363d3d37363d73") && c.length >= 64) {
+      impl = "0x" + c.slice(24, 64);
+    }
+    if (impl && PLATFORM_MAP[impl]) return PLATFORM_MAP[impl];
+    try {
+      const slot = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
+      const eip1967 = await rpcCall("eth_getStorageAt", [tokenAddr, slot, "latest"]);
+      if (eip1967 && eip1967 !== "0x" && eip1967.length >= 66) {
+        const addr = "0x" + eip1967.slice(-40).toLowerCase();
+        if (addr !== "0x0000000000000000000000000000000000000000" && PLATFORM_MAP[addr]) return PLATFORM_MAP[addr];
+      }
+    } catch {}
     return null;
   } catch { return null; }
 }
@@ -710,11 +735,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let platform = detectPlatform(address, deployer, topHolders);
       if (!platform) {
-        const [creationP, chainP] = await Promise.all([
+        const [proxyP, creationP, chainP] = await Promise.all([
+          withTimeout(detectPlatformFromProxyImpl(address), 4000, "proxy-impl-detect").catch(() => null),
           withTimeout(detectPlatformFromCreationTx(address), 5000, "creation-platform-detect").catch(() => null),
           deployer ? withTimeout(detectPlatformFromDeployerChain(deployer), 5000, "deployer-chain-detect").catch(() => null) : null,
         ]);
-        platform = creationP || chainP;
+        platform = proxyP || creationP || chainP;
       }
       const scanCount = await storage.incrementLookup(address, tokenInfo.name, tokenInfo.symbol);
       const lpStatus = detectLpStatus(topHolders, platform);

@@ -24,6 +24,8 @@ export const PLATFORM_MAP: Readonly<Record<string, string>> = Object.freeze({
   "0x39112541720078c70164ea4deb61f0a4811910f9": "Flaunch",
   "0xc785de52b739930ab0864b0ae7896ed6e327628a": "Flaunch",
   "0x45edccb44da8aa1bf4b9e4f2baae61760d1c8fb9": "Flaunch",
+  "0xf1eeeeeeecd95e9eb2df58484ceed175acbd945c": "Flaunch",
+  "0x000000000d564d5be76f7f0d28fe52605afc7cf8": "Flaunch",
   "0x0bf8edd756ff6caf3f583d67a9fd8b237e40f58a": "ApeStore",
   "0xade20c0cc8482c404a57da404ed1f3f2a1f6fe6f": "ApeStore",
   "0xade256e1c2763b8766efe1eeb7c578d93f621f6f": "ApeStore",

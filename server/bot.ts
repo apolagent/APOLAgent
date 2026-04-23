@@ -464,6 +464,30 @@ async function getWalletInfo(addr: string): Promise<WalletInfo> {
   } catch { return { balance: "0", txCount: 0, isContract: false, firstTx: null, firstTxHash: null, firstTxFrom: null, firstTxFromName: null, inflow: 0, outflow: 0 }; }
 }
 
+async function detectPlatformFromProxyImpl(tokenAddr: string): Promise<string | null> {
+  try {
+    const code = await rpcCall("eth_getCode", [tokenAddr, "latest"]);
+    if (!code || code === "0x") return null;
+    const c = code.toLowerCase();
+    let impl: string | null = null;
+    if (c.startsWith("0x363d3d373d3d3d363d73") && c.length >= 62) {
+      impl = "0x" + c.slice(22, 62);
+    } else if (c.startsWith("0x3d3d3d3d363d3d37363d73") && c.length >= 64) {
+      impl = "0x" + c.slice(24, 64);
+    }
+    if (impl && PLATFORM_MAP[impl]) return PLATFORM_MAP[impl];
+    try {
+      const slot = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
+      const eip1967 = await rpcCall("eth_getStorageAt", [tokenAddr, slot, "latest"]);
+      if (eip1967 && eip1967 !== "0x" && eip1967.length >= 66) {
+        const addr = "0x" + eip1967.slice(-40).toLowerCase();
+        if (addr !== "0x0000000000000000000000000000000000000000" && PLATFORM_MAP[addr]) return PLATFORM_MAP[addr];
+      }
+    } catch {}
+    return null;
+  } catch { return null; }
+}
+
 async function detectPlatformFromCreationTx(tokenAddr: string): Promise<string | null> {
   try {
     const transfers = await rpcCall("alchemy_getAssetTransfers", [{
@@ -581,16 +605,17 @@ async function runScan(address: string): Promise<string> {
 
   const platformFromDeployer = detectPlatform(address, deployer, []);
 
-  let [holderCount, topHolders, ethUsd, dexData, creationPlatform, deployerChainPlatform] = await Promise.all([
+  let [holderCount, topHolders, ethUsd, dexData, creationPlatform, deployerChainPlatform, proxyImplPlatform] = await Promise.all([
     softTimeout(getHolderCount(address), 7000, 0),
     softTimeout(getTopHolders(address), 7000, []),
     softTimeout(getEthUsdPrice(), 7000, 0),
     softTimeout(getDexScreenerData(address), 7000, { priceUsd: 0, liquidity: 0, poolVersion: null, dexMcap: 0, dexFdv: 0 }),
     !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
     !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
+    !platformFromDeployer ? softTimeout(detectPlatformFromProxyImpl(address), 5000, null) : Promise.resolve(null),
   ]);
 
-  log(`runScan P2 ${Date.now() - t0}ms holders=${holderCount} dex=$${dexData.priceUsd} ethUsd=${ethUsd}`, "bot");
+  log(`runScan P2 ${Date.now() - t0}ms holders=${holderCount} dex=$${dexData.priceUsd} ethUsd=${ethUsd} proxy=${proxyImplPlatform}`, "bot");
 
   let holdersComplete = topHolders.length > 0;
 
@@ -621,7 +646,7 @@ async function runScan(address: string): Promise<string> {
 
   const scanCount = await storage.incrementLookup(address, tokenInfo.name, tokenInfo.symbol);
 
-  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || creationPlatform || deployerChainPlatform;
+  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || proxyImplPlatform || creationPlatform || deployerChainPlatform;
   const lpStatus = detectLpStatus(topHolders, platform, holdersComplete);
   const isVirtuals = platform === "Virtuals";
   const isManaged = !!(platform && MANAGED_PROTOCOLS.has(platform));
@@ -1061,7 +1086,7 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
 
   const platformFromDeployer = detectPlatform(address, deployer, []);
 
-  let [holderCount, topHolders, ethUsd, dexData, dexSocials, creationPlatform, deployerChainPlatform] = await Promise.all([
+  let [holderCount, topHolders, ethUsd, dexData, dexSocials, creationPlatform, deployerChainPlatform, proxyImplPlatform] = await Promise.all([
     softTimeout(getHolderCount(address), 7000, 0),
     softTimeout(getTopHolders(address), 7000, []),
     softTimeout(getEthUsdPrice(), 7000, 0),
@@ -1069,6 +1094,7 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
     softTimeout(getDexScreenerSocials(address), 7000, { twitter: null, website: null, telegram: null, description: null }),
     !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
     !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
+    !platformFromDeployer ? softTimeout(detectPlatformFromProxyImpl(address), 5000, null) : Promise.resolve(null),
   ]);
 
   let fallbackData: FallbackTokenData | null = null;
@@ -1080,7 +1106,7 @@ async function runAgentScan(address: string, searchedName: string | null): Promi
     }
   }
 
-  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || creationPlatform || deployerChainPlatform;
+  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || proxyImplPlatform || creationPlatform || deployerChainPlatform;
   const isVirtuals = platform === "Virtuals";
   const isManaged = !!(platform && MANAGED_PROTOCOLS.has(platform));
   const isClanker = platform === "Clanker";
