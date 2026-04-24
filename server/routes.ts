@@ -368,15 +368,50 @@ function extractAbilitiesFromText(text: string): string[] {
   return found;
 }
 
+function isPrivateOrReservedIPv4(ip: string): boolean {
+  if (ip === "0.0.0.0") return true;
+  if (ip.startsWith("127.")) return true;
+  if (ip.startsWith("10.")) return true;
+  if (ip.startsWith("192.168.")) return true;
+  if (ip.startsWith("169.254.")) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true;
+  return false;
+}
+
 function isSafeUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
     const host = parsed.hostname.toLowerCase();
-    if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "[::1]") return false;
-    if (host.startsWith("10.") || host.startsWith("192.168.") || host === "169.254.169.254") return false;
-    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
-    if (host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".localhost")) return false;
+
+    // Strip brackets — URL.hostname includes brackets for IPv6 (e.g. "[::1]")
+    const bare = host.replace(/^\[|\]$/g, "");
+
+    // IPv4 checks
+    if (bare === "localhost" || bare === "0.0.0.0") return false;
+    if (isPrivateOrReservedIPv4(bare)) return false;
+    if (bare.endsWith(".local") || bare.endsWith(".internal") || bare.endsWith(".localhost")) return false;
+
+    // IPv6 loopback / unspecified
+    if (bare === "::1" || bare === "0:0:0:0:0:0:0:1" || bare === "::" || bare === "0:0:0:0:0:0:0:0") return false;
+
+    // IPv6 link-local and unique-local (fe80::/10, fc00::/7)
+    if (bare.startsWith("fe80:") || bare.startsWith("fc") || bare.startsWith("fd")) return false;
+
+    // IPv4-mapped IPv6 — URL canonicalizes to hex groups: ::ffff:xxyy:zzww
+    // e.g. ::ffff:169.254.169.254 → ::ffff:a9fe:a9fe
+    const hexMappedMatch = bare.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+    if (hexMappedMatch) {
+      const hi = parseInt(hexMappedMatch[1], 16);
+      const lo = parseInt(hexMappedMatch[2], 16);
+      const ipv4 = `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+      if (isPrivateOrReservedIPv4(ipv4)) return false;
+    }
+
+    // Dotted-decimal IPv4-mapped form (less common after URL parsing but guard anyway)
+    const dotMappedMatch = bare.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+    if (dotMappedMatch && isPrivateOrReservedIPv4(dotMappedMatch[1])) return false;
+
     return true;
   } catch { return false; }
 }
@@ -409,7 +444,7 @@ async function autoAuditAbilities(
 
   for (const url of candidateUrls.slice(0, 3)) {
     try {
-      const resp = await fetch(url, { signal: AbortSignal.timeout(4000), redirect: "follow" });
+      const resp = await fetch(url, { signal: AbortSignal.timeout(4000), redirect: "error" });
       if (!resp.ok) continue;
       const contentType = resp.headers.get("content-type") || "";
       if (!contentType.includes("text/html") && !contentType.includes("application/json") && !contentType.includes("text/plain")) continue;
@@ -1089,9 +1124,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           logsDetail = autoAbilityAudit.reasoningDetail;
         }
       }
-      if (logsUrl && logsUrl.trim() && isSafeUrl(logsUrl.trim())) {
+      if (logsUrl && logsUrl.trim() && !isSafeUrl(logsUrl.trim())) {
+        logsStatus = "mismatch";
+        logsDetail = "Logs URL rejected — only public, non-private addresses are permitted.";
+      } else if (logsUrl && logsUrl.trim() && isSafeUrl(logsUrl.trim())) {
         try {
-          const logsRes = await fetch(logsUrl.trim(), { signal: AbortSignal.timeout(5000) });
+          const logsRes = await fetch(logsUrl.trim(), { signal: AbortSignal.timeout(5000), redirect: "error" });
           if (logsRes.ok) {
             const text = await logsRes.text();
             logsArr.push(text.slice(0, 500));
