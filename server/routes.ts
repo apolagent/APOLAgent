@@ -594,6 +594,28 @@ async function detectPlatformFromProxyImpl(tokenAddr: string): Promise<string | 
   } catch { return null; }
 }
 
+async function detectPlatformFromQuoteToken(tokenAddr: string): Promise<string | null> {
+  try {
+    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${tokenAddr}`, { signal: AbortSignal.timeout(5000) }).then(r => r.ok ? r.json() as any : null);
+    const pairs = (data?.pairs || []).filter((p: any) => (p?.chainId || "").toLowerCase() === "base");
+    if (pairs.length === 0) return null;
+    const lq = (p: any) => parseFloat(p?.liquidity?.usd || "0") || 0;
+    const tokenLow = tokenAddr.toLowerCase();
+    const topPair = pairs.reduce((a: any, b: any) => lq(b) > lq(a) ? b : a, pairs[0]);
+    const platformOf = (p: any) => {
+      const q = (p?.quoteToken?.address || "").toLowerCase();
+      if (q && PLATFORM_MAP[q]) return PLATFORM_MAP[q];
+      const b = (p?.baseToken?.address || "").toLowerCase();
+      if (b && b !== tokenLow && PLATFORM_MAP[b]) return PLATFORM_MAP[b];
+      return null;
+    };
+    const topPlatform = platformOf(topPair);
+    if (!topPlatform) return null;
+    if (lq(topPair) < 1000) return null;
+    return topPlatform;
+  } catch { return null; }
+}
+
 async function detectPlatformFromDeployerChain(deployer: string): Promise<string | null> {
   try {
     const resp = await fetch(`${BLOCKSCOUT_BASE}/api/v2/addresses/${deployer}`);
@@ -735,12 +757,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let platform = detectPlatform(address, deployer, topHolders);
       if (!platform) {
-        const [proxyP, creationP, chainP] = await Promise.all([
+        const [proxyP, creationP, chainP, quoteP] = await Promise.all([
           withTimeout(detectPlatformFromProxyImpl(address), 4000, "proxy-impl-detect").catch(() => null),
           withTimeout(detectPlatformFromCreationTx(address), 5000, "creation-platform-detect").catch(() => null),
           deployer ? withTimeout(detectPlatformFromDeployerChain(deployer), 5000, "deployer-chain-detect").catch(() => null) : null,
+          withTimeout(detectPlatformFromQuoteToken(address), 5000, "quote-token-detect").catch(() => null),
         ]);
-        platform = proxyP || creationP || chainP;
+        platform = proxyP || creationP || chainP || quoteP;
       }
       const scanCount = await storage.incrementLookup(address, tokenInfo.name, tokenInfo.symbol);
       const lpStatus = detectLpStatus(topHolders, platform);
@@ -857,11 +880,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         let platform = detectPlatform(wallet, deployerAddr, topHolders);
         if (!platform) {
-          const [creationP, chainP] = await Promise.all([
+          const [creationP, chainP, quoteP] = await Promise.all([
             detectPlatformFromCreationTx(wallet).catch(() => null),
             deployerAddr ? detectPlatformFromDeployerChain(deployerAddr).catch(() => null) : null,
+            detectPlatformFromQuoteToken(wallet).catch(() => null),
           ]);
-          platform = creationP || chainP;
+          platform = creationP || chainP || quoteP;
         }
         const isVirtuals = platform === "Virtuals";
         const isManaged = !!(platform && MANAGED_PROTOCOLS.has(platform));
