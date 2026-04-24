@@ -65,6 +65,7 @@ export type WalletState = {
   connect: () => Promise<void>;
   connectWith: (detail: EIP6963ProviderDetail) => Promise<void>;
   switchToBase: () => Promise<void>;
+  disconnect: () => Promise<void>;
 };
 
 export function useWallet(): WalletState {
@@ -216,6 +217,37 @@ export function useWallet(): WalletState {
     }
   }, []);
 
+  const disconnect = useCallback(async () => {
+    console.log("[APOL Wallet] disconnect() called");
+    const eth = _selectedProvider || (window as any).ethereum;
+    if (eth && listenersRef.current) {
+      try {
+        eth.removeListener?.("accountsChanged", listenersRef.current.onAccounts);
+        eth.removeListener?.("chainChanged", listenersRef.current.onChain);
+      } catch {}
+      listenersRef.current = null;
+    }
+    if (eth?.request) {
+      try {
+        await eth.request({
+          method: "wallet_revokePermissions",
+          params: [{ eth_accounts: {} }],
+        });
+        console.log("[APOL Wallet] Permissions revoked.");
+      } catch (e: any) {
+        console.log("[APOL Wallet] revokePermissions not supported or rejected:", e?.message);
+      }
+    }
+    _selectedProvider = null;
+    setAddress(null);
+    setChainId(null);
+    try {
+      Object.keys(localStorage).forEach(k => {
+        if (/walletconnect|wagmi|w3m/i.test(k)) localStorage.removeItem(k);
+      });
+    } catch {}
+  }, []);
+
   // Read initial state if already connected (e.g. page refresh)
   useEffect(() => {
     const eth = (window as any).ethereum;
@@ -230,7 +262,7 @@ export function useWallet(): WalletState {
     isConnecting, isSwitching,
     isIframe: inIframe,
     providers, showPicker, setShowPicker,
-    connect, connectWith, switchToBase,
+    connect, connectWith, switchToBase, disconnect,
   };
 }
 

@@ -118,10 +118,22 @@ function WalletButton({ compact = false }: { compact?: boolean }) {
   const {
     address, truncated, isBase, isConnecting, isSwitching,
     isIframe, providers, showPicker, setShowPicker,
-    connect, connectWith, switchToBase,
+    connect, connectWith, switchToBase, disconnect,
   } = useWalletContext();
 
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const [showMenu, setShowMenu] = useState(false);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showMenu]);
 
   const base: React.CSSProperties = {
     ...actionBtnStyle,
@@ -158,9 +170,61 @@ function WalletButton({ compact = false }: { compact?: boolean }) {
 
   if (address && isBase) {
     return (
-      <div data-testid="div-wallet-connected" style={{ ...base, cursor: "default" }}>
-        <span style={{ width: "6px", height: "6px", background: G, display: "inline-block", flexShrink: 0 }} />
-        {truncated}
+      <div ref={wrapperRef} style={{ position: "relative" }}>
+        <button
+          onClick={() => setShowMenu(v => !v)}
+          data-testid="button-wallet-connected"
+          style={{ ...base, cursor: "pointer" }}
+          title="Click to disconnect"
+        >
+          <span style={{ width: "6px", height: "6px", background: G, display: "inline-block", flexShrink: 0 }} />
+          {truncated}
+          <ChevronDown size={10} style={{ marginLeft: "2px" }} />
+        </button>
+        {showMenu && (
+          <div
+            data-testid="menu-wallet"
+            style={{
+              position: "absolute",
+              top: "calc(100% + 4px)",
+              right: 0,
+              minWidth: "160px",
+              background: "#000",
+              border: `1px solid ${G}`,
+              padding: "4px",
+              zIndex: 1000,
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+            }}
+          >
+            <button
+              onClick={async () => {
+                setShowMenu(false);
+                await disconnect();
+              }}
+              data-testid="button-disconnect-wallet"
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                background: "transparent",
+                border: "none",
+                color: "#ff4444",
+                cursor: "pointer",
+                textAlign: "left",
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,68,68,0.1)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+            >
+              <Wallet size={11} />
+              Disconnect
+            </button>
+          </div>
+        )}
       </div>
     );
   }
