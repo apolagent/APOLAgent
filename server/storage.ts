@@ -1,4 +1,4 @@
-import { users, scamReports, heroNominations, votes, flaggedWallets, verificationRequests, scanLookups, agentActivityLogs, subscriptions, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet, type InsertVerificationRequest, type VerificationRequest, type ScanLookup, type AgentActivityLog, type Subscription } from "@shared/schema";
+import { users, scamReports, heroNominations, votes, flaggedWallets, verificationRequests, scanLookups, agentActivityLogs, subscriptions, agentScanResults, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet, type InsertVerificationRequest, type VerificationRequest, type ScanLookup, type AgentActivityLog, type Subscription, type AgentScanResult } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, gte, or, and, sql, sum } from "drizzle-orm";
 
@@ -43,6 +43,8 @@ export interface IStorage {
   getSubscriptionByTxHash(txHash: string): Promise<Subscription | null>;
   upsertSubscription(data: { telegramUserId: string; txHash: string; fromAddress: string | null; amountWei: string; expiresAt: Date }): Promise<Subscription>;
   createWebSubscription(data: { walletAddress: string; txHash: string; fromAddress: string | null; amountWei: string; expiresAt: Date }): Promise<Subscription>;
+  saveAgentScanResult(data: { slug: string; agentName: string; wallet: string | null; chain: string; twitterHandle: string | null; resultJson: any }): Promise<AgentScanResult>;
+  getAgentScanResultBySlug(slug: string): Promise<AgentScanResult | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -360,6 +362,36 @@ export class DatabaseStorage implements IStorage {
         },
       })
       .returning();
+    return row;
+  }
+
+  async saveAgentScanResult(data: { slug: string; agentName: string; wallet: string | null; chain: string; twitterHandle: string | null; resultJson: any }): Promise<AgentScanResult> {
+    const [row] = await db
+      .insert(agentScanResults)
+      .values({
+        slug: data.slug,
+        agentName: data.agentName,
+        wallet: data.wallet,
+        chain: data.chain,
+        twitterHandle: data.twitterHandle,
+        resultJson: data.resultJson,
+      })
+      .returning();
+    return row;
+  }
+
+  async getAgentScanResultBySlug(slug: string): Promise<AgentScanResult | null> {
+    const [row] = await db
+      .select()
+      .from(agentScanResults)
+      .where(eq(agentScanResults.slug, slug))
+      .limit(1);
+    if (!row) return null;
+    db.update(agentScanResults)
+      .set({ viewCount: sql`${agentScanResults.viewCount} + 1` })
+      .where(eq(agentScanResults.slug, slug))
+      .execute()
+      .catch(() => {});
     return row;
   }
 

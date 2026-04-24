@@ -137,6 +137,20 @@ export const agentActivityLogs = pgTable("agent_activity_logs", {
 
 export type AgentActivityLog = typeof agentActivityLogs.$inferSelect;
 
+export const agentScanResults = pgTable("agent_scan_results", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  agentName: text("agent_name").notNull(),
+  wallet: text("wallet"),
+  chain: text("chain").notNull().default("base"),
+  twitterHandle: text("twitter_handle"),
+  resultJson: jsonb("result_json").notNull(),
+  viewCount: integer("view_count").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type AgentScanResult = typeof agentScanResults.$inferSelect;
+
 export const subscriptions = pgTable("subscriptions", {
   id: serial("id").primaryKey(),
   telegramUserId: text("telegram_user_id").unique(),

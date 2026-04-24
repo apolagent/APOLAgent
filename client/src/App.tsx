@@ -28,6 +28,7 @@ function Router() {
       <Route path="/rankings" component={Rankings} />
       <Route path="/report-scam" component={ReportScam} />
       <Route path="/agent-scanner" component={AgentScanner} />
+      <Route path="/agent-scanner/:slug" component={AgentScanner} />
       <Route path="/get-verified" component={GetVerified} />
       <Route path="/admin/dashboard" component={AdminDashboard} />
       <Route path="/verify/:contractAddress" component={VerifyCertificate} />

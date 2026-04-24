@@ -1206,7 +1206,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: { cognitionScore, scoredTests, wallet, socialLink, abilities: autoAbilityAudit?.claimedAbilities },
       }).catch(() => {});
 
-      res.json({
+      const fullResult = {
         agentName: agentName.trim(),
         wallet: wallet || null,
         cognitionScore,
@@ -1246,9 +1246,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
           recentTokens: recentDeployerData.recentTokens,
         } : undefined,
         twitterHandle: dexSocialData.twitter || undefined,
-      });
+      };
+
+      let slug: string | null = null;
+      try {
+        const baseSlug = agentName.trim().toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 40) || "agent";
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const suffix = Math.random().toString(36).slice(2, 8);
+          const candidate = `${baseSlug}-${suffix}`;
+          try {
+            await storage.saveAgentScanResult({
+              slug: candidate,
+              agentName: agentName.trim(),
+              wallet: wallet || null,
+              chain,
+              twitterHandle: dexSocialData.twitter || null,
+              resultJson: fullResult,
+            });
+            slug = candidate;
+            break;
+          } catch (e: any) {
+            if (!String(e?.message || "").match(/unique|duplicate/i)) throw e;
+          }
+        }
+      } catch (e) {
+        // saving is best-effort; never block the scan response
+      }
+
+      res.json({ ...fullResult, slug, shareUrl: slug ? `/agent-scanner/${slug}` : null });
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Agent analysis failed" });
+    }
+  });
+
+  app.get("/api/agent/result/:slug", async (req, res) => {
+    try {
+      const slug = String(req.params.slug || "").trim();
+      if (!/^[a-z0-9-]{3,80}$/.test(slug)) return res.status(400).json({ error: "Invalid slug" });
+      const row = await storage.getAgentScanResultBySlug(slug);
+      if (!row) return res.status(404).json({ error: "Scan result not found" });
+      res.json({
+        slug: row.slug,
+        agentName: row.agentName,
+        wallet: row.wallet,
+        chain: row.chain,
+        twitterHandle: row.twitterHandle,
+        createdAt: row.createdAt,
+        viewCount: row.viewCount,
+        result: row.resultJson,
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Failed to load result" });
     }
   });
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "wouter";
+import { Link, useRoute } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft, Bot, AlertTriangle, CheckCircle,
@@ -609,6 +609,9 @@ function ForensicLookups() {
 }
 
 export default function AgentScanner() {
+  const [, slugMatch] = useRoute<{ slug: string }>("/agent-scanner/:slug");
+  const slugParam = slugMatch?.slug || null;
+
   const [agentName, setAgentName] = useState("");
   const [socialLink, setSocialLink] = useState("");
   const [wallet, setWallet] = useState("");
@@ -619,6 +622,33 @@ export default function AgentScanner() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [showSysInfo, setShowSysInfo] = useState(false);
+  const [shareSlug, setShareSlug] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [isLoadingSavedScan, setIsLoadingSavedScan] = useState(false);
+
+  useEffect(() => {
+    if (!slugParam) return;
+    setIsLoadingSavedScan(true);
+    setScanError(null);
+    fetch(`/api/agent/result/${encodeURIComponent(slugParam)}`)
+      .then(async r => {
+        if (!r.ok) {
+          const data = await r.json().catch(() => ({}));
+          throw new Error(data.error || "Scan result not found");
+        }
+        return r.json();
+      })
+      .then(data => {
+        setResult(data.result);
+        setShareSlug(data.slug);
+        if (data.result?.agentName) setAgentName(data.result.agentName);
+        if (data.result?.wallet) setWallet(data.result.wallet);
+        if (data.chain) setChain(data.chain);
+        setTimeout(() => document.getElementById("larp-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 200);
+      })
+      .catch(e => setScanError(e?.message || "Could not load this scan."))
+      .finally(() => setIsLoadingSavedScan(false));
+  }, [slugParam]);
 
   const [deepDivePending, setDeepDivePending] = useState(false);
   const [deepDiveUnlocked, setDeepDiveUnlocked] = useState(IS_INNER_CIRCLE_TEST_MODE);
@@ -776,6 +806,8 @@ export default function AgentScanner() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Analysis failed");
       setResult(data);
+      setShareSlug(data?.slug || null);
+      setShareCopied(false);
       setTimeout(() => document.getElementById("larp-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
     } catch (e: any) {
       setScanError(e.message || "Scan failed. Please try again.");
@@ -1624,6 +1656,64 @@ export default function AgentScanner() {
         {/* Results */}
         {result && (
           <div id="larp-result" className="space-y-4">
+
+            {/* Share URL */}
+            {shareSlug && (
+              <div
+                data-testid="div-share-url"
+                style={{
+                  border: `1px solid ${G}`,
+                  background: "rgba(0,255,0,0.04)",
+                  padding: "12px 16px",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: 12,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 12,
+                }}
+              >
+                <span style={{ color: G, fontWeight: 700, letterSpacing: 1 }}>SHARE</span>
+                <code
+                  data-testid="text-share-url"
+                  style={{
+                    flex: 1,
+                    minWidth: 220,
+                    color: "#fff",
+                    background: "rgba(0,0,0,0.4)",
+                    padding: "6px 10px",
+                    border: "1px solid rgba(0,255,0,0.25)",
+                    overflowX: "auto",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {`${typeof window !== "undefined" ? window.location.origin : ""}/agent-scanner/${shareSlug}`}
+                </code>
+                <button
+                  data-testid="button-copy-share-url"
+                  onClick={() => {
+                    const url = `${window.location.origin}/agent-scanner/${shareSlug}`;
+                    navigator.clipboard.writeText(url).then(() => {
+                      setShareCopied(true);
+                      setTimeout(() => setShareCopied(false), 2000);
+                    }).catch(() => {});
+                  }}
+                  style={{
+                    background: shareCopied ? G : "transparent",
+                    color: shareCopied ? "#000" : G,
+                    border: `1px solid ${G}`,
+                    padding: "6px 14px",
+                    cursor: "pointer",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                  }}
+                >
+                  {shareCopied ? "COPIED" : "COPY LINK"}
+                </button>
+              </div>
+            )}
 
             {/* APOL Certified Banner */}
             {apolCertified?.certified && (
