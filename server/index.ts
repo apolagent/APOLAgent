@@ -1,10 +1,79 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { execFile } from "child_process";
+import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createBot } from "./bot";
 
 const app = express();
+
+// Trust the first hop's X-Forwarded-For header so rate limiting keys on the
+// real client IP rather than the reverse-proxy address in production.
+app.set("trust proxy", 1);
+
+// ── Rate limiting ────────────────────────────────────────────────────────────
+// General API limiter: 120 requests per 15 minutes per IP
+const generalApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later." },
+});
+
+// Heavy scan limiter: 15 requests per minute per IP
+const scanLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Scan rate limit exceeded. Please wait before scanning again." },
+});
+
+// Heaviest endpoint limiter: 8 requests per minute per IP
+const agentAnalyzeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Agent analyze rate limit exceeded. Please wait before scanning again." },
+});
+
+// ── Concurrency caps ─────────────────────────────────────────────────────────
+// Prevent connection/event-loop saturation from burst traffic even within the
+// rate-limit window.  Each map tracks in-flight count keyed by client IP.
+
+const MAX_CONCURRENT_SCAN = 3;
+const MAX_CONCURRENT_AGENT = 2;
+
+function makeConcurrencyGuard(maxConcurrent: number, label: string) {
+  const inFlight = new Map<string, number>();
+  return (req: Request, res: Response, next: NextFunction) => {
+    const ip = req.ip ?? "unknown";
+    const current = inFlight.get(ip) ?? 0;
+    if (current >= maxConcurrent) {
+      return res.status(429).json({ error: `Too many concurrent ${label} requests. Please wait for previous scan to complete.` });
+    }
+    inFlight.set(ip, current + 1);
+    res.on("finish", () => {
+      const after = (inFlight.get(ip) ?? 1) - 1;
+      if (after <= 0) inFlight.delete(ip);
+      else inFlight.set(ip, after);
+    });
+    next();
+  };
+}
+
+const scanConcurrencyGuard = makeConcurrencyGuard(MAX_CONCURRENT_SCAN, "scan");
+const agentConcurrencyGuard = makeConcurrencyGuard(MAX_CONCURRENT_AGENT, "agent analyze");
+
+// Apply general limiter to all /api routes
+app.use("/api", generalApiLimiter);
+
+// Apply stricter limiters + concurrency guards to the expensive scan endpoints
+app.use("/api/detective/analyze", scanLimiter, scanConcurrencyGuard);
+app.use("/api/scanx", scanLimiter, scanConcurrencyGuard);
+app.use("/api/agent/analyze", agentAnalyzeLimiter, agentConcurrencyGuard);
 
 declare module "http" {
   interface IncomingMessage {
