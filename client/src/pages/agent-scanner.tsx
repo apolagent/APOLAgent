@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useRoute } from "wouter";
+import { Link, useRoute, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft, Bot, AlertTriangle, CheckCircle,
@@ -611,6 +611,16 @@ function ForensicLookups() {
 export default function AgentScanner() {
   const [, slugMatch] = useRoute<{ slug: string }>("/agent-scanner/:slug");
   const slugParam = slugMatch?.slug || null;
+  const [location, setLocation] = useLocation();
+  const queryString = typeof window !== "undefined" ? window.location.search : "";
+  const urlParams = new URLSearchParams(queryString);
+  const checkParam = urlParams.get("check");
+  const checkChainParam = urlParams.get("chain");
+  const scanxParam = urlParams.get("scanx");
+  const isLarpMode = !!slugParam;
+  const isCheckMode = !!checkParam;
+  const isScanxMode = !!scanxParam;
+  const isResultMode = isLarpMode || isCheckMode || isScanxMode;
 
   const [agentName, setAgentName] = useState("");
   const [socialLink, setSocialLink] = useState("");
@@ -720,11 +730,14 @@ export default function AgentScanner() {
       .then(r => r.json()).then(setApolCertified).catch(() => setApolCertified(null));
   }, [result?.wallet, result?.traceabilityTest.isContract]);
 
+  const [lastScanxRun, setLastScanxRun] = useState<string | null>(null);
+  const [lastCheckRun, setLastCheckRun] = useState<string | null>(null);
+
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const scanxParam = params.get("scanx");
-    if (scanxParam && !scanXResult && !isScanningX) {
+    if (scanxParam && lastScanxRun !== scanxParam) {
+      setLastScanxRun(scanxParam);
       setScanXHandle(scanxParam);
+      setScanXResult(null);
       setIsScanningX(true);
       setScanXError(null);
       fetch(`/api/scanx?username=${encodeURIComponent(scanxParam)}`)
@@ -733,22 +746,38 @@ export default function AgentScanner() {
         .catch(() => { setScanXError("Network error."); })
         .finally(() => { setIsScanningX(false); });
     }
-  }, []);
+  }, [scanxParam, lastScanxRun]);
 
-  const handleCheckAddress = async () => {
-    if (!checkAddress.trim()) return;
+  useEffect(() => {
+    const key = checkParam ? `${checkParam}|${checkChainParam || ""}` : null;
+    if (key && lastCheckRun !== key) {
+      setLastCheckRun(key);
+      setCheckAddress(checkParam!);
+      if (checkChainParam) setCheckChain(checkChainParam);
+      setCheckResult(null);
+      handleCheckAddress(checkParam!, checkChainParam || undefined, true);
+    }
+  }, [checkParam, checkChainParam, lastCheckRun]);
+
+  const handleCheckAddress = async (overrideAddress?: string, overrideChain?: string, skipNav?: boolean) => {
+    const addr = (overrideAddress ?? checkAddress).trim();
+    const chainSel = (overrideChain ?? checkChain).trim() || "ethereum";
+    if (!addr) return;
     setIsChecking(true);
     setCheckResult(null);
     setCheckError(null);
     try {
       const res = await fetch(
-        `/api/detective/analyze?address=${encodeURIComponent(checkAddress.trim())}&chain=${encodeURIComponent(checkChain)}`
+        `/api/detective/analyze?address=${encodeURIComponent(addr)}&chain=${encodeURIComponent(chainSel)}`
       );
       const data = await res.json();
       if (!res.ok) {
         setCheckError(data.error || "Failed to check address");
       } else {
         setCheckResult(data);
+        if (!skipNav) {
+          setLocation(`/agent-scanner?check=${encodeURIComponent(addr)}&chain=${encodeURIComponent(chainSel)}`);
+        }
       }
     } catch {
       setCheckError("Network error. Please try again.");
@@ -757,8 +786,8 @@ export default function AgentScanner() {
     }
   };
 
-  const handleScanX = async () => {
-    const raw = scanXHandle.trim();
+  const handleScanX = async (overrideHandle?: string, skipNav?: boolean) => {
+    const raw = (overrideHandle ?? scanXHandle).trim();
     if (!raw) return;
     setIsScanningX(true);
     setScanXResult(null);
@@ -770,6 +799,9 @@ export default function AgentScanner() {
         setScanXError(data.error || "Scan failed");
       } else {
         setScanXResult(data);
+        if (!skipNav) {
+          setLocation(`/agent-scanner?scanx=${encodeURIComponent(raw)}`);
+        }
       }
     } catch {
       setScanXError("Network error. Please try again.");
@@ -815,7 +847,11 @@ export default function AgentScanner() {
       setShareSlug(data?.slug || null);
       setShareCopied(false);
       if (data?.tier === "paid") setDeepDiveUnlocked(true);
-      setTimeout(() => document.getElementById("larp-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+      if (data?.slug) {
+        setLocation(`/agent-scanner/${data.slug}`);
+      } else {
+        setTimeout(() => document.getElementById("larp-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+      }
     } catch (e: any) {
       setScanError(e.message || "Scan failed. Please try again.");
     } finally {
@@ -940,6 +976,7 @@ export default function AgentScanner() {
         </div>
 
         {/* Form */}
+        {!isResultMode && (
         <Card className="bg-slate-900/80 border-slate-700">
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
@@ -1104,8 +1141,10 @@ export default function AgentScanner() {
             )}
           </CardContent>
         </Card>
+        )}
 
         {/* Scan CA / Wallet */}
+        {(!isResultMode || isCheckMode) && (
         <Card style={{ background: "rgba(0,0,0,0.6)", border: `1px solid rgba(0,255,0,0.25)` }}>
           <CardHeader style={{ paddingBottom: "8px" }}>
             <CardTitle style={{ fontSize: "14px", fontWeight: 900, letterSpacing: "0.14em", textTransform: "uppercase", color: "#fff", fontFamily: "'JetBrains Mono', monospace", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1482,8 +1521,10 @@ export default function AgentScanner() {
             )}
           </CardContent>
         </Card>
+        )}
 
         {/* Scan X Profile */}
+        {(!isResultMode || isScanxMode) && (
         <Card style={{ background: "rgba(0,0,0,0.6)", border: `1px solid rgba(0,255,0,0.25)` }}>
           <CardHeader style={{ paddingBottom: "8px" }}>
             <CardTitle style={{ fontSize: "14px", fontWeight: 900, letterSpacing: "0.14em", textTransform: "uppercase", color: "#fff", fontFamily: "'JetBrains Mono', monospace", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1650,9 +1691,10 @@ export default function AgentScanner() {
             })()}
           </CardContent>
         </Card>
+        )}
 
         {/* Evidence Filing — pre-scan (only show for LARP scanner, not CA/wallet) */}
-        {!result && !checkResult && (
+        {!isResultMode && !result && !checkResult && (
           <div>
             <p className="text-xs text-slate-600 uppercase tracking-widest font-semibold mb-3 px-1">Evidence Filing</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1668,7 +1710,7 @@ export default function AgentScanner() {
         )}
 
         {/* Results */}
-        {result && (
+        {result && !isCheckMode && !isScanxMode && (
           <div id="larp-result" className="space-y-4">
 
             {/* Share URL */}
