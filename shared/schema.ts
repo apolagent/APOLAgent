@@ -145,6 +145,7 @@ export const agentScanResults = pgTable("agent_scan_results", {
   chain: text("chain").notNull().default("base"),
   twitterHandle: text("twitter_handle"),
   resultJson: jsonb("result_json").notNull(),
+  tier: text("tier").notNull().default("free"),
   viewCount: integer("view_count").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

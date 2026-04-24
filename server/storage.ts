@@ -43,8 +43,9 @@ export interface IStorage {
   getSubscriptionByTxHash(txHash: string): Promise<Subscription | null>;
   upsertSubscription(data: { telegramUserId: string; txHash: string; fromAddress: string | null; amountWei: string; expiresAt: Date }): Promise<Subscription>;
   createWebSubscription(data: { walletAddress: string; txHash: string; fromAddress: string | null; amountWei: string; expiresAt: Date }): Promise<Subscription>;
-  saveAgentScanResult(data: { slug: string; agentName: string; wallet: string | null; chain: string; twitterHandle: string | null; resultJson: any }): Promise<AgentScanResult>;
+  saveAgentScanResult(data: { slug: string; agentName: string; wallet: string | null; chain: string; twitterHandle: string | null; resultJson: any; tier: string }): Promise<AgentScanResult>;
   getAgentScanResultBySlug(slug: string): Promise<AgentScanResult | null>;
+  upgradeAgentScanResultTier(slug: string, tier: string): Promise<AgentScanResult | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -365,7 +366,7 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
-  async saveAgentScanResult(data: { slug: string; agentName: string; wallet: string | null; chain: string; twitterHandle: string | null; resultJson: any }): Promise<AgentScanResult> {
+  async saveAgentScanResult(data: { slug: string; agentName: string; wallet: string | null; chain: string; twitterHandle: string | null; resultJson: any; tier: string }): Promise<AgentScanResult> {
     const [row] = await db
       .insert(agentScanResults)
       .values({
@@ -375,9 +376,19 @@ export class DatabaseStorage implements IStorage {
         chain: data.chain,
         twitterHandle: data.twitterHandle,
         resultJson: data.resultJson,
+        tier: data.tier,
       })
       .returning();
     return row;
+  }
+
+  async upgradeAgentScanResultTier(slug: string, tier: string): Promise<AgentScanResult | null> {
+    const [row] = await db
+      .update(agentScanResults)
+      .set({ tier })
+      .where(eq(agentScanResults.slug, slug))
+      .returning();
+    return row || null;
   }
 
   async getAgentScanResultBySlug(slug: string): Promise<AgentScanResult | null> {

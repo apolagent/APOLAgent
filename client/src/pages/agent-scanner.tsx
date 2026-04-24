@@ -641,6 +641,8 @@ export default function AgentScanner() {
       .then(data => {
         setResult(data.result);
         setShareSlug(data.slug);
+        if (data.tier === "paid") setDeepDiveUnlocked(true);
+        else setDeepDiveUnlocked(false);
         if (data.result?.agentName) setAgentName(data.result.agentName);
         if (data.result?.wallet) setWallet(data.result.wallet);
         if (data.chain) setChain(data.chain);
@@ -801,6 +803,7 @@ export default function AgentScanner() {
           chain,
           claimedAbilities: claimedAbilities.trim() || undefined,
           logsUrl: logsUrl.trim() || undefined,
+          viewerWallet: connectedWallet || undefined,
         }),
       });
       const data = await res.json();
@@ -808,6 +811,7 @@ export default function AgentScanner() {
       setResult(data);
       setShareSlug(data?.slug || null);
       setShareCopied(false);
+      if (data?.tier === "paid") setDeepDiveUnlocked(true);
       setTimeout(() => document.getElementById("larp-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
     } catch (e: any) {
       setScanError(e.message || "Scan failed. Please try again.");
@@ -856,6 +860,13 @@ export default function AgentScanner() {
             setDeepDiveUnlocked(true);
             setSubscriptionExpiresAt(verifyData.expiresAt || null);
             verifiedOk = true;
+            if (shareSlug) {
+              fetch(`/api/agent/result/${encodeURIComponent(shareSlug)}/upgrade`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ wallet: userWallet }),
+              }).catch(() => {});
+            }
             setTimeout(() => document.getElementById("advanced-results")?.scrollIntoView({ behavior: "smooth", block: "start" }), 200);
             break;
           }

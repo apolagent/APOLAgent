@@ -805,8 +805,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/agent/analyze", async (req, res) => {
     try {
-      const { agentName, socialLink, wallet, chain = "base", claimedAbilities, logsUrl } = req.body;
+      const { agentName, socialLink, wallet, chain = "base", claimedAbilities, logsUrl, viewerWallet } = req.body;
       if (!agentName) return res.status(400).json({ error: "Agent name is required" });
+
+      let scanTier: "free" | "paid" = "free";
+      if (typeof viewerWallet === "string" && /^0x[a-fA-F0-9]{40}$/.test(viewerWallet)) {
+        const lowerViewer = viewerWallet.toLowerCase();
+        if (ADMIN_WALLETS.has(lowerViewer)) {
+          scanTier = "paid";
+        } else {
+          try {
+            const sub = await storage.getActiveSubscriptionByWallet(viewerWallet);
+            if (sub) scanTier = "paid";
+          } catch {}
+        }
+      }
 
       const missingData: string[] = [];
       if (!wallet) missingData.push("wallet");
@@ -1265,6 +1278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               chain,
               twitterHandle: dexSocialData.twitter || null,
               resultJson: fullResult,
+              tier: scanTier,
             });
             slug = candidate;
             break;
@@ -1276,7 +1290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // saving is best-effort; never block the scan response
       }
 
-      res.json({ ...fullResult, slug, shareUrl: slug ? `/agent-scanner/${slug}` : null });
+      res.json({ ...fullResult, slug, shareUrl: slug ? `/agent-scanner/${slug}` : null, tier: scanTier });
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Agent analysis failed" });
     }
@@ -1296,10 +1310,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         twitterHandle: row.twitterHandle,
         createdAt: row.createdAt,
         viewCount: row.viewCount,
+        tier: row.tier,
         result: row.resultJson,
       });
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Failed to load result" });
+    }
+  });
+
+  app.post("/api/agent/result/:slug/upgrade", async (req, res) => {
+    try {
+      const slug = String(req.params.slug || "").trim();
+      const wallet = String(req.body?.wallet || "").trim();
+      if (!/^[a-z0-9-]{3,80}$/.test(slug)) return res.status(400).json({ error: "Invalid slug" });
+      if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) return res.status(400).json({ error: "Invalid wallet" });
+      const lower = wallet.toLowerCase();
+      let isPaid = ADMIN_WALLETS.has(lower);
+      if (!isPaid) {
+        const sub = await storage.getActiveSubscriptionByWallet(wallet);
+        if (sub) isPaid = true;
+      }
+      if (!isPaid) return res.status(403).json({ error: "Wallet has no active subscription" });
+      const updated = await storage.upgradeAgentScanResultTier(slug, "paid");
+      if (!updated) return res.status(404).json({ error: "Scan result not found" });
+      res.json({ ok: true, slug: updated.slug, tier: updated.tier });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Upgrade failed" });
     }
   });
 
