@@ -1455,6 +1455,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const PAYMENT_RECEIVER = "0x857aca6a8a743c9262d64819d239f509a1cd0a85";
   const SUBSCRIPTION_PRICE_WEI = BigInt("20000000000000000");
+  const ADMIN_WALLETS = new Set<string>([
+    "0x3d3ec699d3a7ac26d2cbc83efbe51e742e0bb31a",
+    ...String(process.env.ADMIN_WALLETS || "")
+      .split(",")
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean),
+  ]);
   const SUBSCRIPTION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 
   async function verifyOnChainPayment(txHash: string): Promise<{ ok: true; from: string; valueWei: bigint } | { ok: false; reason: string }> {
@@ -1487,6 +1494,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const wallet = String(req.query.wallet || "").trim();
       if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) return res.json({ paid: false });
+      if (ADMIN_WALLETS.has(wallet.toLowerCase())) {
+        return res.json({ paid: true, admin: true, expiresAt: null, txHash: null });
+      }
       const sub = await storage.getActiveSubscriptionByWallet(wallet);
       if (!sub) return res.json({ paid: false });
       return res.json({ paid: true, expiresAt: sub.expiresAt, txHash: sub.txHash });

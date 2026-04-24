@@ -33,11 +33,20 @@ const SUBSCRIPTION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 const SUB_CACHE = new Map<string, { paid: boolean; timestamp: number }>();
 const SUB_CACHE_TTL = 30000;
 
+const ADMIN_TELEGRAM_IDS = new Set<string>([
+  "8074384961",
+  ...String(process.env.ADMIN_TELEGRAM_IDS || "")
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean),
+]);
+
 const UPGRADE_FOOTER = `\n🔒 *Locked sections* — Subscribe for full deep scan.\nSend 0.02 ETH on Base to \`${PAYMENT_RECEIVER}\`\nThen run \`/verify <txhash>\` to unlock for 30 days.`;
 
 async function isPaidUser(ctx: any): Promise<boolean> {
   const userId = String(ctx.from?.id || "");
   if (!userId) return false;
+  if (ADMIN_TELEGRAM_IDS.has(userId)) return true;
   const cached = SUB_CACHE.get(userId);
   if (cached && Date.now() - cached.timestamp < SUB_CACHE_TTL) return cached.paid;
   try {
