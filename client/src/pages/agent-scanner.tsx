@@ -643,9 +643,12 @@ export default function AgentScanner() {
         setShareSlug(data.slug);
         if (data.tier === "paid") setDeepDiveUnlocked(true);
         else setDeepDiveUnlocked(false);
-        if (data.result?.agentName) setAgentName(data.result.agentName);
-        if (data.result?.wallet) setWallet(data.result.wallet);
-        if (data.chain) setChain(data.chain);
+        setAgentName(data.agentName ?? "");
+        setWallet(data.wallet ?? "");
+        setChain(data.chain ?? "base");
+        setSocialLink(data.socialLink ?? "");
+        setLogsUrl(data.logsUrl ?? "");
+        setClaimedAbilities(data.claimedAbilities ?? "");
         setTimeout(() => document.getElementById("larp-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 200);
       })
       .catch(e => setScanError(e?.message || "Could not load this scan."))
@@ -1723,6 +1726,85 @@ export default function AgentScanner() {
                 >
                   {shareCopied ? "COPIED" : "COPY LINK"}
                 </button>
+              </div>
+            )}
+
+            {/* Project Info — submitted inputs */}
+            {(agentName || wallet || socialLink || logsUrl || claimedAbilities) && (
+              <div
+                data-testid="div-project-info"
+                style={{
+                  border: `1px solid rgba(0,255,0,0.3)`,
+                  background: "rgba(0,255,0,0.03)",
+                  padding: "16px 20px",
+                  fontFamily: "var(--font-mono)",
+                }}
+              >
+                <div style={{ color: G, fontSize: 11, fontWeight: 700, letterSpacing: 1, marginBottom: 12 }}>
+                  PROJECT INFO
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+                  {agentName && (
+                    <div data-testid="info-agent-name">
+                      <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 10, marginBottom: 3 }}>AGENT NAME</div>
+                      <div style={{ color: "#fff", fontSize: 13, wordBreak: "break-word" }}>{agentName}</div>
+                    </div>
+                  )}
+                  {wallet && (
+                    <div data-testid="info-wallet">
+                      <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 10, marginBottom: 3 }}>WALLET / CONTRACT</div>
+                      <div style={{ color: "#fff", fontSize: 12, wordBreak: "break-all" }}>
+                        <a
+                          href={`${CHAIN.explorerUrl}/address/${wallet}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: G, textDecoration: "none" }}
+                        >
+                          {wallet}
+                        </a>
+                        <span style={{ color: "rgba(255,255,255,0.4)", marginLeft: 6, fontSize: 10 }}>
+                          ({chain})
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {socialLink && (
+                    <div data-testid="info-social">
+                      <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 10, marginBottom: 3 }}>X / TELEGRAM</div>
+                      <div style={{ fontSize: 12, wordBreak: "break-all" }}>
+                        <a
+                          href={socialLink.startsWith("http") ? socialLink : `https://${socialLink}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: G, textDecoration: "none" }}
+                        >
+                          {socialLink} <ExternalLink size={10} style={{ display: "inline", verticalAlign: "middle" }} />
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                  {logsUrl && (
+                    <div data-testid="info-logs">
+                      <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 10, marginBottom: 3 }}>LOGS / API ENDPOINT</div>
+                      <div style={{ fontSize: 12, wordBreak: "break-all" }}>
+                        <a
+                          href={logsUrl.startsWith("http") ? logsUrl : `https://${logsUrl}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: G, textDecoration: "none" }}
+                        >
+                          {logsUrl} <ExternalLink size={10} style={{ display: "inline", verticalAlign: "middle" }} />
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {claimedAbilities && (
+                  <div data-testid="info-abilities" style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(0,255,0,0.15)" }}>
+                    <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 10, marginBottom: 4 }}>CLAIMED ABILITIES</div>
+                    <div style={{ color: "#fff", fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{claimedAbilities}</div>
+                  </div>
+                )}
               </div>
             )}
 

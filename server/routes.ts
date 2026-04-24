@@ -1065,7 +1065,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           logsDetail = autoAbilityAudit.reasoningDetail;
         }
       }
-      if (logsUrl && logsUrl.trim()) {
+      if (logsUrl && logsUrl.trim() && isSafeUrl(logsUrl.trim())) {
         try {
           const logsRes = await fetch(logsUrl.trim(), { signal: AbortSignal.timeout(5000) });
           if (logsRes.ok) {
@@ -1277,6 +1277,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               wallet: wallet || null,
               chain,
               twitterHandle: dexSocialData.twitter || null,
+              socialLink: typeof socialLink === "string" && socialLink.trim() ? socialLink.trim().slice(0, 500) : null,
+              logsUrl: typeof logsUrl === "string" && logsUrl.trim() ? logsUrl.trim().slice(0, 500) : null,
+              claimedAbilities: typeof claimedAbilities === "string" && claimedAbilities.trim() ? claimedAbilities.trim().slice(0, 2000) : null,
               resultJson: fullResult,
               tier: scanTier,
             });
@@ -1308,6 +1311,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         wallet: row.wallet,
         chain: row.chain,
         twitterHandle: row.twitterHandle,
+        socialLink: row.socialLink,
+        logsUrl: row.logsUrl,
+        claimedAbilities: row.claimedAbilities,
         createdAt: row.createdAt,
         viewCount: row.viewCount,
         tier: row.tier,

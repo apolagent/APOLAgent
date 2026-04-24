@@ -43,7 +43,7 @@ export interface IStorage {
   getSubscriptionByTxHash(txHash: string): Promise<Subscription | null>;
   upsertSubscription(data: { telegramUserId: string; txHash: string; fromAddress: string | null; amountWei: string; expiresAt: Date }): Promise<Subscription>;
   createWebSubscription(data: { walletAddress: string; txHash: string; fromAddress: string | null; amountWei: string; expiresAt: Date }): Promise<Subscription>;
-  saveAgentScanResult(data: { slug: string; agentName: string; wallet: string | null; chain: string; twitterHandle: string | null; resultJson: any; tier: string }): Promise<AgentScanResult>;
+  saveAgentScanResult(data: { slug: string; agentName: string; wallet: string | null; chain: string; twitterHandle: string | null; socialLink: string | null; logsUrl: string | null; claimedAbilities: string | null; resultJson: any; tier: string }): Promise<AgentScanResult>;
   getAgentScanResultBySlug(slug: string): Promise<AgentScanResult | null>;
   upgradeAgentScanResultTier(slug: string, tier: string): Promise<AgentScanResult | null>;
 }
@@ -366,7 +366,7 @@ export class DatabaseStorage implements IStorage {
     return row;
   }
 
-  async saveAgentScanResult(data: { slug: string; agentName: string; wallet: string | null; chain: string; twitterHandle: string | null; resultJson: any; tier: string }): Promise<AgentScanResult> {
+  async saveAgentScanResult(data: { slug: string; agentName: string; wallet: string | null; chain: string; twitterHandle: string | null; socialLink: string | null; logsUrl: string | null; claimedAbilities: string | null; resultJson: any; tier: string }): Promise<AgentScanResult> {
     const [row] = await db
       .insert(agentScanResults)
       .values({
@@ -375,6 +375,9 @@ export class DatabaseStorage implements IStorage {
         wallet: data.wallet,
         chain: data.chain,
         twitterHandle: data.twitterHandle,
+        socialLink: data.socialLink,
+        logsUrl: data.logsUrl,
+        claimedAbilities: data.claimedAbilities,
         resultJson: data.resultJson,
         tier: data.tier,
       })
