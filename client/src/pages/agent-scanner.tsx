@@ -977,9 +977,9 @@ export default function AgentScanner() {
 
         {/* Form */}
         {!isResultMode && (
-        <Card className="bg-slate-900/80 border-slate-700">
+        <Card className="bg-slate-900/80 border-slate-700" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
+            <CardTitle className="text-white flex items-center gap-2" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
               <Search className="w-5 h-5 text-blue-400" /> Run LARP Detection
             </CardTitle>
           </CardHeader>
