@@ -1,0 +1,14 @@
+Hey, so I want to add x402 payment support to APOL — but I don't want to remove the existing 0.02 ETH manual payment flow, I want both to work side by side.
+Quick context on what APOL does: it's an on-chain forensic tool built on Base that scans AI agents and returns a legitimacy report. Right now users pay 0.02 ETH manually through the Terminal at apolagent.online to trigger a scan. I want AI agents to be able to do the same thing autonomously using x402 — so when an agent hits the scan endpoint and gets a 402 back, it pays in USDC via x402 and the scan runs automatically, no human needed.
+Here's exactly what I need you to build:
+When a request hits the scan endpoint without payment, return a proper HTTP 402 response with the x402 payment details — the amount should be equivalent to 0.02 ETH in USDC, the receiving wallet is mine on Base, and the payment network should be Base. Once the agent pays and retries the request with the payment proof in the header, verify it through the Coinbase x402 facilitator and if it checks out, run the scan and return the report.
+The existing manual ETH payment button on the frontend should stay exactly as it is and still work. I'm not replacing anything, just adding a second lane for agents.
+For the x402 integration use the official Coinbase x402 npm package — it's @coinbase/x402-express if the backend is Express, or whatever the right SDK is for whatever stack I'm running. Pull in the Coinbase-hosted facilitator so I don't have to run my own verification infrastructure.
+A few things I care about:
+
+Don't touch the existing payment flow or frontend at all
+Make sure failed or unverified x402 payments return a clear error, not a silent fail
+Add a simple log so I can see when an agent pays via x402 vs when a human pays manually
+The scan response format for x402 should be the same JSON the Terminal already returns — I want it consistent
+
+Once you're done walk me through how to test it end to end so I can confirm an agent hitting the endpoint actually gets the 402, pays, and gets a real report back.
