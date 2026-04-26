@@ -1,4 +1,5 @@
 import { Telegraf } from "telegraf";
+import { ethers } from "ethers";
 import { storage } from "./storage";
 import {
   WETH, QUOTER_V2, V3_FACTORY, SIM_AMOUNT, MICRO_AMOUNT, FEE_TIERS,
@@ -33,6 +34,15 @@ const SUBSCRIPTION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 const SUB_CACHE = new Map<string, { paid: boolean; timestamp: number }>();
 const SUB_CACHE_TTL = 30000;
 
+interface VerifyChallenge {
+  wallet: string;
+  nonce: string;
+  message: string;
+  expiresAt: number;
+}
+const VERIFY_CHALLENGES = new Map<string, VerifyChallenge>();
+const CHALLENGE_TTL_MS = 10 * 60 * 1000;
+
 const ADMIN_TELEGRAM_IDS = new Set<string>([
   "8074384961",
   ...String(process.env.ADMIN_TELEGRAM_IDS || "")
@@ -41,7 +51,7 @@ const ADMIN_TELEGRAM_IDS = new Set<string>([
     .filter(Boolean),
 ]);
 
-const UPGRADE_FOOTER = `\n🔒 *Locked sections* — Subscribe for full deep scan.\nSend 0.02 ETH on Base to \`${PAYMENT_RECEIVER}\`\nThen run \`/verify <txhash>\` to unlock for 30 days.`;
+const UPGRADE_FOOTER = `\n🔒 *Locked sections* — Subscribe for full deep scan.\nSend 0.02 ETH on Base to \`${PAYMENT_RECEIVER}\`\nThen run \`/challenge <wallet>\` → sign the message → \`/verify <txhash> <sig>\` to unlock for 30 days.`;
 
 async function isPaidUser(ctx: any): Promise<boolean> {
   const userId = String(ctx.from?.id || "");
@@ -1834,7 +1844,8 @@ export function createBot(): Telegraf | null {
       `👮 /map — Wall of Shame`,
       `🛡 /verified — Certified projects`,
       `💎 /subscribe — Unlock deep scans (0.02 ETH/mo)`,
-      `🔓 /verify <txhash> — Activate after payment`,
+      `🔑 /challenge <wallet> — Start wallet proof`,
+      `🔓 /verify <txhash> <sig> — Activate after payment`,
       `📊 /status — Check your subscription`,
       `❓ /help — Help`,
     ];
@@ -1860,12 +1871,47 @@ export function createBot(): Telegraf | null {
       `*1️⃣ Send payment to:*`,
       `\`${PAYMENT_RECEIVER}\``,
       ``,
-      `*2️⃣ Then run:*`,
-      `\`/verify YOUR_TX_HASH\``,
+      `*2️⃣ Start a wallet challenge:*`,
+      `\`/challenge 0xYOUR_WALLET\``,
       ``,
-      `_Each transaction can only activate one Telegram account._`,
+      `*3️⃣ Sign the message shown, then run:*`,
+      `\`/verify 0xYOUR_TX_HASH 0xYOUR_SIGNATURE\``,
+      ``,
+      `_The challenge proves you control the paying wallet. Each transaction activates one Telegram account only._`,
     ];
     ctx.reply(lines.join("\n"), { parse_mode: "Markdown", link_preview_options: { is_disabled: true } });
+  });
+
+  bot.command("challenge", async (ctx) => {
+    const userId = String(ctx.from?.id || "");
+    if (!userId) {
+      ctx.reply("⚠️ Could not identify your Telegram account.", { parse_mode: "Markdown" });
+      return;
+    }
+    const walletArg = ctx.message.text.replace(/^\/challenge(@\w+)?\s*/i, "").trim().toLowerCase();
+    if (!walletArg) {
+      ctx.reply(
+        `🔑 *Wallet Challenge*\n\nUsage: \`/challenge 0xYOUR_WALLET\`\n\nProvide the wallet address you sent (or will send) the 0.02 ETH payment from.\n\nAfter signing the challenge message, run \`/verify <txhash> <signature>\`.`,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+    if (!/^0x[a-f0-9]{40}$/.test(walletArg)) {
+      ctx.reply(`⚠️ That doesn't look like a valid wallet address. Should be \`0x\` + 40 hex characters.`, { parse_mode: "Markdown" });
+      return;
+    }
+    const nonce = `${Date.now().toString(16)}-${Math.random().toString(36).slice(2, 10)}`;
+    const message = `APOL subscription verification\nTelegram: ${userId}\nWallet: ${walletArg}\nNonce: ${nonce}`;
+    const expiresAt = Date.now() + CHALLENGE_TTL_MS;
+    VERIFY_CHALLENGES.set(userId, { wallet: walletArg, nonce, message, expiresAt });
+    ctx.reply(
+      `🔑 *Wallet Challenge Issued*\n\n` +
+      `Sign the following message *exactly* with your wallet \`${walletArg.slice(0, 10)}...\`\n\n` +
+      `\`\`\`\n${message}\n\`\`\`\n\n` +
+      `Then run:\n\`/verify 0xYOUR_TX_HASH 0xYOUR_SIGNATURE\`\n\n` +
+      `⏱ This challenge expires in 10 minutes.`,
+      { parse_mode: "Markdown" }
+    );
   });
 
   bot.command("verify", async (ctx) => {
@@ -1874,21 +1920,74 @@ export function createBot(): Telegraf | null {
       ctx.reply("⚠️ Could not identify your Telegram account.", { parse_mode: "Markdown" });
       return;
     }
-    const txHash = ctx.message.text.replace(/^\/verify(@\w+)?\s*/i, "").trim().toLowerCase();
-    if (!txHash) {
-      ctx.reply(`🔓 *Verify Payment*\n\nUsage: \`/verify 0xYOUR_TX_HASH\`\n\nDon't have a tx yet? Run /subscribe first.`, { parse_mode: "Markdown" });
+    const args = ctx.message.text.replace(/^\/verify(@\w+)?\s*/i, "").trim().split(/\s+/);
+    const txHash = (args[0] || "").toLowerCase();
+    const sigArg = (args[1] || "").toLowerCase();
+    if (!txHash || !sigArg) {
+      ctx.reply(
+        `🔓 *Verify Payment*\n\nUsage:\n1. \`/challenge 0xYOUR_WALLET\` — get a message to sign\n2. Sign it with your wallet\n3. \`/verify 0xTX_HASH 0xSIGNATURE\`\n\nDon't have a tx yet? Run /subscribe first.`,
+        { parse_mode: "Markdown" }
+      );
       return;
     }
     if (!/^0x[a-f0-9]{64}$/.test(txHash)) {
       ctx.reply(`⚠️ That doesn't look like a valid transaction hash. Should be \`0x\` + 64 hex characters.`, { parse_mode: "Markdown" });
       return;
     }
+    if (!/^0x[a-f0-9]{130}$/.test(sigArg)) {
+      ctx.reply(`⚠️ That doesn't look like a valid signature. It should be \`0x\` + 130 hex characters (65 bytes).`, { parse_mode: "Markdown" });
+      return;
+    }
+    const challenge = VERIFY_CHALLENGES.get(userId);
+    if (!challenge) {
+      ctx.reply(
+        `⚠️ *No Active Challenge*\n\nYou need to request a wallet challenge first.\nRun \`/challenge 0xYOUR_WALLET\` to get a message to sign, then come back here.`,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+    if (Date.now() > challenge.expiresAt) {
+      VERIFY_CHALLENGES.delete(userId);
+      ctx.reply(
+        `⏱ *Challenge Expired*\n\nYour wallet challenge has expired. Run \`/challenge 0xYOUR_WALLET\` to get a fresh one.`,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
     const loadingMsg = await ctx.reply(`🔍 *Verifying payment on Base...*\n\n\`${txHash.slice(0, 12)}...${txHash.slice(-8)}\``, { parse_mode: "Markdown" });
     try {
-      const existingByHash = await storage.getSubscriptionByTxHash(txHash).catch(() => null);
-      if (existingByHash && existingByHash.telegramUserId !== userId) {
+      let recoveredAddress: string;
+      try {
+        recoveredAddress = ethers.verifyMessage(challenge.message, sigArg).toLowerCase();
+      } catch {
         await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
-          `⚠️ *Already Used*\n\nThis transaction has already activated another Telegram account. Each payment can only unlock one user.\n\nIf this is a mistake, contact support.`,
+          `❌ *Invalid Signature*\n\nCould not recover a wallet address from your signature. Make sure you signed the exact challenge message provided by \`/challenge\`.`,
+          { parse_mode: "Markdown" }).catch(() => {});
+        return;
+      }
+      if (recoveredAddress !== challenge.wallet) {
+        await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
+          `❌ *Signature Mismatch*\n\nThe signature was made by \`${recoveredAddress.slice(0, 10)}...\`, but the challenge was issued for \`${challenge.wallet.slice(0, 10)}...\`\n\nMake sure you are signing with the correct wallet, or run \`/challenge 0xYOUR_WALLET\` again.`,
+          { parse_mode: "Markdown" }).catch(() => {});
+        return;
+      }
+      const verifiedWallet = challenge.wallet;
+      VERIFY_CHALLENGES.delete(userId);
+      const alreadyUsed = await storage.isTxHashUsed(txHash).catch(() => false);
+      if (alreadyUsed) {
+        const existingByHash = await storage.getSubscriptionByTxHash(txHash).catch(() => null);
+        if (existingByHash && existingByHash.telegramUserId === userId) {
+          const stillActive = new Date(existingByHash.expiresAt).getTime() > Date.now();
+          if (stillActive) {
+            const expiryStr = new Date(existingByHash.expiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+            await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
+              `✅ *Already Active*\n\nYour subscription is already active until *${expiryStr}*.\n\nTo extend, send a new payment and run \`/challenge\` + \`/verify\` with the new transaction hash.`,
+              { parse_mode: "Markdown" }).catch(() => {});
+            return;
+          }
+        }
+        await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
+          `⚠️ *Transaction Already Used*\n\nThis transaction has already been used to activate a subscription. Each payment can only activate one account once.\n\nTo renew or subscribe, please send a new payment and run \`/challenge\` + \`/verify\` with the new transaction hash.`,
           { parse_mode: "Markdown" }).catch(() => {});
         return;
       }
@@ -1896,6 +1995,12 @@ export function createBot(): Telegraf | null {
       if (!result.ok) {
         await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
           `❌ *Verification Failed*\n\n${result.reason}\n\nDouble-check the hash and that the transaction is confirmed on Base.`,
+          { parse_mode: "Markdown" }).catch(() => {});
+        return;
+      }
+      if (result.from !== verifiedWallet) {
+        await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
+          `❌ *Wallet Mismatch*\n\nThis transaction was sent from \`${result.from?.slice(0, 10) ?? "unknown"}...\`, but the wallet you proved ownership of is \`${verifiedWallet.slice(0, 10)}...\`\n\nMake sure you are verifying a transaction sent from your signed wallet.`,
           { parse_mode: "Markdown" }).catch(() => {});
         return;
       }
@@ -1907,6 +2012,7 @@ export function createBot(): Telegraf | null {
         amountWei: String(result.valueWei || SUBSCRIPTION_PRICE_WEI),
         expiresAt,
       });
+      await storage.markTxHashUsed(txHash, userId, verifiedWallet).catch(() => {});
       SUB_CACHE.set(userId, { paid: true, timestamp: Date.now() });
       const expiryStr = expiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
       await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
@@ -2098,7 +2204,8 @@ export function createBot(): Telegraf | null {
       ``,
       `*🔓 Deep Scan Access*`,
       `💎 /subscribe — Unlock full reports (0.02 ETH/mo)`,
-      `🔓 /verify <txhash> — Activate after payment`,
+      `🔑 /challenge <wallet> — Start wallet proof`,
+      `🔓 /verify <txhash> <sig> — Activate after payment`,
       `📊 /status — Check your subscription`,
       ``,
       `💡 You can also paste a contract address directly to scan it.`,

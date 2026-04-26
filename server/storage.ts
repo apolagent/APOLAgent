@@ -1,4 +1,4 @@
-import { users, scamReports, heroNominations, votes, flaggedWallets, verificationRequests, scanLookups, agentActivityLogs, subscriptions, agentScanResults, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet, type InsertVerificationRequest, type VerificationRequest, type ScanLookup, type AgentActivityLog, type Subscription, type AgentScanResult } from "@shared/schema";
+import { users, scamReports, heroNominations, votes, flaggedWallets, verificationRequests, scanLookups, agentActivityLogs, subscriptions, agentScanResults, usedPaymentTxHashes, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet, type InsertVerificationRequest, type VerificationRequest, type ScanLookup, type AgentActivityLog, type Subscription, type AgentScanResult } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, gte, or, and, sql, sum } from "drizzle-orm";
 
@@ -43,6 +43,8 @@ export interface IStorage {
   getSubscriptionByTxHash(txHash: string): Promise<Subscription | null>;
   upsertSubscription(data: { telegramUserId: string; txHash: string; fromAddress: string | null; amountWei: string; expiresAt: Date }): Promise<Subscription>;
   createWebSubscription(data: { walletAddress: string; txHash: string; fromAddress: string | null; amountWei: string; expiresAt: Date }): Promise<Subscription>;
+  isTxHashUsed(txHash: string): Promise<boolean>;
+  markTxHashUsed(txHash: string, telegramUserId: string | null, walletAddress: string | null): Promise<void>;
   saveAgentScanResult(data: { slug: string; agentName: string; wallet: string | null; chain: string; twitterHandle: string | null; socialLink: string | null; logsUrl: string | null; claimedAbilities: string | null; resultJson: any; tier: string }): Promise<AgentScanResult>;
   getAgentScanResultBySlug(slug: string): Promise<AgentScanResult | null>;
   upgradeAgentScanResultTier(slug: string, tier: string): Promise<AgentScanResult | null>;
@@ -364,6 +366,26 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return row;
+  }
+
+  async isTxHashUsed(txHash: string): Promise<boolean> {
+    const [row] = await db
+      .select({ txHash: usedPaymentTxHashes.txHash })
+      .from(usedPaymentTxHashes)
+      .where(eq(usedPaymentTxHashes.txHash, txHash.toLowerCase()))
+      .limit(1);
+    return !!row;
+  }
+
+  async markTxHashUsed(txHash: string, telegramUserId: string | null, walletAddress: string | null): Promise<void> {
+    await db
+      .insert(usedPaymentTxHashes)
+      .values({
+        txHash: txHash.toLowerCase(),
+        telegramUserId,
+        walletAddress: walletAddress?.toLowerCase() || null,
+      })
+      .onConflictDoNothing();
   }
 
   async saveAgentScanResult(data: { slug: string; agentName: string; wallet: string | null; chain: string; twitterHandle: string | null; socialLink: string | null; logsUrl: string | null; claimedAbilities: string | null; resultJson: any; tier: string }): Promise<AgentScanResult> {

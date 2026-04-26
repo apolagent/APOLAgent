@@ -168,6 +168,15 @@ export const subscriptions = pgTable("subscriptions", {
 
 export type Subscription = typeof subscriptions.$inferSelect;
 
+export const usedPaymentTxHashes = pgTable("used_payment_tx_hashes", {
+  txHash: text("tx_hash").primaryKey(),
+  telegramUserId: text("telegram_user_id"),
+  walletAddress: text("wallet_address"),
+  usedAt: timestamp("used_at").defaultNow().notNull(),
+});
+
+export type UsedPaymentTxHash = typeof usedPaymentTxHashes.$inferSelect;
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
