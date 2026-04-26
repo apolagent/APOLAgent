@@ -74,6 +74,9 @@ app.use("/api", generalApiLimiter);
 app.use("/api/detective/analyze", scanLimiter, scanConcurrencyGuard);
 app.use("/api/scanx", scanLimiter, scanConcurrencyGuard);
 app.use("/api/agent/analyze", agentAnalyzeLimiter, agentConcurrencyGuard);
+app.use("/api/x402/detective/analyze", scanLimiter, scanConcurrencyGuard);
+app.use("/api/x402/scanx", scanLimiter, scanConcurrencyGuard);
+app.use("/api/x402/agent/analyze", agentAnalyzeLimiter, agentConcurrencyGuard);
 
 declare module "http" {
   interface IncomingMessage {

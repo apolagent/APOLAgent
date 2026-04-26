@@ -1,8 +1,9 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
+import { installX402 } from "./x402";
 import {
   WETH, QUOTER_V2, V3_FACTORY, SIM_AMOUNT, MICRO_AMOUNT, HARD_TIMEOUT, FEE_TIERS,
   BURN_ADDRS, PLATFORM_MAP, LOCKER_MAP, CREATION_LOG_SIGNATURES, MANAGED_PROTOCOLS,
@@ -737,6 +738,8 @@ function detectLpStatus(holders: { address: string; percent: number }[], platfor
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  installX402(app);
+
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", engine: "APOL Forensic Engine", timestamp: Date.now() });
   });
@@ -784,7 +787,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try { res.json(await storage.getFlaggedWallets(20)); } catch { res.json([]); }
   });
 
-  app.get("/api/detective/analyze", async (req, res) => {
+  const detectiveAnalyzeHandler = async (req: Request, res: Response) => {
     const address = (req.query.address as string || "").trim();
     const chain = (req.query.chain as string || "base").trim();
     if (!address || !address.startsWith("0x") || address.length !== 42) {
@@ -893,9 +896,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Scan failed" });
     }
-  });
+  };
+  app.get("/api/detective/analyze", detectiveAnalyzeHandler);
+  app.get("/api/x402/detective/analyze", detectiveAnalyzeHandler);
 
-  app.post("/api/agent/analyze", async (req, res) => {
+  const agentAnalyzeHandler = async (req: Request, res: Response) => {
     try {
       const { agentName, socialLink, wallet, chain = "base", claimedAbilities, logsUrl, viewerWallet } = req.body;
       if (!agentName) return res.status(400).json({ error: "Agent name is required" });
@@ -1394,7 +1399,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Agent analysis failed" });
     }
-  });
+  };
+  app.post("/api/agent/analyze", agentAnalyzeHandler);
+  app.post("/api/x402/agent/analyze", agentAnalyzeHandler);
 
   app.get("/api/agent/result/:slug", async (req, res) => {
     try {
@@ -1442,7 +1449,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/scanx", async (req, res) => {
+  const scanxHandler = async (req: Request, res: Response) => {
     try {
       const raw = (req.query.username as string || "").trim();
       if (!raw) return res.status(400).json({ error: "Username is required" });
@@ -1590,7 +1597,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Scan failed" });
     }
-  });
+  };
 
   const PAYMENT_RECEIVER = "0x857aca6a8a743c9262d64819d239f509a1cd0a85";
   const SUBSCRIPTION_PRICE_WEI = BigInt("20000000000000000");
@@ -1628,6 +1635,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return { ok: false, reason: `Verification failed: ${e?.message?.slice(0, 80) || "Network error"}` };
     }
   }
+  app.get("/api/scanx", scanxHandler);
+  app.get("/api/x402/scanx", scanxHandler);
 
   app.get("/api/subscription/status", async (req, res) => {
     try {
@@ -1679,6 +1688,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amountWei: verify.valueWei.toString(),
         expiresAt,
       });
+      console.log(`[payment-lane=manual-eth] HUMAN paid manually (0.02 ETH) — wallet=${wallet} txHash=${txHash}`);
       res.json({ ok: true, expiresAt: sub.expiresAt });
     } catch (e: any) {
       const msg = String(e?.message || "");
