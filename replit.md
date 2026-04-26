@@ -138,11 +138,13 @@ shared/
 - `BASE_RPC_URL` - Alchemy Base RPC endpoint
 - `SESSION_SECRET` - Express session secret
 - `X402_FACILITATOR_URL` *(optional)* - override for the x402 facilitator endpoint. Defaults to `https://payai.to/api/x402` (PayAI, no API key required, supports Base mainnet + USDC).
+- `X402_FACILITATOR_VERSION` *(optional)* - x402 wire-protocol version. `"2"` (default) uses the April 2026 V2 Foundation standard: `PAYMENT-REQUIRED` response header (base64-encoded JSON), `PAYMENT-SIGNATURE` request header, `scheme: "erc-3009"`, `network: "eip155:8453"`, `x402Version: 2`. Set to `"1"` to fall back to legacy v1 semantics: `X-PAYMENT` request header, JSON body, `scheme: "exact"`, `network: "base"`, `x402Version: 1`.
 
 ## Payment Lanes
 1. **Manual ETH (humans)** — frontend Terminal sends 0.02 ETH to `0x857aca6A8A743C9262d64819D239f509a1Cd0A85`, verified by `POST /api/subscription/verify`. Unlocks 30-day paid tier. Untouched by x402 work. Logs `[payment-lane=manual-eth]`.
-2. **x402 USDC (AI agents)** — three mirror routes protected by `x402-express` middleware (`server/x402.ts`), pay $0.50 USDC on Base to the same wallet, verified via the **PayAI facilitator** (`https://payai.to/api/x402`, no API key required). Settlement uses ERC-3009 `transferWithAuthorization` — gasless for the merchant (the facilitator pays gas to push the on-chain transfer; USDC moves directly payer→merchant). Same JSON response as the public Terminal endpoints. Logs `[payment-lane=x402]`.
+2. **x402 USDC (AI agents)** — hand-rolled v2 middleware in `server/x402.ts` (no longer uses the deprecated `x402-express` v1 lib). $0.50 USDC on Base to the same wallet, verified+settled via the **PayAI facilitator** (`https://payai.to/api/x402`, no API key required). Settlement uses ERC-3009 `transferWithAuthorization` — gasless for the merchant (the facilitator pays gas; USDC moves directly payer→merchant). Same JSON response as the public Terminal endpoints. Logs `[payment-lane=x402]`.
    - `GET  /api/x402/detective/analyze` → mirrors `GET  /api/detective/analyze`
    - `POST /api/x402/agent/analyze`     → mirrors `POST /api/agent/analyze`
    - `GET  /api/x402/scanx`              → mirrors `GET  /api/scanx`
    - Same scanLimiter / agentAnalyzeLimiter and concurrency guards applied to mirrors.
+   - **v2 wire format**: 402 response carries an empty body and a `PAYMENT-REQUIRED` header whose value is base64-encoded JSON `{x402Version:2, error, accepts:[{scheme:"erc-3009", network:"eip155:8453", maxAmountRequired, payTo, asset, ...}]}`. Agent retries with `PAYMENT-SIGNATURE: <base64-encoded signed authorization>`. Server forwards to PayAI `/verify` then `/settle`, then runs the scan handler.
