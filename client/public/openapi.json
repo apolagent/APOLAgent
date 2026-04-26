@@ -1,0 +1,186 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "APOL Agent — On-Chain Forensic Scanner",
+    "version": "1.0.0",
+    "summary": "High-fidelity forensic risk analysis for the Base blockchain. Detects wash trading, whale distribution, honeypots, and deployer red flags.",
+    "description": "APOL Agent is a paid scanning API designed for autonomous AI agents (Claude, GPT, custom bots, x402-fetch SDK clients). Every scan call costs 0.50 USDC on Base mainnet, paid through the x402 V2 payment protocol. There are no API keys, no signups, and no rate plans — your agent simply pays per scan with USDC.\n\nHow paying works (x402 V2, April 2026 Foundation standard):\n1. Your agent calls the endpoint without a payment header. The server responds with HTTP 402 Payment Required and a `PAYMENT-REQUIRED` response header containing a base64-encoded JSON object describing the payment (amount, recipient, asset, network, scheme).\n2. Your agent decodes that header, signs an ERC-3009 `transferWithAuthorization` message for 0.50 USDC (500000 micro-USDC) on Base mainnet (chain id 8453, CAIP-2 `eip155:8453`) to the merchant address, and base64-encodes the signed authorization.\n3. Your agent retries the same request with a `PAYMENT-SIGNATURE` request header carrying that base64 payload. The server forwards it to the PayAI facilitator (`https://payai.to/api/x402`) for verification and on-chain settlement, then runs the scan and returns the JSON report. Settlement is gasless for the merchant — the facilitator pays gas to push the on-chain USDC transfer.\n\nIf you are using the standard `x402-fetch` SDK (or any V2-compatible x402 client), all of this is automatic — just point it at the endpoint with a funded Base wallet."
+  },
+  "servers": [
+    {
+      "url": "https://apolagent.online",
+      "description": "Production"
+    }
+  ],
+  "paths": {
+    "/api/x402/detective/analyze": {
+      "get": {
+        "operationId": "scanContractOrWallet",
+        "summary": "Run a forensic risk scan on a Base address (0.50 USDC via x402 V2)",
+        "description": "Performs a deep, high-fidelity on-chain forensic analysis of a contract or wallet on the Base blockchain. The scan combines:\n\n- **Honeypot simulation** — buys and sells the token in a forked simulation to detect honeypots, transfer restrictions, and hidden tax behavior.\n- **Buy/sell tax measurement** — actual taxes from the simulation, not what the contract claims.\n- **Whale distribution analysis** — top-holder breakdown to detect dangerous concentration of supply.\n- **Wash-trading detection** — identifies suspicious self-trading patterns from on-chain volume vs. unique-trader signal.\n- **Deployer reputation** — pulls the deployer wallet, prior deployments, and known bad-actor flags.\n- **Liquidity & price** — live DEX liquidity (USD) and price from DexScreener.\n- **Holder count** — total unique holder count.\n- **Platform detection** — identifies whether the token was launched on Clanker, Zora, Virtuals, or another known launchpad.\n\nReturns the same JSON shape as the public APOL Terminal scan, designed to be parsed directly by an AI agent.\n\n## Payment (x402 V2, REQUIRED)\n\n**This endpoint always responds with HTTP 402 Payment Required on the first call.** It costs **0.50 USDC** (500000 micro-USDC, 6 decimals) on **Base mainnet** (chain id 8453), paid via the **x402 V2 protocol** using the **ERC-3009 `transferWithAuthorization`** scheme.\n\nThe 402 response carries:\n- HTTP status `402 Payment Required`\n- A `PAYMENT-REQUIRED` response header whose value is base64-encoded JSON containing the payment requirements (`x402Version: 2`, `scheme: \"erc-3009\"`, `network: \"eip155:8453\"`, `payTo`, `asset`, `maxAmountRequired: \"500000\"`, `resource`, `description`).\n\nTo successfully receive scan data, retry the same request with a `PAYMENT-SIGNATURE` request header containing your base64-encoded signed ERC-3009 authorization. The server will verify and settle through the PayAI facilitator (no Coinbase CDP keys required) and then return the JSON scan report. USDC is transferred directly from the payer wallet to the APOL merchant wallet on-chain; the facilitator pays gas.\n\nIf you use the official `x402-fetch` SDK (or any V2-compatible x402 client), this round-trip is fully automatic — just call the URL with a Base-funded EOA.",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "query",
+            "required": true,
+            "description": "The on-chain address to analyze. Must be a valid EVM address: a 42-character hex string starting with `0x`. Can be either a token/contract address (recommended — unlocks honeypot simulation, tax detection, holder breakdown) or a plain wallet address (returns wallet-level signals only). Example: `0xC1ce66BD83e1EecbE4059346CA166dC14Af93b07`.",
+            "schema": {
+              "type": "string",
+              "pattern": "^0x[a-fA-F0-9]{40}$",
+              "example": "0xC1ce66BD83e1EecbE4059346CA166dC14Af93b07"
+            }
+          },
+          {
+            "name": "chain",
+            "in": "query",
+            "required": false,
+            "description": "The blockchain network to scan. Currently only Base mainnet is supported. Defaults to `base` if omitted.",
+            "schema": {
+              "type": "string",
+              "enum": ["base"],
+              "default": "base"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payment was successfully verified and settled on-chain via the x402 V2 facilitator. The scan completed and the JSON forensic report is returned. The response shape matches the public APOL Terminal scan output exactly.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — missing `address`, or `address` is not a valid 42-character `0x` hex string.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": { "type": "string", "example": "Valid contract address required" }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required. This is the expected first response. Read the `PAYMENT-REQUIRED` response header (base64-encoded JSON) to discover the payment terms, then retry the request with a `PAYMENT-SIGNATURE` request header containing your base64-encoded signed ERC-3009 authorization. A 402 is also returned if the supplied `PAYMENT-SIGNATURE` is malformed, the facilitator rejects verification, or on-chain settlement fails — in all of those cases the JSON body's `error` field explains why.",
+            "headers": {
+              "PAYMENT-REQUIRED": {
+                "description": "Base64-encoded JSON of the x402 V2 payment requirements. Decode (base64), then `JSON.parse` to obtain `{ x402Version: 2, error, accepts: [{ scheme: \"erc-3009\", network: \"eip155:8453\", maxAmountRequired: \"500000\", resource, description, mimeType: \"application/json\", payTo, maxTimeoutSeconds: 60, asset, extra: { name: \"USD Coin\", version: \"2\" } }] }`. `payTo` is the APOL merchant wallet on Base. `asset` is the USDC contract on Base mainnet (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`). `maxAmountRequired` is in micro-USDC (6 decimals), so `500000` = 0.50 USDC.",
+                "schema": { "type": "string", "format": "base64" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "x402Version": { "type": "integer", "const": 2 },
+                    "error": { "type": "string", "example": "Payment Required" },
+                    "message": {
+                      "type": "string",
+                      "example": "Payment requirements provided in the PAYMENT-REQUIRED response header (base64-encoded JSON). Retry with payment proof in the PAYMENT-SIGNATURE request header."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "PAYMENT-SIGNATURE",
+          "in": "header",
+          "required": false,
+          "description": "x402 V2 payment proof. Base64-encoded JSON containing your signed ERC-3009 `transferWithAuthorization` for 0.50 USDC on Base mainnet to the `payTo` address in the `PAYMENT-REQUIRED` header. Omit on the first request to receive the 402 challenge; include on the retry to unlock the scan. Standard `x402-fetch` SDK clients populate this automatically.",
+          "schema": { "type": "string", "format": "base64" }
+        }
+      ]
+    }
+  },
+  "components": {
+    "schemas": {
+      "ScanReport": {
+        "type": "object",
+        "description": "APOL forensic scan report — same JSON shape returned by the public APOL Terminal. Designed to be parsed directly by an AI agent to decide whether the scanned address is safe to interact with.",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "The address that was scanned (echoed back, lowercased)."
+          },
+          "tokenInfo": {
+            "type": "object",
+            "description": "ERC-20 metadata pulled from the contract.",
+            "properties": {
+              "name": { "type": "string", "example": "Example Token" },
+              "symbol": { "type": "string", "example": "EXMP" },
+              "totalSupply": { "type": "string", "description": "Total supply as a base-units string (raw, before decimals are applied)." },
+              "decimals": { "type": "integer", "example": 18 }
+            }
+          },
+          "simulation": {
+            "type": "object",
+            "description": "Honeypot / tax simulation result. Buys and sells the token in a forked simulation to measure real-world behavior.",
+            "properties": {
+              "isHoneypot": { "type": "boolean", "description": "True if the token cannot be sold, or sells fail in simulation. Critical risk signal." },
+              "buyTax": { "type": "number", "description": "Measured buy tax as a percentage (0–100)." },
+              "sellTax": { "type": "number", "description": "Measured sell tax as a percentage (0–100)." },
+              "simulationSuccess": { "type": "boolean", "description": "True if the simulation completed; false if the simulation itself failed (treat as low-confidence)." },
+              "feeTier": { "type": ["integer", "null"], "description": "Detected Uniswap v3 fee tier (e.g. 500, 3000, 10000) or null." }
+            }
+          },
+          "deployer": {
+            "type": ["string", "null"],
+            "description": "Deployer wallet address (lowercase) if known. Useful for cross-referencing deployer reputation."
+          },
+          "holderCount": {
+            "type": "integer",
+            "description": "Total number of unique holders for this token."
+          },
+          "topHolders": {
+            "type": "array",
+            "description": "Top holder breakdown — used for whale-distribution and wash-trading signals.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "address": { "type": "string" },
+                "balance": { "type": "string", "description": "Holder balance as a base-units string." },
+                "percentage": { "type": "number", "description": "Percentage of total supply held by this address." }
+              }
+            }
+          },
+          "liquidity": {
+            "type": "number",
+            "description": "Live USD liquidity reported by DexScreener."
+          },
+          "priceUsd": {
+            "type": "number",
+            "description": "Live USD price reported by DexScreener."
+          },
+          "platform": {
+            "type": ["string", "null"],
+            "description": "Detected launch platform if any (e.g. `clanker`, `zora`, `virtuals`)."
+          },
+          "riskScore": {
+            "type": "integer",
+            "description": "Overall risk score 0–100. Lower is safer; higher means more red flags. Final go/no-go signal for the agent."
+          },
+          "riskLabel": {
+            "type": "string",
+            "description": "Human-readable risk label, e.g. `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`."
+          },
+          "flags": {
+            "type": "array",
+            "description": "List of human-readable risk flags raised by the scan (e.g. `\"Honeypot detected\"`, `\"Top holder controls 45% of supply\"`, `\"Deployer linked to 3 prior rugs\"`).",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}
