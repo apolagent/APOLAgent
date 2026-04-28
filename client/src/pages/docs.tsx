@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "wouter";
-import { Search, Menu, X, Copy, Check, Info, AlertTriangle, CheckCircle, ChevronRight, Home, BookOpen, Terminal, Shield, Zap, Code, FileText, Lock, Key, BarChart3, Eye, EyeOff, RefreshCw, Unlock, ExternalLink, Sparkles, BadgeCheck } from "lucide-react";
-import { useWalletContext } from "@/hooks/use-wallet";
+import { Search, Menu, X, Copy, Check, Info, AlertTriangle, CheckCircle, ChevronRight, Home, BookOpen, Terminal, Shield, Zap, Code, FileText, Lock, BarChart3, EyeOff, RefreshCw, ExternalLink } from "lucide-react";
 
 const ACCENT = "#00D1FF";
 const sans = "'Inter', 'Segoe UI', -apple-system, sans-serif";
@@ -24,8 +23,8 @@ const sectionOutlines: Record<SectionId, string[]> = {
   "bot-commands": ["Core Commands", "Forensic Commands", "Community Commands", "Command Reference Table"],
   "forensic-verdicts": ["Verdict Overview", "Green Status", "Yellow Status", "Red Status", "Score Breakdown"],
   "security-standards": ["Heuristic Logic Scan", "On-Chain Analysis", "Behavioral Detection", "Economic Resilience"],
-  "api": ["Authentication", "Endpoints", "Rate Limits", "Response Format"],
-  "api-dashboard": ["Your API Key", "Usage Tracker", "Premium Access", "Authentication Header", "Scan Endpoint", "Integration Guide"],
+  "api": ["How It Works", "Live Endpoints", "Rate Limits", "Response Format"],
+  "api-dashboard": ["Access Model", "Scan Endpoint", "x402 Payment Flow", "Code Examples", "Premium Access"],
   "security-governance": ["Privacy Commitment", "Data Handling Policy", "The Verified Standard"],
 };
 
@@ -356,13 +355,13 @@ function ApiDocs() {
   return (
     <>
       <SectionTitle id="api">API</SectionTitle>
-      <Para>The APOL Agent API provides programmatic access to forensic scanning capabilities. The API is RESTful and returns JSON responses.</Para>
+      <Para>The APOL Agent API provides programmatic access to forensic scanning capabilities on Base. It is RESTful, returns JSON, and requires no API key — access is paid per scan using the x402 protocol.</Para>
 
-      <SubTitle id="authentication">Authentication</SubTitle>
-      <Para>API access requires an API key passed via the X-API-Key header. Keys are available to $APOL token holders through the verification portal.</Para>
-      <CopyBlock code={`curl -X GET "https://apolagent.online/api/scan/0x..." \\\n  -H "X-API-Key: YOUR_API_KEY" \\\n  -H "Content-Type: application/json"`} label="Authentication Header" />
+      <SubTitle id="how-it-works">How It Works</SubTitle>
+      <Para>Instead of API keys, APOL uses per-call payment via the x402 V2 standard. Each forensic scan costs <strong>$0.50 USDC</strong> on Base mainnet, paid automatically through an ERC-3009 transferWithAuthorization. There are no subscriptions, rate plans, or keys to manage. Your agent pays, your agent gets the result.</Para>
+      <Callout type="info">AI agents using any x402 V2-compatible client (such as x402-fetch) handle payment automatically — call the endpoint, the client detects the 402, pays 0.50 USDC, and retries. No extra integration work.</Callout>
 
-      <SubTitle id="endpoints">Endpoints</SubTitle>
+      <SubTitle id="live-endpoints">Live Endpoints</SubTitle>
       <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: sans, fontSize: 14, margin: "16px 0" }}>
         <thead>
           <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
@@ -373,10 +372,9 @@ function ApiDocs() {
         </thead>
         <tbody>
           {([
-            ["GET", "/api/scan/:address", "Full forensic scan of a token contract"],
-            ["GET", "/api/wallet/:address", "Wallet risk profile and history"],
-            ["GET", "/api/verified", "List all APOL-verified projects"],
-            ["GET", "/api/health", "API status and uptime"],
+            ["GET", "/api/x402/detective/analyze", "Full forensic scan — contract or wallet on Base"],
+            ["POST", "/api/x402/agent/analyze", "AI agent legitimacy report (LARP detector)"],
+            ["GET", "/api/x402/scanx", "X (Twitter) handle agent verification scan"],
           ]).map(([method, endpoint, desc], i) => (
             <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
               <td style={{ padding: "10px 14px" }}><code style={{ fontFamily: mono, fontSize: 12, color: "#16a34a", background: "#f0fdf4", padding: "2px 8px", borderRadius: 4 }}>{method}</code></td>
@@ -388,233 +386,146 @@ function ApiDocs() {
       </table>
 
       <SubTitle id="rate-limits">Rate Limits</SubTitle>
-      <Para>API requests are rate-limited to prevent abuse. Standard tier allows 60 requests per minute. Premium tier (holders of 100,000+ $APOL) allows 300 requests per minute.</Para>
-      <Callout type="info">Rate limit headers (X-RateLimit-Remaining, X-RateLimit-Reset) are included in every API response.</Callout>
+      <Para>Each x402 endpoint is limited to 15 paid requests per minute per IP to prevent abuse. The rate limit window resets every 60 seconds.</Para>
+      <Callout type="info">Standard RateLimit headers (RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset) are included in every API response.</Callout>
 
       <SubTitle id="response-format">Response Format</SubTitle>
-      <CopyBlock code={`{\n  "status": "success",\n  "data": {\n    "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",\n    "name": "USD Coin",\n    "symbol": "USDC",\n    "score": 95,\n    "verdict": "LOW_RISK",\n    "signals": {\n      "honeypot": false,\n      "mintable": false,\n      "lpLocked": true,\n      "whaleConcentration": 0.12\n    },\n    "scannedAt": "2026-03-27T21:00:00Z"\n  }\n}`} label="Example Response: /api/scan/:address" />
+      <CopyBlock code={`{
+  "riskScore": 72,
+  "riskLabel": "MEDIUM",
+  "verdict": "Moderate Risk — proceed with caution",
+  "address": "0xC1ce66BD83e1EecbE4059346CA166dC14Af93b07",
+  "tokenInfo": {
+    "name": "Example Token",
+    "symbol": "EXMP",
+    "totalSupply": "1000000000000000000000000",
+    "decimals": 18
+  },
+  "simulation": {
+    "isHoneypot": false,
+    "buyTax": 2,
+    "sellTax": 5,
+    "simulationSuccess": true
+  },
+  "deployer": "0xabc123...",
+  "holderCount": 1240,
+  "liquidity": 45000,
+  "priceUsd": 0.00042,
+  "platform": "clanker",
+  "flags": ["High sell tax (5%)", "Deployer holds 8% of supply"]
+}`} label="Example Response — GET /api/x402/detective/analyze" />
     </>
   );
 }
 
-const APOL_PREMIUM_THRESHOLD = 100000;
-const UNISWAP_BUY_URL = "https://app.uniswap.org/swap?chain=base";
-
-function useApolBalance(address: string | null) {
-  const [balance, setBalance] = useState<number | null>(null);
-  const [loading, setLoading] = useState(false);
-  useEffect(() => {
-    if (!address) { setBalance(null); return; }
-    setLoading(true);
-    const timer = setTimeout(() => {
-      setBalance(0);
-      setLoading(false);
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [address]);
-  return { balance, loading };
-}
-
-function ConfettiEffect() {
-  const colors = [ACCENT, "#0ea5e9", "#22d3ee", "#67e8f9", "#a5f3fc", "#fff"];
-  return (
-    <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 10 }}>
-      {Array.from({ length: 40 }).map((_, i) => {
-        const left = Math.random() * 100;
-        const delay = Math.random() * 0.6;
-        const size = 4 + Math.random() * 6;
-        const color = colors[Math.floor(Math.random() * colors.length)];
-        const rotation = Math.random() * 360;
-        return (
-          <div key={i} style={{
-            position: "absolute", left: `${left}%`, top: -10,
-            width: size, height: size * 1.5, background: color,
-            borderRadius: 2, opacity: 0.9, transform: `rotate(${rotation}deg)`,
-            animation: `confetti-fall 1.5s ease-out ${delay}s forwards`,
-          }} />
-        );
-      })}
-      <style>{`
-        @keyframes confetti-fall {
-          0% { transform: translateY(0) rotate(0deg); opacity: 1; }
-          100% { transform: translateY(350px) rotate(720deg); opacity: 0; }
-        }
-      `}</style>
-    </div>
-  );
-}
-
 function ApiDashboard() {
-  const wallet = useWalletContext();
-  const { balance, loading: balanceLoading } = useApolBalance(wallet.address);
-  const isConnected = !!wallet.address;
-  const hasPremium = balance !== null && balance >= APOL_PREMIUM_THRESHOLD;
-
-  const [keyVisible, setKeyVisible] = useState(false);
-  const [keyGenerated, setKeyGenerated] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [premiumClaimed, setPremiumClaimed] = useState(false);
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [showPopup, setShowPopup] = useState(false);
-
-  const demoKey = "apol_sk_live_7f3a9b2e1d4c8f5a6b0e2d9c4a7f1b3e";
-  const premiumKey = "apol_sk_premium_" + (wallet.address ? wallet.address.slice(2, 18).toLowerCase() : "") + "x9f2e7d1a";
-  const usedScans = 3;
-  const totalScans = premiumClaimed ? 999999 : 10;
-  const usagePercent = premiumClaimed ? 0 : (usedScans / totalScans) * 100;
-
-  const handleClaimPremium = () => {
-    setPremiumClaimed(true);
-    setShowConfetti(true);
-    setTimeout(() => setShowConfetti(false), 2000);
-  };
-
-  const handleGenerate = () => {
-    setKeyGenerated(true);
-  };
-
-  const handleCopyKey = () => {
-    navigator.clipboard.writeText(demoKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
     <>
-      <SectionTitle id="api-dashboard">API Management Dashboard</SectionTitle>
-      <Para>Manage your API credentials, monitor usage, and unlock premium forensic capabilities from a single dashboard.</Para>
+      <SectionTitle id="api-dashboard">API Integration Guide</SectionTitle>
+      <Para>Everything you need to integrate APOL forensic scanning into your application, trading bot, or AI agent. No API keys, no subscriptions — access is metered per scan via the x402 payment protocol.</Para>
 
-      <SubTitle id="your-api-key">Your API Key</SubTitle>
-      <div style={{
-        background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12,
-        padding: 28, marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-          <Key style={{ width: 20, height: 20, color: ACCENT }} />
-          <span style={{ fontSize: 16, fontWeight: 600, color: "#0f172a", fontFamily: sans }}>Your API Key</span>
-        </div>
-        {!keyGenerated ? (
-          <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <Para>Generate an API key to start making forensic scan requests programmatically.</Para>
-            <button
-              onClick={handleGenerate}
-              data-testid="button-generate-key"
-              style={{
-                background: ACCENT, color: "#fff", border: "none", borderRadius: 8,
-                padding: "12px 28px", fontSize: 14, fontWeight: 600, fontFamily: sans,
-                cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8,
-              }}
-            >
-              <RefreshCw style={{ width: 16, height: 16 }} />
-              Generate API Key
-            </button>
-          </div>
-        ) : (
-          <div>
-            <div style={{
-              display: "flex", alignItems: "center", gap: 10,
-              background: "#1a1d23", borderRadius: 8, padding: "14px 16px",
-            }}>
-              <code
-                data-testid="text-api-key"
-                style={{
-                  flex: 1, fontSize: 14, fontFamily: mono, letterSpacing: "0.02em",
-                  color: keyVisible ? "#e0e0e0" : "transparent",
-                  textShadow: keyVisible ? "none" : "0 0 8px rgba(255,255,255,0.5)",
-                  userSelect: keyVisible ? "text" : "none",
-                }}
-              >
-                {demoKey}
-              </code>
-              <button
-                onClick={() => setKeyVisible(!keyVisible)}
-                data-testid="button-toggle-key-visibility"
-                style={{
-                  background: "transparent", border: "1px solid #3a3d45", borderRadius: 6,
-                  padding: "6px 8px", cursor: "pointer", color: "#888", display: "flex",
-                  alignItems: "center", gap: 4, fontSize: 12, fontFamily: sans,
-                }}
-              >
-                {keyVisible ? <EyeOff style={{ width: 14, height: 14 }} /> : <Eye style={{ width: 14, height: 14 }} />}
-                {keyVisible ? "Hide" : "Reveal"}
-              </button>
-              <button
-                onClick={handleCopyKey}
-                data-testid="button-copy-api-key"
-                style={{
-                  background: "transparent", border: "1px solid #3a3d45", borderRadius: 6,
-                  padding: "6px 8px", cursor: "pointer",
-                  color: copied ? "#4ade80" : "#888",
-                  display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontFamily: sans,
-                }}
-              >
-                {copied ? <><Check style={{ width: 14, height: 14 }} /> Copied!</> : <><Copy style={{ width: 14, height: 14 }} /> Copy</>}
-              </button>
-            </div>
-            <Callout type="warning">Keep your API key secret. Do not expose it in frontend code or public repositories.</Callout>
-          </div>
-        )}
+      <SubTitle id="access-model">Access Model</SubTitle>
+      <Callout type="info">APOL uses pay-per-scan rather than API keys. Each call costs $0.50 USDC on Base mainnet. There are no free tiers, no monthly limits to track, and no keys to rotate or secure.</Callout>
+      <Para>When your code calls an x402 endpoint without a payment header, the server responds with HTTP 402 and a <code style={{ fontFamily: mono, fontSize: 13 }}>PAYMENT-REQUIRED</code> header containing the payment terms. Your client signs an ERC-3009 authorization for 0.50 USDC and retries with a <code style={{ fontFamily: mono, fontSize: 13 }}>PAYMENT-SIGNATURE</code> header. The server verifies and settles on-chain, then returns the scan result.</Para>
+
+      <SubTitle id="scan-endpoint">Scan Endpoint</SubTitle>
+      <div style={{ marginBottom: 8 }}>
+        <span style={{
+          display: "inline-block", fontSize: 11, fontWeight: 700, fontFamily: mono,
+          color: "#16a34a", background: "#f0fdf4", border: "1px solid #bbf7d0",
+          padding: "2px 10px", borderRadius: 4, marginBottom: 8,
+        }}>GET</span>
+        <code style={{ fontSize: 14, fontFamily: mono, color: ACCENT, marginLeft: 8 }}>https://apolagent.online/api/x402/detective/analyze</code>
       </div>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: sans, fontSize: 14, margin: "16px 0" }}>
+        <thead>
+          <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
+            <th style={{ textAlign: "left", padding: "10px 14px", fontWeight: 600, color: "#0f172a", fontSize: 13 }}>Parameter</th>
+            <th style={{ textAlign: "left", padding: "10px 14px", fontWeight: 600, color: "#0f172a", fontSize: 13 }}>Type</th>
+            <th style={{ textAlign: "left", padding: "10px 14px", fontWeight: 600, color: "#0f172a", fontSize: 13 }}>Required</th>
+            <th style={{ textAlign: "left", padding: "10px 14px", fontWeight: 600, color: "#0f172a", fontSize: 13 }}>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {([
+            ["address", "string", "Yes", "EVM address to scan (0x…, 42 chars)"],
+            ["chain", "string", "No", "Chain to scan — defaults to base"],
+          ]).map(([param, type, req, desc], i) => (
+            <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
+              <td style={{ padding: "10px 14px" }}><code style={{ fontFamily: mono, fontSize: 13, color: ACCENT }}>{param}</code></td>
+              <td style={{ padding: "10px 14px", color: "#475569", fontFamily: mono, fontSize: 13 }}>{type}</td>
+              <td style={{ padding: "10px 14px", color: req === "Yes" ? "#dc2626" : "#64748b", fontSize: 13, fontWeight: req === "Yes" ? 600 : 400 }}>{req}</td>
+              <td style={{ padding: "10px 14px", color: "#475569" }}>{desc}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
-      <SubTitle id="usage-tracker">Usage Tracker</SubTitle>
-      {isConnected && (
-        <div data-testid="badge-wallet-verified" style={{
-          display: "inline-flex", alignItems: "center", gap: 6,
-          padding: "5px 12px", marginBottom: 14,
-          background: `${ACCENT}10`, border: `1px solid ${ACCENT}30`, borderRadius: 20,
-          fontSize: 12, fontWeight: 600, color: ACCENT, fontFamily: mono,
-        }}>
-          <BadgeCheck style={{ width: 14, height: 14 }} />
-          Wallet Verified: {wallet.truncated}
-        </div>
-      )}
-      <div style={{
-        background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12,
-        padding: 28, marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <BarChart3 style={{ width: 20, height: 20, color: ACCENT }} />
-            <span style={{ fontSize: 16, fontWeight: 600, color: "#0f172a", fontFamily: sans }}>Request Credits</span>
-          </div>
-          <span style={{ fontSize: 13, color: "#64748b", fontFamily: sans }}>Resets monthly</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 12 }}>
-          <span style={{ fontSize: 32, fontWeight: 700, color: "#0f172a", fontFamily: sans }}>{usedScans}</span>
-          <span style={{ fontSize: 16, color: "#94a3b8", fontFamily: sans }}>/ {totalScans} scans used</span>
-        </div>
-        <div style={{
-          width: "100%", height: 12, background: "#f1f5f9", borderRadius: 6, overflow: "hidden", marginBottom: 12,
-        }}>
-          <div
-            data-testid="progress-usage"
-            style={{
-              width: `${usagePercent}%`, height: "100%",
-              background: `linear-gradient(90deg, ${ACCENT}, #0ea5e9)`,
-              borderRadius: 6, transition: "width 0.5s ease",
-            }}
-          />
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 13, color: "#64748b", fontFamily: sans }}>
-            Free Tier: {usedScans}/{totalScans} scans used
-          </span>
-          <span style={{
-            fontSize: 11, fontWeight: 600, color: ACCENT, fontFamily: mono,
-            background: "#f0f9ff", padding: "4px 10px", borderRadius: 4,
-          }}>
-            {totalScans - usedScans} remaining
-          </span>
-        </div>
-      </div>
+      <SubTitle id="x402-payment-flow">x402 Payment Flow</SubTitle>
+      <Para>The full round-trip looks like this:</Para>
+      <CopyBlock code={`# Step 1 — Call the endpoint. You will receive HTTP 402.
+curl -i "https://apolagent.online/api/x402/detective/analyze?address=0xC1ce66BD83e1EecbE4059346CA166dC14Af93b07&chain=base"
 
-      <SubTitle id="premium-access">Premium Access</SubTitle>
+# HTTP/1.1 402 Payment Required
+# PAYMENT-REQUIRED: eyJ4NDAyVmVyc2lvbiI6MiwiZXJyb3IiOi...  (base64-encoded JSON)
+#
+# Step 2 — Decode the PAYMENT-REQUIRED header, sign the ERC-3009 authorization
+#           for 0.50 USDC (500000 micro-USDC) on Base, base64-encode the result.
+#
+# Step 3 — Retry with the PAYMENT-SIGNATURE header.
+curl "https://apolagent.online/api/x402/detective/analyze?address=0xC1ce66BD83e1EecbE4059346CA166dC14Af93b07&chain=base" \\
+  -H "PAYMENT-SIGNATURE: <your-base64-encoded-signed-authorization>"
+# → HTTP 200 — JSON scan result`} label="Manual flow (curl)" />
+      <Callout type="info">If you use the x402-fetch SDK, the entire 3-step flow is automatic. Wrap your fetch calls with the x402 client and point it at a funded Base wallet — it handles the 402 detection, signing, and retry for you.</Callout>
+
+      <SubTitle id="code-examples">Code Examples</SubTitle>
+      <CopyBlock code={`import { createX402Client } from "x402-fetch";
+import { privateKeyToAccount } from "viem/accounts";
+
+const account = privateKeyToAccount(process.env.PRIVATE_KEY);
+const x402Fetch = createX402Client({ account });
+
+const address = "0xC1ce66BD83e1EecbE4059346CA166dC14Af93b07";
+const res = await x402Fetch(
+  \`https://apolagent.online/api/x402/detective/analyze?address=\${address}&chain=base\`
+);
+
+const scan = await res.json();
+
+if (scan.riskScore >= 70) {
+  console.warn("HIGH RISK:", scan.verdict, scan.flags);
+} else {
+  console.log("Low risk — score:", scan.riskScore);
+}`} label="Node.js — x402-fetch SDK (recommended)" />
+      <CopyBlock code={`import requests, base64, json
+from eth_account import Account
+from eth_account.messages import encode_defunct
+
+# Step 1: get payment requirements
+url = "https://apolagent.online/api/x402/detective/analyze"
+params = {"address": "0xC1ce66BD83e1EecbE4059346CA166dC14Af93b07", "chain": "base"}
+r = requests.get(url, params=params)
+assert r.status_code == 402
+
+requirements = json.loads(base64.b64decode(r.headers["PAYMENT-REQUIRED"]))
+pay = requirements["accepts"][0]  # scheme, network, payTo, asset, maxAmountRequired
+
+# Step 2: sign ERC-3009 transferWithAuthorization for 0.50 USDC
+# (use web3.py or a compatible ERC-3009 signing library)
+signed_payload = sign_erc3009(pay, private_key=YOUR_PRIVATE_KEY)  # your impl
+sig_header = base64.b64encode(json.dumps(signed_payload).encode()).decode()
+
+# Step 3: retry with payment
+result = requests.get(url, params=params, headers={"PAYMENT-SIGNATURE": sig_header})
+scan = result.json()
+print(f"Risk score: {scan['riskScore']} — {scan['verdict']}")`} label="Python — manual x402 V2 flow" />
+
+      <SubTitle id="premium-access">Premium Access — Coming with $APOL</SubTitle>
       <div style={{
         background: "linear-gradient(135deg, #0c1220 0%, #1a1d2e 100%)",
         border: "1px solid #2a2d45", borderRadius: 12,
         padding: 32, position: "relative", overflow: "hidden",
       }}>
-        {showConfetti && <ConfettiEffect />}
         <div style={{
           position: "absolute", top: -40, right: -40, width: 160, height: 160,
           background: `radial-gradient(circle, ${ACCENT}15 0%, transparent 70%)`,
@@ -631,235 +542,29 @@ function ApiDashboard() {
               <Lock style={{ width: 22, height: 22, color: ACCENT }} />
             </div>
             <div>
-              <span style={{
-                fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
-                color: ACCENT, fontFamily: mono,
-              }}>Premium</span>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: ACCENT, fontFamily: mono }}>Coming Soon</span>
               <p style={{ fontSize: 18, fontWeight: 700, color: "#fff", fontFamily: sans, margin: 0 }}>
-                Unlock Unlimited Forensic API Access
+                $APOL Token-Gated Premium Tier
               </p>
             </div>
           </div>
-          <div style={{ marginBottom: 20 }}>
-            <ul style={{ fontSize: 14, lineHeight: 2, color: "#94a3b8", fontFamily: sans, paddingLeft: 20, margin: 0 }}>
-              <li>Unlimited scan requests (no monthly cap)</li>
-              <li>Priority queue processing</li>
-              <li>Deep Dive forensic dossiers via API</li>
-              <li>Webhook notifications for monitored contracts</li>
-              <li>Batch scanning (up to 50 addresses per request)</li>
-            </ul>
+          <p style={{ fontSize: 15, lineHeight: 1.7, color: "#94a3b8", fontFamily: sans, margin: "0 0 4px" }}>Once the $APOL token launches on Base, holders of 100,000+ $APOL will unlock a premium API tier with enhanced capabilities. The current x402 pay-per-scan lane is the production access model in the meantime.</p>
+          <ul style={{ fontSize: 14, lineHeight: 2, color: "#94a3b8", fontFamily: sans, paddingLeft: 20, margin: "12px 0 0" }}>
+            <li>Higher rate limits (300 req/min vs 15 req/min)</li>
+            <li>Batch scanning — up to 50 addresses per request</li>
+            <li>Webhook notifications for monitored contracts</li>
+            <li>Extended forensic fields: cluster_id, creator_provenance, whale_map</li>
+            <li>Priority processing queue</li>
+          </ul>
+          <div style={{
+            marginTop: 20, padding: "12px 16px",
+            background: "rgba(255,255,255,0.04)", border: "1px solid #2a2d45", borderRadius: 8,
+            fontSize: 13, color: "#64748b", fontFamily: sans,
+          }}>
+            Token balance verification will be performed on-chain via the Base network at request time. No off-chain trust required.
           </div>
-          {premiumClaimed ? (
-            <>
-              <div style={{
-                width: "100%", padding: "14px 24px",
-                background: `linear-gradient(135deg, ${ACCENT}20, #0ea5e920)`,
-                border: `1px solid ${ACCENT}50`, borderRadius: 8,
-                fontSize: 15, fontWeight: 700, color: ACCENT, fontFamily: sans,
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              }}>
-                <BadgeCheck style={{ width: 18, height: 18 }} />
-                Premium Active
-              </div>
-              <div style={{
-                marginTop: 16, background: "#111827", border: "1px solid #1e293b", borderRadius: 8,
-                padding: 16,
-              }}>
-                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: ACCENT, fontFamily: mono, margin: "0 0 8px" }}>Premium API Key</p>
-                <code style={{
-                  display: "block", fontSize: 13, fontFamily: mono, color: "#e2e8f0",
-                  background: "#0a0e17", padding: "10px 14px", borderRadius: 6, wordBreak: "break-all",
-                }}>{premiumKey}</code>
-              </div>
-            </>
-          ) : !isConnected ? (
-            <>
-              <button
-                data-testid="button-upgrade-premium"
-                onClick={() => setShowPopup(true)}
-                style={{
-                  width: "100%", padding: "14px 24px",
-                  background: `linear-gradient(135deg, ${ACCENT}, #0ea5e9)`,
-                  border: "none", borderRadius: 8, cursor: "pointer",
-                  fontSize: 15, fontWeight: 700, color: "#fff", fontFamily: sans,
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  boxShadow: `0 4px 16px ${ACCENT}40`,
-                }}
-              >
-                <Lock style={{ width: 16, height: 16 }} />
-                Hold 100,000 $APOL to Upgrade
-              </button>
-              <p style={{ fontSize: 11, color: "#4a5568", textAlign: "center", fontFamily: sans, margin: "12px 0 0" }}>
-                Token balance is verified on-chain via the Base network
-              </p>
-            </>
-          ) : balanceLoading ? (
-            <div style={{
-              width: "100%", padding: "14px 24px",
-              background: "#1e293b", borderRadius: 8,
-              fontSize: 14, fontWeight: 600, color: "#94a3b8", fontFamily: sans,
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            }}>
-              <RefreshCw style={{ width: 16, height: 16, animation: "spin 1s linear infinite" }} />
-              Checking $APOL balance...
-              <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-            </div>
-          ) : hasPremium ? (
-            <>
-              <button
-                data-testid="button-claim-premium"
-                onClick={handleClaimPremium}
-                style={{
-                  width: "100%", padding: "14px 24px",
-                  background: `linear-gradient(135deg, ${ACCENT}, #0ea5e9)`,
-                  border: "none", borderRadius: 8, cursor: "pointer",
-                  fontSize: 15, fontWeight: 700, color: "#fff", fontFamily: sans,
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  boxShadow: `0 4px 16px ${ACCENT}40, 0 0 30px ${ACCENT}25`,
-                  animation: "premium-glow 2s ease-in-out infinite",
-                }}
-              >
-                <Sparkles style={{ width: 18, height: 18 }} />
-                Claim Premium API Key
-              </button>
-              <style>{`@keyframes premium-glow {
-                0%, 100% { box-shadow: 0 4px 16px ${ACCENT}40, 0 0 20px ${ACCENT}15; }
-                50% { box-shadow: 0 4px 24px ${ACCENT}60, 0 0 40px ${ACCENT}30; }
-              }`}</style>
-              <p style={{ fontSize: 11, color: "#4ade80", textAlign: "center", fontFamily: sans, margin: "12px 0 0" }}>
-                Balance verified: {balance?.toLocaleString()} $APOL
-              </p>
-            </>
-          ) : (
-            <>
-              <a
-                href={UNISWAP_BUY_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                data-testid="button-buy-apol-uniswap"
-                style={{
-                  width: "100%", padding: "14px 24px",
-                  background: "linear-gradient(135deg, #334155, #1e293b)",
-                  border: "1px solid #475569", borderRadius: 8, cursor: "pointer",
-                  fontSize: 15, fontWeight: 700, color: "#f59e0b", fontFamily: sans,
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  textDecoration: "none", boxSizing: "border-box",
-                }}
-              >
-                <ExternalLink style={{ width: 16, height: 16 }} />
-                Insufficient $APOL for Premium
-              </a>
-              <p style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", fontFamily: sans, margin: "12px 0 0" }}>
-                Your balance: {balance?.toLocaleString() ?? "0"} $APOL — Need {APOL_PREMIUM_THRESHOLD.toLocaleString()}+ to unlock Premium
-              </p>
-            </>
-          )}
-
-          {showPopup && (
-            <div style={{
-              position: "fixed", inset: 0, zIndex: 9999,
-              background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }} onClick={() => setShowPopup(false)}>
-              <div onClick={e => e.stopPropagation()} style={{
-                background: "#fff", borderRadius: 16, padding: 32, maxWidth: 400, width: "90%",
-                boxShadow: "0 20px 60px rgba(0,0,0,0.3)", textAlign: "center",
-              }}>
-                <div style={{
-                  width: 56, height: 56, borderRadius: "50%", margin: "0 auto 16px",
-                  background: `${ACCENT}15`, border: `2px solid ${ACCENT}30`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  <Lock style={{ width: 28, height: 28, color: ACCENT }} />
-                </div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", fontFamily: sans, margin: "0 0 8px" }}>Wallet Not Connected</h3>
-                <p style={{ fontSize: 14, lineHeight: 1.6, color: "#475569", fontFamily: sans, margin: "0 0 24px" }}>
-                  Please connect your wallet in the header to verify your $APOL balance.
-                </p>
-                <button
-                  data-testid="button-popup-close"
-                  onClick={() => setShowPopup(false)}
-                  style={{
-                    padding: "10px 24px", background: `linear-gradient(135deg, ${ACCENT}, #0ea5e9)`,
-                    border: "none", borderRadius: 8, cursor: "pointer",
-                    fontSize: 14, fontWeight: 600, color: "#fff", fontFamily: sans,
-                  }}
-                >
-                  Got it
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
-
-      <div style={{ margin: "48px 0 0", padding: "40px 0 0", borderTop: "1px solid #e5e7eb" }}>
-        <h2 style={{ fontSize: 24, fontWeight: 700, color: "#0f172a", fontFamily: sans, margin: "0 0 8px" }}>Endpoints & Integration</h2>
-        <Para>Technical reference for integrating APOL forensic scanning into your applications.</Para>
-      </div>
-
-      <SubTitle id="authentication-header">Authentication Header</SubTitle>
-      <Para>All authenticated requests must include your API key in the request header. Pass the key using the X-APOL-AUTH header on every request:</Para>
-      <CopyBlock code="X-APOL-AUTH: YOUR_API_KEY" label="Header" />
-      <Callout type="info">Replace YOUR_API_KEY with the key generated from the dashboard above. Keys are prefixed with apol_sk_live_ for production access.</Callout>
-
-      <SubTitle id="scan-endpoint">Scan Endpoint</SubTitle>
-      <Para>The primary forensic endpoint accepts a contract address and returns a full risk assessment with composite scoring, individual signals, and a final verdict.</Para>
-      <div style={{ marginBottom: 8 }}>
-        <span style={{
-          display: "inline-block", fontSize: 11, fontWeight: 700, fontFamily: mono,
-          color: "#16a34a", background: "#f0fdf4", border: "1px solid #bbf7d0",
-          padding: "2px 10px", borderRadius: 4, marginBottom: 8,
-        }}>GET</span>
-        <code style={{ fontSize: 14, fontFamily: mono, color: ACCENT, marginLeft: 8 }}>/v1/scan</code>
-      </div>
-      <CopyBlock code="curl https://api.apolagent.io/v1/scan?address=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \\\n  -H &quot;X-APOL-AUTH: apol_sk_live_7f3a9b2e1d4c...&quot;" label="Request" />
-      <CopyBlock code={`{
-  "status": "success",
-  "resilience_score": 88,
-  "verdict": "Low Risk",
-  "flags": ["Contract Verified", "Liquidity Locked"]
-}`} label="Response (200 OK)" />
-      <Para>The response includes the composite resilience_score (0 to 100), a human-readable verdict string, and an array of detected flags. Premium holders receive additional fields including cluster_id and creator_provenance.</Para>
-
-      <SubTitle id="integration-guide">Integration Guide</SubTitle>
-      <Para>To integrate APOL into your own dApp or Trading Bot, simply call our REST API. Premium holders (50k+ $APOL) receive priority bandwidth and deeper forensic metadata, including Cluster-ID and Creator-Provenance data.</Para>
-      <CopyBlock code={`// Example: Node.js Integration
-const response = await fetch(
-  "https://api.apolagent.io/v1/scan?address=" + contractAddress,
-  {
-    headers: {
-      "X-APOL-AUTH": process.env.APOL_API_KEY,
-      "Content-Type": "application/json"
-    }
-  }
-);
-
-const data = await response.json();
-
-if (data.resilience_score < 40) {
-  console.warn("CRITICAL THREAT detected:", data.verdict);
-  // Block interaction or alert user
-}
-
-if (data.resilience_score >= 90) {
-  console.log("Project is APOL Verified:", data.flags);
-  // Safe to proceed
-}`} label="Node.js" />
-      <CopyBlock code={`# Example: Python Integration
-import requests
-
-headers = {"X-APOL-AUTH": "apol_sk_live_YOUR_KEY"}
-url = f"https://api.apolagent.io/v1/scan?address={contract_address}"
-
-response = requests.get(url, headers=headers)
-data = response.json()
-
-if data["resilience_score"] < 40:
-    print(f"THREAT: {data['verdict']}")
-elif data["resilience_score"] >= 90:
-    print(f"VERIFIED: {data['flags']}")`} label="Python" />
-      <Callout type="success">Premium API responses include additional forensic metadata: cluster_id (linked wallet group identifier), creator_provenance (funding source chain), and whale_map (top 10 holder breakdown with wallet ages).</Callout>
     </>
   );
 }
