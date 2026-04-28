@@ -20,7 +20,7 @@ const navSections: { id: SectionId; label: string; icon: typeof BookOpen }[] = [
 
 const sectionOutlines: Record<SectionId, string[]> = {
   "getting-started": ["Add the Bot", "Quick Start", "Running Your First Scan", "Understanding Results"],
-  "bot-commands": ["Core Commands", "Forensic Commands", "Community Commands", "Command Reference Table"],
+  "bot-commands": ["Core Commands", "Subscription Commands", "Forensic Commands", "Community Commands", "Command Reference Table"],
   "forensic-verdicts": ["Verdict Overview", "Green Status", "Yellow Status", "Red Status", "Score Breakdown"],
   "security-standards": ["Heuristic Logic Scan", "On-Chain Analysis", "Behavioral Detection", "Economic Resilience"],
   "api": ["How It Works", "Live Endpoints", "Rate Limits", "Response Format"],
@@ -118,105 +118,106 @@ function GettingStarted() {
 }
 
 function BotCommands() {
+  const cmdStyle: React.CSSProperties = { fontFamily: mono, fontSize: 13, color: ACCENT, background: "#f0f9ff", padding: "2px 8px", borderRadius: 4 };
+  const thStyle: React.CSSProperties = { textAlign: "left", padding: "10px 14px", fontWeight: 600, color: "#0f172a", fontSize: 13 };
+  const tdStyle: React.CSSProperties = { padding: "10px 14px", color: "#475569" };
+  const rowStyle: React.CSSProperties = { borderBottom: "1px solid #f1f5f9" };
+
+  function CmdTable({ rows }: { rows: [string, string][] }) {
+    return (
+      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: sans, fontSize: 14, margin: "16px 0" }}>
+        <thead>
+          <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
+            <th style={thStyle}>Command</th>
+            <th style={thStyle}>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([cmd, desc], i) => (
+            <tr key={i} style={rowStyle}>
+              <td style={{ padding: "10px 14px" }}><code style={cmdStyle}>{cmd}</code></td>
+              <td style={tdStyle}>{desc}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
   return (
     <>
       <SectionTitle id="bot-commands">Bot Commands</SectionTitle>
-      <Para>Complete reference for all APOL Agent Telegram bot commands. Commands are organized by category for quick lookup.</Para>
+      <Para>Complete reference for all APOL Agent Telegram bot commands. Add the bot at <strong>@ApolAgentBot</strong> and send any command to get started.</Para>
 
       <SubTitle id="core-commands">Core Commands</SubTitle>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: sans, fontSize: 14, margin: "16px 0" }}>
-        <thead>
-          <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
-            <th style={{ textAlign: "left", padding: "10px 14px", fontWeight: 600, color: "#0f172a", fontSize: 13 }}>Command</th>
-            <th style={{ textAlign: "left", padding: "10px 14px", fontWeight: 600, color: "#0f172a", fontSize: 13 }}>Description</th>
-          </tr>
-        </thead>
-        <tbody>
-          {([
-            ["/help", "Display the full list of available commands"],
-          ]).map(([cmd, desc], i) => (
-            <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
-              <td style={{ padding: "10px 14px" }}><code style={{ fontFamily: mono, fontSize: 13, color: ACCENT, background: "#f0f9ff", padding: "2px 8px", borderRadius: 4 }}>{cmd}</code></td>
-              <td style={{ padding: "10px 14px", color: "#475569" }}>{desc}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <CmdTable rows={[
+        ["/start", "Welcome message — shows APOL Agent status and the full command list"],
+        ["/help", "Display all available commands with a short description of each"],
+        ["/status", "Check your current subscription tier, expiry date, and wallet linked to your account"],
+      ]} />
+
+      <SubTitle id="subscription-commands">Subscription Commands</SubTitle>
+      <Para>APOL scans are free at the basic tier. A 30-day deep-scan subscription costs <strong>0.02 ETH on Base</strong> paid to the APOL payment address. The verification flow uses a cryptographic challenge to prove you control the paying wallet — this prevents replay attacks and cross-account theft.</Para>
+      <CmdTable rows={[
+        ["/subscribe", "Show subscription info, pricing, and the step-by-step payment instructions"],
+        ["/challenge <wallet>", "Step 1 — Issue a wallet challenge. Provide the 0x wallet address you paid from. The bot returns a unique message for you to sign with that wallet (valid for 10 minutes)"],
+        ["/verify <txhash> <signature>", "Step 2 — Activate your subscription. Provide the transaction hash of your 0.02 ETH payment and the EIP-191 signature from Step 1. The bot verifies on-chain and unlocks deep scans for 30 days"],
+      ]} />
+      <Callout type="info">Each transaction hash can only activate one Telegram account once. To renew after expiry, send a new payment and repeat the /challenge + /verify flow with the new hash.</Callout>
+      <CopyBlock code="/challenge 0xYourWalletAddress" label="Step 1 — Request wallet challenge" />
+      <CopyBlock code="/verify 0xYourTxHash 0xYourSignature" label="Step 2 — Activate subscription" />
+      <CopyBlock code="/status" label="Confirm subscription is active" />
 
       <SubTitle id="forensic-commands">Forensic Commands</SubTitle>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: sans, fontSize: 14, margin: "16px 0" }}>
-        <thead>
-          <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
-            <th style={{ textAlign: "left", padding: "10px 14px", fontWeight: 600, color: "#0f172a", fontSize: 13 }}>Command</th>
-            <th style={{ textAlign: "left", padding: "10px 14px", fontWeight: 600, color: "#0f172a", fontSize: 13 }}>Description</th>
-          </tr>
-        </thead>
-        <tbody>
-          {([
-            ["/scan <contract>", "Token security check"],
-            ["/scanx <username>", "X/Twitter social forensics"],
-            ["/scanagent <name or CA>", "AI agent audit"],
-            ["/checkwallet <address>", "Wallet investigation"],
-          ]).map(([cmd, desc], i) => (
-            <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
-              <td style={{ padding: "10px 14px" }}><code style={{ fontFamily: mono, fontSize: 13, color: ACCENT, background: "#f0f9ff", padding: "2px 8px", borderRadius: 4 }}>{cmd}</code></td>
-              <td style={{ padding: "10px 14px", color: "#475569" }}>{desc}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <CopyBlock code="/scan 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" label="Example: Token Security Check" />
-      <CopyBlock code="/scanx elonmusk" label="Example: X/Twitter Social Forensics" />
-      <CopyBlock code="/scanagent 0x1234567890abcdef1234567890abcdef12345678" label="Example: AI Agent Audit" />
-      <CopyBlock code="/checkwallet 0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18" label="Example: Wallet Investigation" />
+      <Para>Basic output is available to all users. Subscribers get the full forensic dossier including deployer trace, wallet funding source, treasury health, and detailed risk verdict.</Para>
+      <CmdTable rows={[
+        ["/scan <contract>", "Full token security check — honeypot simulation, tax analysis, holder distribution, deployer audit, and liquidity assessment"],
+        ["/scanx <username>", "X (Twitter) handle forensics — account age, follower/following ratio, linked contract addresses, and agent authenticity signals"],
+        ["/scanagent <name or CA>", "AI agent legitimacy audit (LARP detector) — on-chain execution evidence, autonomy scoring, narrative consistency, treasury health"],
+        ["/checkwallet <address>", "Wallet investigation — funding source trace, transaction history, balance, known cluster membership, and risk flags"],
+      ]} />
+      <CopyBlock code="/scan 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" label="Example: Token scan" />
+      <CopyBlock code="/scanx vitalikbuterin" label="Example: X handle forensics" />
+      <CopyBlock code="/scanagent 0x1234567890abcdef1234567890abcdef12345678" label="Example: AI agent audit" />
+      <CopyBlock code="/checkwallet 0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18" label="Example: Wallet investigation" />
 
       <SubTitle id="community-commands">Community Commands</SubTitle>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: sans, fontSize: 14, margin: "16px 0" }}>
-        <thead>
-          <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
-            <th style={{ textAlign: "left", padding: "10px 14px", fontWeight: 600, color: "#0f172a", fontSize: 13 }}>Command</th>
-            <th style={{ textAlign: "left", padding: "10px 14px", fontWeight: 600, color: "#0f172a", fontSize: 13 }}>Description</th>
-          </tr>
-        </thead>
-        <tbody>
-          {([
-            ["/report", "Submit scam evidence"],
-            ["/map", "Wall of Shame"],
-            ["/verified", "Certified projects"],
-          ]).map(([cmd, desc], i) => (
-            <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
-              <td style={{ padding: "10px 14px" }}><code style={{ fontFamily: mono, fontSize: 13, color: ACCENT, background: "#f0f9ff", padding: "2px 8px", borderRadius: 4 }}>{cmd}</code></td>
-              <td style={{ padding: "10px 14px", color: "#475569" }}>{desc}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <CmdTable rows={[
+        ["/report", "Submit evidence of a scam, rug pull, or LARP project to the APOL threat registry"],
+        ["/map", "Wall of Shame — view flagged addresses and reported threat actors"],
+        ["/verified", "List all APOL-certified projects that have passed the full verification standard"],
+      ]} />
 
       <SubTitle id="command-reference-table">Command Reference Table</SubTitle>
-      <Para>Quick reference of all commands with their access levels and fee requirements:</Para>
+      <Para>Full command list with access tier and cost at a glance:</Para>
       <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: sans, fontSize: 14, margin: "16px 0" }}>
         <thead>
           <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
-            <th style={{ textAlign: "left", padding: "10px 14px", fontWeight: 600, color: "#0f172a", fontSize: 13 }}>Command</th>
-            <th style={{ textAlign: "center", padding: "10px 14px", fontWeight: 600, color: "#0f172a", fontSize: 13 }}>Access</th>
-            <th style={{ textAlign: "center", padding: "10px 14px", fontWeight: 600, color: "#0f172a", fontSize: 13 }}>Fee</th>
+            <th style={thStyle}>Command</th>
+            <th style={{ ...thStyle, textAlign: "center" }}>Tier</th>
+            <th style={{ ...thStyle, textAlign: "center" }}>Cost</th>
           </tr>
         </thead>
         <tbody>
           {([
-            ["/scan", "Public", "Free"],
-            ["/scanx", "Public", "Free"],
-            ["/scanagent", "Public", "Free"],
-            ["/checkwallet", "Public", "Free"],
-            ["/report", "Public", "Free"],
-            ["/map", "Public", "Free"],
-            ["/verified", "Public", "Free"],
-            ["/help", "Public", "Free"],
-          ]).map(([cmd, access, fee], i) => (
-            <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
+            ["/start",                    "Public",       "Free"],
+            ["/help",                     "Public",       "Free"],
+            ["/status",                   "Public",       "Free"],
+            ["/subscribe",                "Public",       "Free"],
+            ["/challenge <wallet>",       "Public",       "Free"],
+            ["/verify <txhash> <sig>",    "Public",       "Free — requires 0.02 ETH paid first"],
+            ["/scan",                     "Free / Paid",  "Free (basic) · 0.02 ETH/mo (deep)"],
+            ["/scanx",                    "Free / Paid",  "Free (basic) · 0.02 ETH/mo (deep)"],
+            ["/scanagent",                "Free / Paid",  "Free (basic) · 0.02 ETH/mo (deep)"],
+            ["/checkwallet",              "Free / Paid",  "Free (basic) · 0.02 ETH/mo (deep)"],
+            ["/report",                   "Public",       "Free"],
+            ["/map",                      "Public",       "Free"],
+            ["/verified",                 "Public",       "Free"],
+          ]).map(([cmd, tier, cost], i) => (
+            <tr key={i} style={rowStyle}>
               <td style={{ padding: "8px 14px" }}><code style={{ fontFamily: mono, fontSize: 13, color: ACCENT }}>{cmd}</code></td>
-              <td style={{ padding: "8px 14px", textAlign: "center", color: access === "Admin" ? "#dc2626" : "#475569", fontWeight: access === "Admin" ? 600 : 400 }}>{access}</td>
-              <td style={{ padding: "8px 14px", textAlign: "center", color: fee !== "Free" ? "#d97706" : "#475569" }}>{fee}</td>
+              <td style={{ padding: "8px 14px", textAlign: "center", color: "#475569" }}>{tier}</td>
+              <td style={{ padding: "8px 14px", textAlign: "center", color: cost.includes("0.02") ? "#d97706" : "#475569" }}>{cost}</td>
             </tr>
           ))}
         </tbody>
