@@ -644,7 +644,6 @@ function detectLpStatus(holders: { address: string; percent: number }[], platfor
     if (LOCKER_MAP[h.address]) return `${LOCKER_MAP[h.address]} Locked 🔒`;
   }
   if (platform) return `${platform} Managed ✅`;
-  if (!holdersComplete) return "Checking...";
   return "Unlocked ⚠️";
 }
 
@@ -760,8 +759,8 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
   const mcap = dexData.dexMcap > 0 ? dexData.dexMcap : (dexData.dexFdv > 0 ? dexData.dexFdv : calculatedMcap);
   const liquidity = dexData.liquidity;
 
-  const hasPool = sim.simulationSuccess || isManaged || !!platform;
-  const poolLabel = "Uniswap";
+  const hasPool = sim.simulationSuccess || isManaged || !!platform || dexData.priceUsd > 0 || dexData.liquidity > 0;
+  const poolLabel = dexData.poolVersion ? `Uniswap ${dexData.poolVersion.toUpperCase()}` : "Uniswap";
   const dexStatus = hasPool ? `${poolLabel} ✅` : "No Pool Found ⚠️";
 
   let contractOwner: string | null = null;

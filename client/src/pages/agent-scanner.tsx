@@ -1178,7 +1178,7 @@ export default function AgentScanner() {
                 data-testid="input-check-address"
               />
               <button
-                onClick={handleCheckAddress}
+                onClick={() => handleCheckAddress()}
                 disabled={isChecking}
                 style={{
                   background: G, color: "#000", border: "none", padding: "8px 20px",
@@ -1548,7 +1548,7 @@ export default function AgentScanner() {
                 data-testid="input-scan-x-handle"
               />
               <button
-                onClick={handleScanX}
+                onClick={() => handleScanX()}
                 disabled={isScanningX}
                 style={{
                   background: G, color: "#000", border: "none", padding: "8px 20px",
