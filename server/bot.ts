@@ -283,14 +283,14 @@ async function getDeployer(addr: string): Promise<string | null> {
 
 async function getHolderCount(addr: string): Promise<number> {
   try {
-    const data = await fetch(`${BLOCKSCOUT_BASE}/api/v2/tokens/${addr}/counters`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch(`${BLOCKSCOUT_BASE}/api/v2/tokens/${addr}/counters`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
     return parseInt(data?.token_holders_count || "0", 10);
   } catch { return 0; }
 }
 
 async function getTopHolders(addr: string): Promise<{ address: string; percent: number }[]> {
   try {
-    const data = await fetch(`${BLOCKSCOUT_BASE}/api/v2/tokens/${addr}/holders?limit=10`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch(`${BLOCKSCOUT_BASE}/api/v2/tokens/${addr}/holders?limit=10`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
     if (!data?.items) return [];
     return data.items.map((h: any) => ({ address: (h.address?.hash || "").toLowerCase(), percent: parseFloat(h.percentage || "0") }));
   } catch { return []; }
@@ -300,14 +300,22 @@ async function getEthUsdPrice(): Promise<number> {
   if (ETH_PRICE_CACHE && Date.now() - ETH_PRICE_CACHE.timestamp < ETH_CACHE_TTL) {
     return ETH_PRICE_CACHE.price;
   }
-  try {
-    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${WETH}`, { signal: AbortSignal.timeout(6000) }).then((r) => r.ok ? r.json() as any : null);
-    const price = parseFloat(data?.pairs?.[0]?.priceUsd || "0") || 0;
-    if (price > 0) ETH_PRICE_CACHE = { price, timestamp: Date.now() };
-    return price || ETH_PRICE_CACHE?.price || 0;
-  } catch {
-    return ETH_PRICE_CACHE?.price || 0;
-  }
+  const tryDexScreener = async (): Promise<number> => {
+    try {
+      const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${WETH}`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
+      return parseFloat(data?.pairs?.[0]?.priceUsd || "0") || 0;
+    } catch { return 0; }
+  };
+  const tryCoingecko = async (): Promise<number> => {
+    try {
+      const data = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
+      return parseFloat(data?.ethereum?.usd || "0") || 0;
+    } catch { return 0; }
+  };
+  const [dxResult, cgResult] = await Promise.all([tryDexScreener(), tryCoingecko()]);
+  const price = dxResult > 0 ? dxResult : cgResult;
+  if (price > 0) ETH_PRICE_CACHE = { price, timestamp: Date.now() };
+  return price || ETH_PRICE_CACHE?.price || 0;
 }
 
 async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liquidity: number; poolVersion: string | null; dexMcap: number; dexFdv: number }> {
@@ -317,7 +325,7 @@ async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liq
     return cached.data;
   }
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(6000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(8000) }).then((r) => r.ok ? r.json() as any : null);
     const pairs = data?.pairs || [];
     const pair = pairs.length > 1
       ? pairs.reduce((best: any, p: any) => (parseFloat(p?.liquidity?.usd || "0") > parseFloat(best?.liquidity?.usd || "0") ? p : best), pairs[0])
@@ -684,10 +692,10 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
   const platformFromDeployer = detectPlatform(address, deployer, []);
 
   let [holderCount, topHolders, ethUsd, dexData, creationPlatform, deployerChainPlatform, proxyImplPlatform] = await Promise.all([
-    softTimeout(getHolderCount(address), 7000, 0),
-    softTimeout(getTopHolders(address), 7000, []),
-    softTimeout(getEthUsdPrice(), 7000, 0),
-    softTimeout(getDexScreenerData(address), 7000, { priceUsd: 0, liquidity: 0, poolVersion: null, dexMcap: 0, dexFdv: 0 }),
+    softTimeout(getHolderCount(address), 8000, 0),
+    softTimeout(getTopHolders(address), 8000, []),
+    softTimeout(getEthUsdPrice(), 8000, 0),
+    softTimeout(getDexScreenerData(address), 10000, { priceUsd: 0, liquidity: 0, poolVersion: null, dexMcap: 0, dexFdv: 0 }),
     !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
     !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
     !platformFromDeployer ? softTimeout(detectPlatformFromProxyImpl(address), 5000, null) : Promise.resolve(null),
@@ -1170,11 +1178,11 @@ async function runAgentScan(address: string, searchedName: string | null, paid: 
   const platformFromDeployer = detectPlatform(address, deployer, []);
 
   let [holderCount, topHolders, ethUsd, dexData, dexSocials, creationPlatform, deployerChainPlatform, proxyImplPlatform] = await Promise.all([
-    softTimeout(getHolderCount(address), 7000, 0),
-    softTimeout(getTopHolders(address), 7000, []),
-    softTimeout(getEthUsdPrice(), 7000, 0),
-    softTimeout(getDexScreenerData(address), 7000, { priceUsd: 0, liquidity: 0, poolVersion: null, dexMcap: 0, dexFdv: 0 }),
-    softTimeout(getDexScreenerSocials(address), 7000, { twitter: null, website: null, telegram: null, description: null }),
+    softTimeout(getHolderCount(address), 8000, 0),
+    softTimeout(getTopHolders(address), 8000, []),
+    softTimeout(getEthUsdPrice(), 8000, 0),
+    softTimeout(getDexScreenerData(address), 10000, { priceUsd: 0, liquidity: 0, poolVersion: null, dexMcap: 0, dexFdv: 0 }),
+    softTimeout(getDexScreenerSocials(address), 8000, { twitter: null, website: null, telegram: null, description: null }),
     !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
     !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
     !platformFromDeployer ? softTimeout(detectPlatformFromProxyImpl(address), 5000, null) : Promise.resolve(null),
@@ -1488,7 +1496,7 @@ async function cachedRunScan(address: string, paid: boolean = false): Promise<st
     log(`Waiting on in-flight scan for ${address.slice(0, 10)}... paid=${paid}`, "bot");
     return inflight;
   }
-  const promise = softTimeout(runScan(address, paid), 25000, null).then((result) => {
+  const promise = softTimeout(runScan(address, paid), 45000, null).then((result) => {
     if (result) SCAN_CACHE.set(key, { result, timestamp: Date.now() });
     SCAN_IN_FLIGHT.delete(key);
     return result;
