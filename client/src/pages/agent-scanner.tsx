@@ -70,9 +70,9 @@ type DetectiveResult = {
   taxOverride?: string | null;
   isHoneypot?: boolean;
   isMintable?: boolean;
-  isOpenSource?: boolean;
+  isOpenSource?: boolean | null;
   isInDex?: boolean;
-  isProxy?: boolean;
+  isProxy?: boolean | null;
   hasBlacklist?: boolean;
   canPause?: boolean;
   protocolSecured?: boolean;
@@ -81,12 +81,28 @@ type DetectiveResult = {
   liveStatus?: string | null;
   lpStatus?: string | null;
   holderCountLabel?: string;
+  holderCount?: number;
   platformName?: string | null;
+  platform?: string | null;
   isClone?: boolean;
   currentBalance?: string;
   activity?: { txCount: number; level: string; inflow: string; outflow: string };
   genesis?: { creationTx: string | null; creator: string | null };
   funding?: { fundingSource: string | null; fundingTxHash: string | null; fundingValue: string };
+  // Forensic enrichment
+  priceUsd?: number;
+  mcap?: number;
+  liquidity?: number;
+  volume24h?: number;
+  tokenAgeDays?: number | null;
+  deployerHolding?: number | null;
+  creatorDumped?: boolean;
+  topHoldersList?: { address: string; percent: number }[];
+  poolVersion?: string | null;
+  deployer?: string | null;
+  scanCount?: number;
+  isFakeApol?: boolean;
+  fakeApolWarning?: string | null;
 };
 
 type TestResult = { scored: boolean; score: number; maxScore: number; label: string; detail: string; timingPattern?: string[]; isContract?: boolean };
@@ -1234,7 +1250,82 @@ export default function AgentScanner() {
                       </div>
                     )}
 
-                    {checkResult.greenBadge && !checkResult.isHighRisk && !checkResult.redFlags?.some(f => f.toLowerCase().includes("honeypot")) ? (
+                    {/* Token Intelligence Panel */}
+                    {(checkResult.priceUsd != null || checkResult.mcap != null || checkResult.liquidity != null || checkResult.volume24h != null || checkResult.tokenAgeDays != null || checkResult.deployerHolding != null || (checkResult.topHoldersList && checkResult.topHoldersList.length > 0)) && (() => {
+                      const fmtUsd = (v: number) => v >= 1e9 ? `$${(v/1e9).toFixed(2)}B` : v >= 1e6 ? `$${(v/1e6).toFixed(2)}M` : v >= 1e3 ? `$${(v/1e3).toFixed(1)}K` : `$${v.toFixed(0)}`;
+                      const fmtPrice = (v: number) => {
+                        if (v === 0) return "$0";
+                        if (v >= 1) return `$${v.toFixed(4)}`;
+                        if (v >= 0.01) return `$${v.toFixed(6)}`;
+                        const s = v.toFixed(20);
+                        const m = s.match(/^0\.(0*[1-9]\d{0,3})/);
+                        return m ? `$0.${m[1]}` : `$${v.toExponential(3)}`;
+                      };
+                      const stats = [
+                        checkResult.priceUsd != null && checkResult.priceUsd > 0 ? { label: "Price", value: fmtPrice(checkResult.priceUsd) } : null,
+                        checkResult.mcap != null && checkResult.mcap > 0 ? { label: "Market Cap", value: fmtUsd(checkResult.mcap) } : null,
+                        checkResult.liquidity != null && checkResult.liquidity > 0 ? { label: "Liquidity", value: fmtUsd(checkResult.liquidity) } : null,
+                        checkResult.volume24h != null && checkResult.volume24h > 0 ? { label: "24h Volume", value: fmtUsd(checkResult.volume24h) } : null,
+                        checkResult.holderCount != null && checkResult.holderCount > 0 ? { label: "Holders", value: checkResult.holderCount.toLocaleString() } : null,
+                        checkResult.tokenAgeDays != null ? { label: "Age", value: checkResult.tokenAgeDays === 0 ? "TODAY" : checkResult.tokenAgeDays === 1 ? "1 day" : `${checkResult.tokenAgeDays} days` } : null,
+                      ].filter(Boolean) as { label: string; value: string }[];
+                      return (
+                        <div data-testid="div-token-intelligence" style={{ border: "1px solid rgba(0,255,0,0.2)", background: "rgba(0,0,0,0.3)", padding: "0" }}>
+                          <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(0,255,0,0.12)", display: "flex", alignItems: "center", gap: "8px" }}>
+                            <TrendingUp size={13} color={G} />
+                            <span style={{ fontSize: "10px", fontWeight: 900, color: G, letterSpacing: "0.12em", textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace" }}>TOKEN INTELLIGENCE</span>
+                            {(checkResult.poolVersion || checkResult.platform) && (
+                              <span style={{ marginLeft: "auto", fontSize: "9px", fontWeight: 700, padding: "2px 8px", border: `1px solid rgba(0,255,0,0.3)`, color: G, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.06em" }}>
+                                {checkResult.poolVersion ? `Uniswap ${checkResult.poolVersion}` : checkResult.platform}
+                              </span>
+                            )}
+                          </div>
+                          {stats.length > 0 && (
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: "1px", background: "rgba(0,255,0,0.08)" }}>
+                              {stats.map((s, i) => (
+                                <div key={i} data-testid={`div-token-stat-${s.label.replace(/\s/g,'-').toLowerCase()}`} style={{ padding: "10px 14px", background: "rgba(0,0,0,0.6)" }}>
+                                  <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.4)", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace", marginBottom: "3px" }}>{s.label}</div>
+                                  <div style={{ fontSize: "13px", fontWeight: 900, color: "#fff", fontFamily: "'JetBrains Mono', monospace" }}>{s.value}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {(checkResult.deployerHolding != null || checkResult.creatorDumped != null) && (
+                            <div style={{ padding: "10px 14px", borderTop: "1px solid rgba(0,255,0,0.08)", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                              <span style={{ fontSize: "9px", fontWeight: 700, color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace" }}>Creator Position</span>
+                              {checkResult.creatorDumped ? (
+                                <span data-testid="badge-creator-dumped" style={{ fontSize: "10px", fontWeight: 900, padding: "2px 10px", background: "rgba(255,68,68,0.1)", border: "1px solid rgba(255,68,68,0.4)", color: "#f87171", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.06em" }}>SOLD — 0% HELD ⚠</span>
+                              ) : (
+                                <span data-testid="badge-creator-holding" style={{ fontSize: "10px", fontWeight: 900, padding: "2px 10px", background: "rgba(0,255,0,0.06)", border: `1px solid rgba(0,255,0,0.3)`, color: G, fontFamily: "'JetBrains Mono', monospace" }}>{(checkResult.deployerHolding ?? 0).toFixed(2)}% HELD</span>
+                              )}
+                              {checkResult.deployer && (
+                                <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace", marginLeft: "auto" }}>
+                                  {checkResult.deployer.slice(0, 8)}…{checkResult.deployer.slice(-4)}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {checkResult.topHoldersList && checkResult.topHoldersList.length > 0 && (
+                            <div style={{ borderTop: "1px solid rgba(0,255,0,0.08)" }}>
+                              <div style={{ padding: "8px 14px 4px", fontSize: "9px", fontWeight: 700, color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace" }}>Top Holders</div>
+                              {checkResult.topHoldersList.map((h, i) => (
+                                <div key={i} data-testid={`div-top-holder-${i}`} style={{ padding: "5px 14px", display: "flex", alignItems: "center", gap: "10px", borderTop: i > 0 ? "1px solid rgba(255,255,255,0.04)" : undefined }}>
+                                  <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace", width: "14px" }}>#{i + 1}</span>
+                                  <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.55)", fontFamily: "'JetBrains Mono', monospace", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {h.address.slice(0, 10)}…{h.address.slice(-4)}
+                                  </span>
+                                  <span style={{ fontSize: "11px", fontWeight: 900, color: h.percent > 20 ? "#f87171" : h.percent > 10 ? "#facc15" : G, fontFamily: "'JetBrains Mono', monospace" }}>
+                                    {h.percent.toFixed(2)}%
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {checkResult.greenBadge && !checkResult.isHighRisk && (!checkResult.redFlags || checkResult.redFlags.length === 0) ? (
                       <div data-testid="div-green-badge" style={{ border: `2px solid ${G}`, background: "rgba(0,255,0,0.06)", padding: "20px", textAlign: "center" }}>
                         <div style={{ fontSize: "14px", fontWeight: 900, color: G, letterSpacing: "0.16em", textTransform: "uppercase" }}>APOL AGENT GREEN BADGE</div>
                         <div style={{ fontSize: "11px", color: "rgba(0,255,0,0.7)", marginTop: "4px" }}>Status: Cleared. All checks passed.</div>
@@ -1336,17 +1427,18 @@ export default function AgentScanner() {
 
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "6px" }}>
                       {[
-                        { label: "Honeypot", value: checkResult.isHoneypot, bad: true },
-                        { label: "Mintable", value: checkResult.isMintable, bad: true },
-                        { label: "Open Source", value: checkResult.isOpenSource, bad: false },
-                        { label: "Proxy", value: checkResult.isProxy, bad: true },
-                        { label: "Blacklist", value: checkResult.hasBlacklist, bad: true },
-                        { label: "Pausable", value: checkResult.canPause, bad: true },
-                        { label: checkResult.taxOverride ? `Buy Tax: Protocol Managed (${checkResult.taxOverride})` : `Buy Tax ${checkResult.buyTax != null ? Number(checkResult.buyTax).toFixed(1) + "%" : ""}`, value: checkResult.taxOverride ? false : (Number(checkResult.buyTax) || 0) > 10, bad: true },
-                        { label: checkResult.taxOverride ? `Sell Tax: Protocol Managed (${checkResult.taxOverride})` : `Sell Tax ${checkResult.sellTax != null ? Number(checkResult.sellTax).toFixed(1) + "%" : ""}`, value: checkResult.taxOverride ? false : (Number(checkResult.sellTax) || 0) > 10, bad: true },
-                        { label: "On DEX", value: checkResult.isInDex, bad: false },
-                      ].map((item, i) => {
-                        const isWarning = item.bad ? item.value : !item.value;
+                        { label: "Honeypot", value: checkResult.isHoneypot ?? false, skip: false, bad: true },
+                        checkResult.isMintable != null ? { label: "Mintable", value: checkResult.isMintable, skip: false, bad: true } : null,
+                        checkResult.isOpenSource != null ? { label: "Open Source", value: checkResult.isOpenSource, skip: false, bad: false } : null,
+                        checkResult.isProxy != null ? { label: "Proxy Contract", value: checkResult.isProxy, skip: false, bad: true } : null,
+                        checkResult.hasBlacklist != null ? { label: "Blacklist", value: checkResult.hasBlacklist, skip: false, bad: true } : null,
+                        checkResult.canPause != null ? { label: "Pausable", value: checkResult.canPause, skip: false, bad: true } : null,
+                        { label: checkResult.taxOverride ? `Buy Tax: Protocol Managed (${checkResult.taxOverride})` : `Buy Tax ${checkResult.buyTax != null ? Number(checkResult.buyTax).toFixed(1) + "%" : "0%"}`, value: checkResult.taxOverride ? false : (Number(checkResult.buyTax) || 0) > 10, skip: false, bad: true },
+                        { label: checkResult.taxOverride ? `Sell Tax: Protocol Managed (${checkResult.taxOverride})` : `Sell Tax ${checkResult.sellTax != null ? Number(checkResult.sellTax).toFixed(1) + "%" : "0%"}`, value: checkResult.taxOverride ? false : (Number(checkResult.sellTax) || 0) > 10, skip: false, bad: true },
+                        { label: "On DEX", value: checkResult.isInDex ?? false, skip: false, bad: false },
+                      ].filter(Boolean).map((item, i) => {
+                        const itm = item as { label: string; value: boolean; bad: boolean };
+                        const isWarning = itm.bad ? itm.value : !itm.value;
                         return (
                           <div key={i} style={{
                             display: "flex", alignItems: "center", gap: "6px", padding: "6px 10px",
@@ -1356,7 +1448,7 @@ export default function AgentScanner() {
                             color: isWarning ? "#f87171" : G,
                           }} data-testid={`div-contract-flag-${i}`}>
                             <span>{isWarning ? "⚠" : "✓"}</span>
-                            <span>{item.label}</span>
+                            <span>{itm.label}</span>
                           </div>
                         );
                       })}
@@ -1366,17 +1458,24 @@ export default function AgentScanner() {
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
                         {checkResult.redFlags.map((flag, i) => (
                           <span key={i} style={{ fontSize: "10px", padding: "4px 10px", border: "1px solid rgba(255,68,68,0.4)", background: "rgba(255,68,68,0.06)", color: "#f87171", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }} data-testid={`div-red-flag-${i}`}>
-                            {flag}
+                            🚩 {flag}
                           </span>
                         ))}
                       </div>
                     )}
 
-                    <div data-testid="div-apol-summary" style={{ display: "flex", gap: "12px", padding: "14px", border: `1px solid rgba(0,255,0,0.2)`, background: "rgba(0,255,0,0.03)" }}>
-                      <div style={{ width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>🦍</div>
-                      <div>
-                        <div style={{ fontSize: "10px", fontWeight: 900, color: G, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "4px", fontFamily: "'JetBrains Mono', monospace" }}>APOL DETECTIVE</div>
-                        <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.7)", lineHeight: 1.6, fontStyle: "italic", fontFamily: "'JetBrains Mono', monospace" }}>"{checkResult.apolVerdict}"</div>
+                    <div data-testid="div-apol-summary" style={{ display: "flex", gap: "12px", padding: "14px 16px", border: `1px solid rgba(0,255,0,0.2)`, background: "rgba(0,255,0,0.03)" }}>
+                      <div style={{ width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", flexShrink: 0 }}>🦍</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: "10px", fontWeight: 900, color: G, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "6px", fontFamily: "'JetBrains Mono', monospace" }}>APOL DETECTIVE</div>
+                        {checkResult.apolVerdict ? (
+                          <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.85)", lineHeight: 1.7, fontFamily: "'JetBrains Mono', monospace" }}>{checkResult.apolVerdict}</div>
+                        ) : (
+                          <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.35)", lineHeight: 1.6, fontStyle: "italic", fontFamily: "'JetBrains Mono', monospace" }}>Insufficient data for verdict.</div>
+                        )}
+                        {checkResult.scanCount != null && (
+                          <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.25)", marginTop: "6px", fontFamily: "'JetBrains Mono', monospace" }}>Scan #{checkResult.scanCount} on this address</div>
+                        )}
                       </div>
                     </div>
 

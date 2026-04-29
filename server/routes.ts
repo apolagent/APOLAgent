@@ -211,7 +211,8 @@ async function getTopHolders(addr: string): Promise<{ address: string; percent: 
   } catch { return []; }
 }
 
-const routesDexCache = new Map<string, { data: { priceUsd: number; liquidity: number }; timestamp: number }>();
+type DexData = { priceUsd: number; liquidity: number; dexMcap: number; dexFdv: number; volume24h: number; pairCreatedAt: number | null; poolVersion: string | null };
+const routesDexCache = new Map<string, { data: DexData; timestamp: number }>();
 let routesEthCache: { price: number; timestamp: number } | null = null;
 const ROUTES_CACHE_TTL = 60000;
 
@@ -228,29 +229,66 @@ async function getEthUsdPrice(): Promise<number> {
   } catch { return routesEthCache?.price || 0; }
 }
 
-async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liquidity: number; dexMcap: number; dexFdv: number }> {
+async function getDexScreenerData(addr: string): Promise<DexData> {
   const key = addr.toLowerCase();
   const cached = routesDexCache.get(key);
   if (cached && Date.now() - cached.timestamp < ROUTES_CACHE_TTL) {
     return cached.data;
   }
+  const empty: DexData = { priceUsd: 0, liquidity: 0, dexMcap: 0, dexFdv: 0, volume24h: 0, pairCreatedAt: null, poolVersion: null };
   try {
     const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(6000) }).then((r) => r.ok ? r.json() as any : null);
     const pairs = data?.pairs || [];
     const pair = pairs.length > 1
       ? pairs.reduce((best: any, p: any) => (parseFloat(p?.liquidity?.usd || "0") > parseFloat(best?.liquidity?.usd || "0") ? p : best), pairs[0])
       : pairs[0] || null;
-    const result = {
+    const labels: string[] = pair?.labels || [];
+    const poolVersion = labels.some((l: string) => l.toLowerCase() === "v2") ? "V2"
+      : labels.some((l: string) => l.toLowerCase() === "v3") ? "V3"
+      : pair?.pairAddress ? (pair?.feeTier ? "V3" : "V2") : null;
+    const result: DexData = {
       priceUsd: parseFloat(pair?.priceUsd || "0") || 0,
       liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0,
       dexMcap: parseFloat(pair?.marketCap || "0") || 0,
       dexFdv: parseFloat(pair?.fdv || "0") || 0,
+      volume24h: parseFloat(pair?.volume?.h24 || "0") || 0,
+      pairCreatedAt: pair?.pairCreatedAt ? Number(pair.pairCreatedAt) : null,
+      poolVersion,
     };
     if (result.priceUsd > 0) routesDexCache.set(key, { data: result, timestamp: Date.now() });
     return result.priceUsd > 0 ? result : cached?.data || result;
   } catch {
-    return cached?.data || { priceUsd: 0, liquidity: 0, dexMcap: 0, dexFdv: 0 };
+    return cached?.data || empty;
   }
+}
+
+interface GoPlusSecurityData {
+  isMintable: boolean;
+  isProxy: boolean;
+  isOpenSource: boolean;
+  hasBlacklist: boolean;
+  canPause: boolean;
+  creatorPercent: number;
+  ownerPercent: number;
+}
+
+async function getGoPlusSecurityData(addr: string): Promise<GoPlusSecurityData | null> {
+  try {
+    const resp = await fetch(`${GOPLUS_BASE}/api/v1/token_security/${BASE_CHAIN_ID}?contract_addresses=${addr}`, { signal: AbortSignal.timeout(5000) });
+    if (!resp.ok) return null;
+    const data = await resp.json() as any;
+    const token = data?.result?.[addr.toLowerCase()];
+    if (!token) return null;
+    return {
+      isMintable: token.is_mintable === "1",
+      isProxy: token.is_proxy === "1",
+      isOpenSource: token.is_open_source === "1",
+      hasBlacklist: token.is_blacklisted === "1" || token.is_blacklisted === 1,
+      canPause: token.can_take_back_ownership === "1" || token.owner_change_balance === "1",
+      creatorPercent: parseFloat(token.creator_percent || "0") * 100,
+      ownerPercent: parseFloat(token.owner_percent || "0") * 100,
+    };
+  } catch { return null; }
 }
 
 async function getDexScreenerSocials(addr: string): Promise<{ twitter: string | null; website: string | null; description: string | null }> {
@@ -804,6 +842,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           getTopHolders(address),
           getEthUsdPrice(),
           getDexScreenerData(address),
+          getGoPlusSecurityData(address),
         ]),
         HARD_TIMEOUT,
         "detective-analyze",
@@ -815,7 +854,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let holderCount = results[3].status === "fulfilled" ? results[3].value : 0;
       const topHolders = results[4].status === "fulfilled" ? results[4].value : [];
       const ethUsd = results[5].status === "fulfilled" ? results[5].value : 0;
-      let dexData = results[6].status === "fulfilled" ? results[6].value : { priceUsd: 0, liquidity: 0 };
+      let dexData = results[6].status === "fulfilled" ? results[6].value : { priceUsd: 0, liquidity: 0, dexMcap: 0, dexFdv: 0, volume24h: 0, pairCreatedAt: null, poolVersion: null };
+      const goplusData = results[7]?.status === "fulfilled" ? results[7].value : null;
 
       let fallbackData: FallbackTokenData | null = null;
       if (holderCount === 0 || (!sim.simulationSuccess && !deployer)) {
@@ -863,7 +903,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const symbolUpper = tokenInfo.symbol.toUpperCase();
       const isFakeApol = symbolUpper === "APOL" || nameUpper === "APOL" || nameUpper === "APOL AGENT" || nameUpper.includes("APOLAGENT");
 
-      const riskLevel = isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10 ? "High" : buyTax > 0 || sellTax > 0 ? "Caution" : "Clean";
+      // --- Forensic enrichment ---
+      const deployerLower = deployer?.toLowerCase() || null;
+      const deployerHolding = deployerLower
+        ? (topHolders.find(h => h.address === deployerLower)?.percent ?? 0)
+        : null;
+      const creatorDumped = deployerHolding !== null && deployerHolding < 0.5;
+
+      const tokenAgeDays = dexData.pairCreatedAt
+        ? Math.floor((Date.now() - dexData.pairCreatedAt) / (1000 * 60 * 60 * 24))
+        : null;
+      const isNewToken = tokenAgeDays !== null && tokenAgeDays < 14;
+      const isInDex = tokenPriceUsd > 0 || dexData.liquidity > 0;
+
+      // Top 5 non-LP/non-burn holders for display
+      const displayHolders = topHolders
+        .filter(h => !BURN_ADDRS.has(h.address))
+        .slice(0, 5)
+        .map(h => ({ address: h.address, percent: h.percent }));
+
+      // GoPlus-derived security flags
+      const isMintable = goplusData?.isMintable ?? false;
+      const isProxy = goplusData?.isProxy ?? null;
+      const isOpenSource = goplusData?.isOpenSource ?? null;
+      const hasBlacklist = goplusData?.hasBlacklist ?? false;
+      const canPause = goplusData?.canPause ?? false;
+
+      // Red flags
+      const redFlags: string[] = [];
+      if (isFakeApol) redFlags.push("IMPERSONATING APOL");
+      if (isHoneypot) redFlags.push("HONEYPOT DETECTED");
+      if (buyTax > 10) redFlags.push(`HIGH BUY TAX (${buyTax.toFixed(1)}%)`);
+      if (sellTax > 10) redFlags.push(`HIGH SELL TAX (${sellTax.toFixed(1)}%)`);
+      if (creatorDumped) redFlags.push("CREATOR SOLD 100%");
+      if (isNewToken && tokenAgeDays === 0) redFlags.push("DEPLOYED TODAY");
+      else if (isNewToken && tokenAgeDays! < 3) redFlags.push(`${tokenAgeDays} DAYS OLD`);
+      if (holderCount > 0 && holderCount < 50) redFlags.push(`ONLY ${holderCount} HOLDERS`);
+      if (isOpenSource === false) redFlags.push("UNVERIFIED CONTRACT");
+      if (isMintable) redFlags.push("MINTABLE — OWNER CAN PRINT");
+      if (hasBlacklist) redFlags.push("BLACKLIST FUNCTION");
+      if (canPause) redFlags.push("OWNER CAN PAUSE TRADING");
+      if (mcap > 0 && dexData.liquidity > 0 && dexData.liquidity / mcap < 0.03) redFlags.push("LOW LIQUIDITY RATIO");
+
+      const isHighRisk = isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10 || isMintable || canPause || hasBlacklist;
+      const riskLevel = isHighRisk ? "High" : buyTax > 0 || sellTax > 0 ? "Caution" : "Clean";
+
+      // APOL Detective verdict
+      const ageLabel = tokenAgeDays === null ? "" : tokenAgeDays === 0 ? "deployed today" : tokenAgeDays === 1 ? "1 day old" : `${tokenAgeDays} days old`;
+      let apolVerdict: string;
+      if (isHoneypot) {
+        apolVerdict = `HONEYPOT CONFIRMED on ${tokenInfo.name} (${tokenInfo.symbol}). This contract blocks selling — funds are trapped. Do not interact under any circumstances.`;
+      } else if (isFakeApol) {
+        apolVerdict = `SCAM ALERT: ${tokenInfo.name} is impersonating APOL Agent. APOL does NOT have an official token or CA yet. Any $APOL token is unauthorized — do not buy.`;
+      } else if (redFlags.length >= 4) {
+        apolVerdict = `${tokenInfo.name} (${tokenInfo.symbol})${ageLabel ? `, ${ageLabel}` : ""}, carries ${redFlags.length} active risk signals: ${redFlags.slice(0, 3).join(", ")}${redFlags.length > 3 ? ", and more" : ""}. APOL rates this HIGH RISK — proceed with extreme caution or avoid.`;
+      } else if (redFlags.length >= 2) {
+        apolVerdict = `${tokenInfo.name} (${tokenInfo.symbol}) raises ${redFlags.length} concerns: ${redFlags.join(", ")}${ageLabel ? ` (${ageLabel})` : ""}. Speculative play — DYOR before any entry.`;
+      } else if (redFlags.length === 1) {
+        apolVerdict = `${tokenInfo.name} (${tokenInfo.symbol}) is generally clean but flags one issue: ${redFlags[0]}. Lower risk overall, but stay alert.`;
+      } else if (riskLevel === "Clean") {
+        apolVerdict = `${tokenInfo.name} (${tokenInfo.symbol}) passes all security checks — no honeypot, no high tax, no admin threats detected${platform ? ` (${platform} managed)` : ""}. Standard market risk still applies.`;
+      } else {
+        apolVerdict = `${tokenInfo.name} (${tokenInfo.symbol})${ageLabel ? ` — ${ageLabel}` : ""}. Partial data available. Treat as speculative and verify independently before entry.`;
+      }
 
       storage.logAgentActivity({
         action: "contract_scan",
@@ -877,6 +979,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         address, chain, addressType: "contract",
         riskLevel,
+        isHighRisk,
         tokenName: tokenInfo.name, tokenSymbol: tokenInfo.symbol,
         isHoneypot, buyTax, sellTax,
         simulationSuccess: sim.simulationSuccess,
@@ -887,11 +990,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         priceUsd: tokenPriceUsd,
         mcap,
         liquidity: dexData.liquidity,
+        volume24h: dexData.volume24h,
         deployer,
         scanCount,
-        greenBadge: riskLevel === "Clean" && sim.simulationSuccess && !isFakeApol,
+        greenBadge: riskLevel === "Clean" && !isHighRisk && !isFakeApol && redFlags.length === 0,
         isFakeApol,
         fakeApolWarning: isFakeApol ? "APOL Agent does NOT have an official token or CA yet. Any $APOL token is a SCAM." : null,
+        // Forensic enrichment
+        redFlags,
+        apolVerdict,
+        isInDex,
+        isMintable,
+        isProxy,
+        isOpenSource,
+        hasBlacklist,
+        canPause,
+        deployerHolding,
+        creatorDumped,
+        tokenAgeDays,
+        topHoldersList: displayHolders,
+        poolVersion: dexData.poolVersion,
       });
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Scan failed" });
