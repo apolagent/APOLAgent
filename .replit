@@ -34,9 +34,12 @@ args = "Start application"
 name = "Start application"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run dev"
+args = "npm install --include=dev 2>&1 | tail -3; NODE_ENV=development npx --yes tsx server/index.ts"
 waitForPort = 5000
 
 [userenv]

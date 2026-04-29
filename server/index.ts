@@ -261,12 +261,18 @@ app.use((req, res, next) => {
           }
 
           bot.telegram.setMyCommands([
-            { command: "scan",        description: "Detailed CA investigation (Taxes, Liquidity, Honeypot)" },
+            { command: "scan",        description: "Token security check (Taxes, Liquidity, Honeypot)" },
             { command: "scanx",       description: "X/Twitter social forensics & LARP detection" },
             { command: "scanagent",   description: "Verify AI Agent authenticity and security" },
             { command: "checkwallet", description: "Forensic wallet audit (Age, Funding, Volume)" },
-            { command: "map",         description: "Access the APOL Wall of Shame" },
+            { command: "subscribe",   description: "Unlock deep scans — 0.02 ETH/30 days" },
+            { command: "challenge",   description: "Step 1: prove wallet ownership before activating sub" },
+            { command: "verify",      description: "Step 2: activate subscription with tx hash + signature" },
+            { command: "status",      description: "Check your subscription tier and expiry" },
+            { command: "report",      description: "Submit scam evidence to the APOL registry" },
+            { command: "map",         description: "Wall of Shame — flagged addresses" },
             { command: "verified",    description: "View APOL Certified Hero Projects" },
+            { command: "help",        description: "Show all available commands" },
           ]).then(() => log("Command menu registered ✅", "bot")).catch(() => {});
         } else {
           log(`setWebhook FAILED: ${JSON.stringify(setData)}`, "bot");

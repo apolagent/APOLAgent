@@ -417,7 +417,7 @@ async function getContractActivity(addr: string): Promise<ContractActivity> {
             result.contractAgeDays = Math.max(1, Math.floor((Date.now() - created) / (1000 * 60 * 60 * 24)));
           }
         }
-      } catch {}
+      } catch (e) { console.error("🚨 ALCHEMY ERROR:", e); }
     }
     if (codeResult && codeResult !== "0x") {
       result.hasContractCode = true;
@@ -2230,7 +2230,7 @@ export function createBot(): Telegraf | null {
           if (isContractAddress(text)) {
             await handleCheckWallet(ctx, text);
           } else {
-            ctx.reply("⚠️ That doesn't look like a valid address. Send a 0x... wallet address.", { parse_mode: "Markdown" });
+            ctx.reply("⚠️ That doesn't look like a valid address. Send a 0x... wallet address.", {});
           }
         } else if (cmd === "scanx") {
           await handleScanX(ctx, text);
@@ -2238,12 +2238,12 @@ export function createBot(): Telegraf | null {
           if (isContractAddress(text)) {
             const displayId = `${text.slice(0, 8)}. . .${text.slice(-6)}`;
             const paid = await isPaidUser(ctx);
-            const loadingMsg = await ctx.reply(`🔍 *Analyzing Forensic Data...*\n\n📍 ${displayId}\n_Consulting APOL intelligence database. This may take a moment._`, { parse_mode: "Markdown" });
+            const loadingMsg = await ctx.reply(`🔍 *Analyzing Forensic Data...*\n\n📍 ${displayId}\n_Consulting APOL intelligence database. This may take a moment._`, {});
             try {
               const result = await softTimeout(runAgentScan(text, null, paid), 30000, null);
               log(`scanagent result: ${result ? `${result.text.length} chars` : "NULL"}`, "bot");
               if (result) {
-                const opts: any = { parse_mode: "Markdown", link_preview_options: { is_disabled: true } };
+                const opts: any = { link_preview_options: { is_disabled: true } };
                 if (result.twitterHandle) {
                   opts.reply_markup = { inline_keyboard: [[{ text: "🔍 Deep Scan X Profile", url: `https://apolagent.online/agent-scanner?scanx=${encodeURIComponent(result.twitterHandle)}` }]] };
                 }
@@ -2256,12 +2256,12 @@ export function createBot(): Telegraf | null {
                 }
               } else {
                 await ctx.telegram.editMessageText(chatId, loadingMsg.message_id, undefined,
-                  `🤖 *APOL AGENT — LARP DETECTOR*\n\n⚠️ Scan timed out. Try again.`, { parse_mode: "Markdown" }).catch(() => {});
+                `🤖 <b>APOL AGENT — LARP DETECTOR</b>\n\n⚠️ Scan timed out. Try again.`, { parse_mode: "Markdown" }).catch(() => {});
               }
             } catch (e: any) {
               log(`ScanAgent error: ${e?.message}`, "bot");
               await ctx.telegram.editMessageText(chatId, loadingMsg.message_id, undefined,
-                `🤖 *APOL AGENT — LARP DETECTOR*\n\n⚠️ Error: ${e?.message?.slice(0, 80) || "Unknown"}`, { parse_mode: "Markdown" }).catch(() => {});
+              `🤖 <b>APOL AGENT — LARP DETECTOR</b>\n\n⚠️ Error: ${e?.message?.slice(0, 80) || "Unknown"}`, { parse_mode: "Markdown" }).catch(() => {});
             }
           } else {
             const found = await softTimeout(searchDexScreener(text), 5000, null);
@@ -2271,11 +2271,11 @@ export function createBot(): Telegraf | null {
             }
             const displayId = `${found.address.slice(0, 8)}. . .${found.address.slice(-6)}`;
             const paid = await isPaidUser(ctx);
-            const loadingMsg = await ctx.reply(`🔍 *Analyzing Forensic Data...*\n\n📍 ${displayId}\n_Consulting APOL intelligence database..._`, { parse_mode: "Markdown" });
+            const loadingMsg = await ctx.reply(`🔍 <b>Analyzing Forensic Data...</b>\n\n📍 ${displayId}\n<i>Consulting APOL intelligence database...</i>`, { parse_mode: "Markdown" });
             try {
               const result = await softTimeout(runAgentScan(found.address, found.name, paid), 30000, null);
               if (result) {
-                const opts: any = { parse_mode: "Markdown", link_preview_options: { is_disabled: true } };
+                const opts: any = { link_preview_options: { is_disabled: true } };
                 if (result.twitterHandle) {
                   opts.reply_markup = { inline_keyboard: [[{ text: "🔍 Deep Scan X Profile", url: `https://apolagent.online/agent-scanner?scanx=${encodeURIComponent(result.twitterHandle)}` }]] };
                 }
@@ -2316,3 +2316,10 @@ export function createBot(): Telegraf | null {
 
   return bot;
 }
+const bot = createBot();
+bot.telegram.deleteWebhook({ drop_pending_updates: true })
+  .then(() => bot.launch())
+  .then(() => console.log("Bot is Live!"))
+  .catch(err => console.error("Startup error:", err));
+
+
