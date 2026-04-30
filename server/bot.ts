@@ -1809,26 +1809,35 @@ export function createBot(): Telegraf | null {
   });
 
   bot.command("start", (ctx) => {
+    const name = ctx.from?.first_name ? ` ${ctx.from.first_name}` : "";
     const lines = [
       `🚨 <b>APOL AGENT ONLINE</b>`,
-      `Protecting the Base trenches.`,
+      `Welcome${name}. On-chain forensics for the Base trenches.`,
       ``,
-      `Use /scan address to check a contract or /report to flag a larp.`,
+      `<b>🔍 Scan Tools</b>`,
+      `/scan &lt;contract&gt; — Token security check`,
+      `/scanx &lt;username&gt; — X/Twitter social forensics`,
+      `/scanagent &lt;name or CA&gt; — AI agent full audit`,
+      `/checkwallet &lt;address&gt; — Wallet investigation`,
       ``,
-      `<b>AVAILABLE COMMANDS</b>`,
-      `🔍 /scan contract — Token security check`,
-      `🔍 /scanx username — X/Twitter social forensics`,
-      `🤖 /scanagent name or CA — AI agent audit`,
-      `🕵️ /checkwallet address — Wallet investigation`,
-      `🚩 /report — Submit scam evidence`,
-      `👮 /map — Wall of Shame`,
-      `🛡 /verified — Certified projects`,
-      `💎 /subscribe — Unlock deep scans (0.02 ETH/mo)`,
-      `🔓 /verify &lt;txhash&gt; — Activate after payment`,
-      `📊 /status — Check your subscription`,
-      `❓ /help — Help`,
+      `<b>🛡 Community</b>`,
+      `/report — Submit scam evidence`,
+      `/map — Wall of Shame`,
+      `/verified — Certified projects`,
+      ``,
+      `<b>💎 Subscription</b>`,
+      `/subscribe — Unlock full deep scans (0.02 ETH/30 days)`,
+      `/verify &lt;txhash&gt; — Activate after payment`,
+      `/status — Check your subscription`,
+      ``,
+      `<b>❓ Other</b>`,
+      `/help — Show this menu anytime`,
+      ``,
+      `💡 You can also paste a contract address directly to scan it.`,
+      ``,
+      `🔗 <a href="https://apolagent.online">Website</a> | 🐦 <a href="https://x.com/ApolAgent_">Twitter</a>`,
     ];
-    ctx.reply(lines.join("\n"), { parse_mode: "HTML" });
+    ctx.reply(lines.join("\n"), { parse_mode: "HTML", link_preview_options: { is_disabled: true } });
   });
 
   bot.command("subscribe", (ctx) => {
