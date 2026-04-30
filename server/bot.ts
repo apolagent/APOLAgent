@@ -293,8 +293,9 @@ async function getEthUsdPrice(): Promise<number> {
   }
   const tryDexScreener = async (): Promise<number> => {
     try {
-      const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${WETH}`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
-      return parseFloat(data?.pairs?.[0]?.priceUsd || "0") || 0;
+      const data = await fetch(`${DEXSCREENER_BASE}/tokens/v1/base/${WETH}`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
+      const pairs = Array.isArray(data) ? data : [];
+      return parseFloat(pairs[0]?.priceUsd || "0") || 0;
     } catch { return 0; }
   };
   const tryCoingecko = async (): Promise<number> => {
@@ -316,15 +317,13 @@ async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liq
     return cached.data;
   }
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(8000) }).then((r) => r.ok ? r.json() as any : null);
-    const pairs = data?.pairs || [];
+    const data = await fetch(`${DEXSCREENER_BASE}/tokens/v1/base/${addr}`, { signal: AbortSignal.timeout(8000) }).then((r) => r.ok ? r.json() as any : null);
+    const pairs = Array.isArray(data) ? data : [];
     const pair = pairs.length > 1
       ? pairs.reduce((best: any, p: any) => (parseFloat(p?.liquidity?.usd || "0") > parseFloat(best?.liquidity?.usd || "0") ? p : best), pairs[0])
       : pairs[0] || null;
-    const labels: string[] = pair?.labels || [];
-    let poolVersion: string | null = null;
-    if (labels.includes("v4")) poolVersion = "v4";
-    else if (labels.includes("v3")) poolVersion = "v3";
+    const dexId: string = (pair?.dexId || "").toLowerCase();
+    const poolVersion: string | null = dexId.includes("v4") ? "v4" : dexId.includes("v3") ? "v3" : pair ? "v2" : null;
     const result = {
       priceUsd: parseFloat(pair?.priceUsd || "0") || 0,
       liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0,
@@ -934,8 +933,9 @@ function getProtocolUrl(platform: string | null, address: string): string | null
 
 async function getDexScreenerSocials(addr: string): Promise<{ twitter: string | null; website: string | null; telegram: string | null; description: string | null }> {
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
-    const pair = data?.pairs?.[0];
+    const data = await fetch(`${DEXSCREENER_BASE}/tokens/v1/base/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
+    const pairs = Array.isArray(data) ? data : [];
+    const pair = pairs[0];
     const info = pair?.info || {};
     const socials = info.socials || [];
     let twitter: string | null = null;

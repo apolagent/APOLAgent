@@ -221,9 +221,10 @@ async function getEthUsdPrice(): Promise<number> {
     return routesEthCache.price;
   }
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${WETH}`, { signal: AbortSignal.timeout(6000) })
+    const data = await fetch(`${DEXSCREENER_BASE}/tokens/v1/base/${WETH}`, { signal: AbortSignal.timeout(6000) })
       .then((r) => (r.ok ? (r.json() as any) : null));
-    const price = parseFloat(data?.pairs?.[0]?.priceUsd || "0") || 0;
+    const pairs = Array.isArray(data) ? data : [];
+    const price = parseFloat(pairs[0]?.priceUsd || "0") || 0;
     if (price > 0) routesEthCache = { price, timestamp: Date.now() };
     return price || routesEthCache?.price || 0;
   } catch { return routesEthCache?.price || 0; }
@@ -237,15 +238,13 @@ async function getDexScreenerData(addr: string): Promise<DexData> {
   }
   const empty: DexData = { priceUsd: 0, liquidity: 0, dexMcap: 0, dexFdv: 0, volume24h: 0, pairCreatedAt: null, poolVersion: null };
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(6000) }).then((r) => r.ok ? r.json() as any : null);
-    const pairs = data?.pairs || [];
+    const data = await fetch(`${DEXSCREENER_BASE}/tokens/v1/base/${addr}`, { signal: AbortSignal.timeout(6000) }).then((r) => r.ok ? r.json() as any : null);
+    const pairs = Array.isArray(data) ? data : [];
     const pair = pairs.length > 1
       ? pairs.reduce((best: any, p: any) => (parseFloat(p?.liquidity?.usd || "0") > parseFloat(best?.liquidity?.usd || "0") ? p : best), pairs[0])
       : pairs[0] || null;
-    const labels: string[] = pair?.labels || [];
-    const poolVersion = labels.some((l: string) => l.toLowerCase() === "v2") ? "V2"
-      : labels.some((l: string) => l.toLowerCase() === "v3") ? "V3"
-      : pair?.pairAddress ? (pair?.feeTier ? "V3" : "V2") : null;
+    const dexId: string = (pair?.dexId || "").toLowerCase();
+    const poolVersion: string | null = dexId.includes("v4") ? "V4" : dexId.includes("v3") ? "V3" : pair ? "V2" : null;
     const result: DexData = {
       priceUsd: parseFloat(pair?.priceUsd || "0") || 0,
       liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0,
@@ -293,8 +292,8 @@ async function getGoPlusSecurityData(addr: string): Promise<GoPlusSecurityData |
 
 async function getDexScreenerSocials(addr: string): Promise<{ twitter: string | null; website: string | null; description: string | null }> {
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
-    const pair = data?.pairs?.[0];
+    const data = await fetch(`${DEXSCREENER_BASE}/tokens/v1/base/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
+    const pair = (Array.isArray(data) ? data : [])[0];
     const info = pair?.info || {};
     const socials = info.socials || [];
     let twitter: string | null = null;
@@ -670,8 +669,8 @@ async function detectPlatformFromProxyImpl(tokenAddr: string): Promise<string | 
 
 async function detectPlatformFromQuoteToken(tokenAddr: string): Promise<string | null> {
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${tokenAddr}`, { signal: AbortSignal.timeout(5000) }).then(r => r.ok ? r.json() as any : null);
-    const pairs = (data?.pairs || []).filter((p: any) => (p?.chainId || "").toLowerCase() === "base");
+    const data = await fetch(`${DEXSCREENER_BASE}/tokens/v1/base/${tokenAddr}`, { signal: AbortSignal.timeout(5000) }).then(r => r.ok ? r.json() as any : null);
+    const pairs = (Array.isArray(data) ? data : []).filter((p: any) => (p?.chainId || "").toLowerCase() === "base");
     if (pairs.length === 0) return null;
     const lq = (p: any) => parseFloat(p?.liquidity?.usd || "0") || 0;
     const tokenLow = tokenAddr.toLowerCase();
