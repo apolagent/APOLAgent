@@ -103,6 +103,10 @@ type DetectiveResult = {
   scanCount?: number;
   isFakeApol?: boolean;
   fakeApolWarning?: string | null;
+  // Blockaid sell simulation
+  sellSimulationSuccess?: boolean | null;
+  sellSimRevertReason?: string | null;
+  blockaidResultType?: string | null;
 };
 
 type TestResult = { scored: boolean; score: number; maxScore: number; label: string; detail: string; timingPattern?: string[]; isContract?: boolean };
@@ -1436,6 +1440,16 @@ export default function AgentScanner() {
                         { label: checkResult.taxOverride ? `Buy Tax: Protocol Managed (${checkResult.taxOverride})` : `Buy Tax ${checkResult.buyTax != null ? Number(checkResult.buyTax).toFixed(1) + "%" : "0%"}`, value: checkResult.taxOverride ? false : (Number(checkResult.buyTax) || 0) > 10, skip: false, bad: true },
                         { label: checkResult.taxOverride ? `Sell Tax: Protocol Managed (${checkResult.taxOverride})` : `Sell Tax ${checkResult.sellTax != null ? Number(checkResult.sellTax).toFixed(1) + "%" : "0%"}`, value: checkResult.taxOverride ? false : (Number(checkResult.sellTax) || 0) > 10, skip: false, bad: true },
                         { label: "On DEX", value: checkResult.isInDex ?? false, skip: false, bad: false },
+                        checkResult.sellSimulationSuccess != null
+                          ? {
+                              label: checkResult.sellSimulationSuccess
+                                ? "Sell Simulation: PASS"
+                                : `Sell Simulation: BLOCKED${checkResult.sellSimRevertReason ? ` (${checkResult.sellSimRevertReason})` : ""}`,
+                              value: checkResult.sellSimulationSuccess,
+                              skip: false,
+                              bad: false,
+                            }
+                          : null,
                       ].filter(Boolean).map((item, i) => {
                         const itm = item as { label: string; value: boolean; bad: boolean };
                         const isWarning = itm.bad ? itm.value : !itm.value;

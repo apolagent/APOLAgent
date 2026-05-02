@@ -3,7 +3,7 @@ import { storage } from "./storage";
 import {
   WETH, QUOTER_V2, V3_FACTORY, SIM_AMOUNT, MICRO_AMOUNT, FEE_TIERS,
   BURN_ADDRS, PLATFORM_MAP, LOCKER_MAP, CREATION_LOG_SIGNATURES, MANAGED_PROTOCOLS,
-  DEPLOYER_CHAIN_KEYWORDS, BLOCKSCOUT_BASE, DEXSCREENER_BASE, GOPLUS_BASE, BASE_CHAIN_ID,
+  DEPLOYER_CHAIN_KEYWORDS, BLOCKSCOUT_BASE, DEXSCREENER_BASE, GOPLUS_BASE, BLOCKAID_BASE, BASE_CHAIN_ID,
   VERIFIED_AGENTS, CLANKER_API_BASE, SERIAL_DEPLOYER_THRESHOLD, SERIAL_DEPLOYER_WINDOW_DAYS,
 } from "./constants";
 
@@ -369,6 +369,38 @@ async function getFallbackTokenData(addr: string): Promise<FallbackTokenData | n
   } catch { return null; }
 }
 
+interface BlockaidTokenResult {
+  resultType: "Malicious" | "Suspicious" | "Benign" | "Spam" | null;
+  isMalicious: boolean;
+  isSuspicious: boolean;
+  sellSimulationSuccess: boolean | null;
+  sellRevertReason: string | null;
+  attackTypes: string[];
+}
+
+async function getBlockaidTokenScan(addr: string): Promise<BlockaidTokenResult | null> {
+  const apiKey = process.env.BLOCKAID_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const resp = await fetch(`${BLOCKAID_BASE}/v0/evm/token/scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+      body: JSON.stringify({ chain: "base", address: addr }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json() as any;
+    const resultType = data?.result_type ?? null;
+    const isMalicious = resultType === "Malicious";
+    const isSuspicious = resultType === "Suspicious";
+    const attackTypes = Object.keys(data?.attack_types ?? {});
+    const sellSim = data?.simulation_result?.sell_simulation ?? null;
+    const sellSimulationSuccess = sellSim != null ? (sellSim.success ?? null) : null;
+    const sellRevertReason = sellSim?.revert_reason ?? null;
+    return { resultType, isMalicious, isSuspicious, sellSimulationSuccess, sellRevertReason, attackTypes };
+  } catch { return null; }
+}
+
 interface ContractActivity {
   txCount: number;
   contractAgeDays: number;
@@ -680,7 +712,7 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
 
   const platformFromDeployer = detectPlatform(address, deployer, []);
 
-  let [holderCount, topHolders, ethUsd, dexData, creationPlatform, deployerChainPlatform, proxyImplPlatform] = await Promise.all([
+  let [holderCount, topHolders, ethUsd, dexData, creationPlatform, deployerChainPlatform, proxyImplPlatform, blockaidData] = await Promise.all([
     softTimeout(getHolderCount(address), 8000, 0),
     softTimeout(getTopHolders(address), 8000, []),
     softTimeout(getEthUsdPrice(), 8000, 0),
@@ -688,7 +720,11 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
     !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
     !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
     !platformFromDeployer ? softTimeout(detectPlatformFromProxyImpl(address), 5000, null) : Promise.resolve(null),
+    softTimeout(getBlockaidTokenScan(address), 9000, null),
   ]);
+  const blockaid = blockaidData as BlockaidTokenResult | null;
+  const blockaidMalicious = blockaid?.isMalicious ?? false;
+  const blockaidSellFail = blockaid?.sellSimulationSuccess === false;
 
   log(`runScan P2 ${Date.now() - t0}ms holders=${holderCount} dex=$${dexData.priceUsd} ethUsd=${ethUsd} proxy=${proxyImplPlatform}`, "bot");
 
@@ -776,12 +812,14 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
   const flags: string[] = [];
   if (isFakeApol) flags.push("🚨 FAKE $APOL — APOL Agent does NOT have an official token or CA yet. This is a SCAM.");
   if (isHoneypot) flags.push("🚨 Honeypot — SELL BLOCKED");
+  if (blockaidSellFail && !isHoneypot) flags.push("🚫 Sell simulation FAILED — sell transactions blocked (Blockaid)");
+  if (blockaidMalicious) flags.push(`🚨 BLOCKAID: Malicious contract detected${blockaid?.attackTypes?.length ? ` (${blockaid.attackTypes.join(", ")})` : ""}`);
   if (buyTax > 5 || sellTax > 5) flags.push(`💰 High tax: Buy ${buyTax}% / Sell ${sellTax}%`);
   if (holderCount > 0 && holderCount < 100) flags.push("👥 Low holder count");
   if (liquidity > 0 && liquidity < 10000) flags.push("💧 Very Low Liquidity");
   if (!hasPool) flags.push("⚠️ No Uniswap liquidity pool");
 
-  const riskLevel = isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10
+  const riskLevel = isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10 || blockaidMalicious || blockaidSellFail
     ? "🔴 HIGH RISK"
     : flags.length > 0
       ? "🟡 CAUTION"
@@ -824,6 +862,11 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
     lines.push(`🔒 <b>LP Status:</b> ${lpStatus}`);
     lines.push(`👥 <b>Holders:</b> ${holderStr}`);
     lines.push(`💰 <b>Buy Tax:</b> ${buyTax.toFixed(1)}%  |  <b>Sell Tax:</b> ${sellTax.toFixed(1)}%`);
+    if (blockaid?.sellSimulationSuccess === true) {
+      lines.push(`🟢 <b>Sell Simulation:</b> PASS`);
+    } else if (blockaid?.sellSimulationSuccess === false) {
+      lines.push(`🔴 <b>Sell Simulation:</b> BLOCKED${blockaid.sellRevertReason ? ` — ${blockaid.sellRevertReason}` : ""}`);
+    }
 
     if (clankerData) {
       if (clankerData.volume24h > 0) lines.push(`📈 <b>24h Volume:</b> ${formatUsd(clankerData.volume24h)}`);
@@ -1925,14 +1968,22 @@ export function createBot(): Telegraf | null {
       }
 
       const expiresAt = new Date(Date.now() + SUBSCRIPTION_DURATION_MS);
-      await storage.upsertSubscription({
-        telegramUserId: userId,
-        txHash,
-        fromAddress: result.from || null,
-        amountWei: String(result.valueWei || SUBSCRIPTION_PRICE_WEI),
-        expiresAt,
-      });
-      await storage.markTxHashUsed(txHash, userId, result.from || "").catch(() => {});
+      try {
+        await storage.upsertSubscription({
+          telegramUserId: userId,
+          txHash,
+          fromAddress: result.from || null,
+          amountWei: String(result.valueWei || SUBSCRIPTION_PRICE_WEI),
+          expiresAt,
+        });
+        await storage.markTxHashUsed(txHash, userId, result.from || "").catch(() => {});
+      } catch (dbErr: any) {
+        log(`/verify db write error: ${dbErr?.message}`, "bot");
+        await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
+          `⚠️ <b>Payment verified on-chain, but we could not save your subscription.</b>\n\nYour payment was received — do NOT send again.\nPlease try <code>/verify ${txHash}</code> again in 60 seconds, or contact support with your tx hash:\n<code>${txHash}</code>`,
+          { parse_mode: "HTML" }).catch(() => {});
+        return;
+      }
       SUB_CACHE.set(userId, { paid: true, timestamp: Date.now() });
       const expiryStr = expiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
       await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
@@ -1941,7 +1992,7 @@ export function createBot(): Telegraf | null {
     } catch (e: any) {
       log(`/verify error: ${e?.message}`, "bot");
       await ctx.telegram.editMessageText(ctx.chat.id, loadingMsg.message_id, undefined,
-        `⚠️ Verification error. Please try again in a moment.`,
+        `❌ <b>Verification failed.</b>\n\n${e?.message ? e.message.slice(0, 200) : "Unexpected error — please try again."}\n\nIf the problem persists, contact support with your tx hash:\n<code>${txHash}</code>`,
         { parse_mode: "HTML" }).catch(() => {});
     }
   });

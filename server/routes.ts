@@ -7,7 +7,7 @@ import { installX402 } from "./x402";
 import {
   WETH, QUOTER_V2, V3_FACTORY, SIM_AMOUNT, MICRO_AMOUNT, HARD_TIMEOUT, FEE_TIERS,
   BURN_ADDRS, PLATFORM_MAP, LOCKER_MAP, CREATION_LOG_SIGNATURES, MANAGED_PROTOCOLS,
-  DEPLOYER_CHAIN_KEYWORDS, BLOCKSCOUT_BASE, DEXSCREENER_BASE, GOPLUS_BASE, BASE_CHAIN_ID,
+  DEPLOYER_CHAIN_KEYWORDS, BLOCKSCOUT_BASE, DEXSCREENER_BASE, GOPLUS_BASE, BLOCKAID_BASE, BASE_CHAIN_ID,
   VERIFIED_AGENTS, CLANKER_API_BASE, SERIAL_DEPLOYER_THRESHOLD, SERIAL_DEPLOYER_WINDOW_DAYS,
 } from "./constants";
 
@@ -287,6 +287,38 @@ async function getGoPlusSecurityData(addr: string): Promise<GoPlusSecurityData |
       creatorPercent: parseFloat(token.creator_percent || "0") * 100,
       ownerPercent: parseFloat(token.owner_percent || "0") * 100,
     };
+  } catch { return null; }
+}
+
+interface BlockaidTokenResult {
+  resultType: "Malicious" | "Suspicious" | "Benign" | "Spam" | null;
+  isMalicious: boolean;
+  isSuspicious: boolean;
+  sellSimulationSuccess: boolean | null;
+  sellRevertReason: string | null;
+  attackTypes: string[];
+}
+
+async function getBlockaidTokenScan(addr: string): Promise<BlockaidTokenResult | null> {
+  const apiKey = process.env.BLOCKAID_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const resp = await fetch(`${BLOCKAID_BASE}/v0/evm/token/scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+      body: JSON.stringify({ chain: "base", address: addr }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json() as any;
+    const resultType = data?.result_type ?? null;
+    const isMalicious = resultType === "Malicious";
+    const isSuspicious = resultType === "Suspicious";
+    const attackTypes = Object.keys(data?.attack_types ?? {});
+    const sellSim = data?.simulation_result?.sell_simulation ?? null;
+    const sellSimulationSuccess = sellSim != null ? (sellSim.success ?? null) : null;
+    const sellRevertReason = sellSim?.revert_reason ?? null;
+    return { resultType, isMalicious, isSuspicious, sellSimulationSuccess, sellRevertReason, attackTypes };
   } catch { return null; }
 }
 
@@ -842,6 +874,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           getEthUsdPrice(),
           getDexScreenerData(address),
           getGoPlusSecurityData(address),
+          getBlockaidTokenScan(address),
         ]),
         HARD_TIMEOUT,
         "detective-analyze",
@@ -855,6 +888,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ethUsd = results[5].status === "fulfilled" ? results[5].value : 0;
       let dexData = results[6].status === "fulfilled" ? results[6].value : { priceUsd: 0, liquidity: 0, dexMcap: 0, dexFdv: 0, volume24h: 0, pairCreatedAt: null, poolVersion: null };
       const goplusData = results[7]?.status === "fulfilled" ? results[7].value : null;
+      const blockaidData = results[8]?.status === "fulfilled" ? results[8].value : null;
 
       let fallbackData: FallbackTokenData | null = null;
       if (holderCount === 0 || (!sim.simulationSuccess && !deployer)) {
@@ -928,10 +962,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hasBlacklist = goplusData?.hasBlacklist ?? false;
       const canPause = goplusData?.canPause ?? false;
 
+      // Blockaid-derived flags
+      const blockaidMalicious = blockaidData?.isMalicious ?? false;
+      const blockaidSellFail = blockaidData?.sellSimulationSuccess === false;
+
       // Red flags
       const redFlags: string[] = [];
       if (isFakeApol) redFlags.push("IMPERSONATING APOL");
       if (isHoneypot) redFlags.push("HONEYPOT DETECTED");
+      if (blockaidSellFail && !isHoneypot) redFlags.push("SELL SIMULATION FAILED");
+      if (blockaidMalicious) redFlags.push("BLOCKAID: MALICIOUS CONTRACT DETECTED");
       if (buyTax > 10) redFlags.push(`HIGH BUY TAX (${buyTax.toFixed(1)}%)`);
       if (sellTax > 10) redFlags.push(`HIGH SELL TAX (${sellTax.toFixed(1)}%)`);
       if (creatorDumped) redFlags.push("CREATOR SOLD 100%");
@@ -944,7 +984,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (canPause) redFlags.push("OWNER CAN PAUSE TRADING");
       if (mcap > 0 && dexData.liquidity > 0 && dexData.liquidity / mcap < 0.03) redFlags.push("LOW LIQUIDITY RATIO");
 
-      const isHighRisk = isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10 || isMintable || canPause || hasBlacklist;
+      const isHighRisk = isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10 || isMintable || canPause || hasBlacklist || blockaidMalicious || blockaidSellFail;
       const riskLevel = isHighRisk ? "High" : buyTax > 0 || sellTax > 0 ? "Caution" : "Clean";
 
       // APOL Detective verdict
@@ -952,6 +992,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let apolVerdict: string;
       if (isHoneypot) {
         apolVerdict = `HONEYPOT CONFIRMED on ${tokenInfo.name} (${tokenInfo.symbol}). This contract blocks selling — funds are trapped. Do not interact under any circumstances.`;
+      } else if (blockaidSellFail) {
+        apolVerdict = `SELL BLOCKED — Blockaid simulation confirms sell transactions fail on ${tokenInfo.name} (${tokenInfo.symbol}). Funds may be trapped. APOL rates this DANGEROUS — do not buy.${blockaidData?.sellRevertReason ? ` Revert reason: ${blockaidData.sellRevertReason}.` : ""}`;
+      } else if (blockaidMalicious) {
+        apolVerdict = `BLOCKAID ALERT: ${tokenInfo.name} (${tokenInfo.symbol}) is flagged as MALICIOUS. Attack types: ${blockaidData?.attackTypes?.join(", ") || "unknown"}. APOL rates this HIGH RISK — avoid.`;
       } else if (isFakeApol) {
         apolVerdict = `SCAM ALERT: ${tokenInfo.name} is impersonating APOL Agent. APOL does NOT have an official token or CA yet. Any $APOL token is unauthorized — do not buy.`;
       } else if (redFlags.length >= 4) {
@@ -1009,6 +1053,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tokenAgeDays,
         topHoldersList: displayHolders,
         poolVersion: dexData.poolVersion,
+        // Blockaid sell simulation
+        sellSimulationSuccess: blockaidData?.sellSimulationSuccess ?? null,
+        sellSimRevertReason: blockaidData?.sellRevertReason ?? null,
+        blockaidResultType: blockaidData?.resultType ?? null,
+        blockaidAttackTypes: blockaidData?.attackTypes ?? [],
       });
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Scan failed" });
@@ -1391,16 +1440,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const cognitionScore = isVerifiedAgent ? 100 : zeroAgentTrace ? 0 : (scoredTests >= 2 ? Math.min(100, rawScore) : null);
       const isPartial = isVerifiedAgent ? false : zeroAgentTrace ? false : scoredTests < 3;
 
+      // Blockaid override: if the agent's contract is flagged malicious, cap cognition at 5
+      const agentBlockaidData = (wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet))
+        ? await getBlockaidTokenScan(wallet).catch(() => null)
+        : null;
+      const finalCognitionScore = (agentBlockaidData?.isMalicious && cognitionScore !== null && !isVerifiedAgent)
+        ? Math.min(cognitionScore, 5)
+        : cognitionScore;
+
       type Verdict = "Confirmed LARP" | "Unverified" | "Semi-Autonomous" | "Fully Autonomous" | "Under Review" | "Insufficient Data" | "Inconclusive";
       let verdict: Verdict;
       if (isVerifiedAgent) verdict = "Fully Autonomous";
       else if (zeroAgentTrace) verdict = "Confirmed LARP";
       else if (scoredTests < 2) verdict = "Insufficient Data";
-      else if (cognitionScore !== null && cognitionScore >= 71) verdict = "Fully Autonomous";
-      else if (cognitionScore !== null && cognitionScore >= 41) verdict = "Semi-Autonomous";
-      else if (cognitionScore !== null && cognitionScore >= 21) verdict = "Under Review";
-      else if (cognitionScore !== null && cognitionScore <= 10 && scoredTests >= 4) verdict = "Confirmed LARP";
-      else if (cognitionScore !== null) verdict = "Unverified";
+      else if (finalCognitionScore !== null && finalCognitionScore >= 71) verdict = "Fully Autonomous";
+      else if (finalCognitionScore !== null && finalCognitionScore >= 41) verdict = "Semi-Autonomous";
+      else if (finalCognitionScore !== null && finalCognitionScore >= 21) verdict = "Under Review";
+      else if (finalCognitionScore !== null && finalCognitionScore <= 10 && scoredTests >= 4) verdict = "Confirmed LARP";
+      else if (finalCognitionScore !== null) verdict = "Unverified";
       else verdict = "Inconclusive";
 
       let apolVerdict = "";
@@ -1428,20 +1485,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (autoAbilityAudit?.reasoningStatus === "verified") apolVerdict += " ✅ Autonomous reasoning logs detected.";
       if (!isVerifiedAgent && autoAbilityAudit?.reasoningStatus === "not_found" && autoAbilityAudit.claimedAbilities.length > 0) apolVerdict += " ⚠️ Claims abilities but no public reasoning logs found.";
+      if (agentBlockaidData?.isMalicious) apolVerdict += " 🚨 BLOCKAID: Agent contract flagged MALICIOUS — cognition score capped at 5/100.";
 
       storage.logAgentActivity({
         action: "agent_verification",
         target: agentName.trim(),
-        detail: `Verified agent "${agentName.trim()}". Cognition score: ${cognitionScore ?? "N/A"}. Tests scored: ${scoredTests}. ${traceIsContract ? "On-chain contract verified." : "No on-chain contract."} ${autoAbilityAudit?.claimedAbilities?.length ? `Abilities: ${autoAbilityAudit.claimedAbilities.join(", ")}.` : ""} ${autoAbilityAudit?.reasoningStatus === "verified" ? "Reasoning logs verified." : autoAbilityAudit?.reasoningStatus === "mismatch" ? "Reasoning logs mismatch." : "No reasoning logs found."}`.replace(/\s+/g, " ").trim(),
+        detail: `Verified agent "${agentName.trim()}". Cognition score: ${finalCognitionScore ?? "N/A"}. Tests scored: ${scoredTests}. ${traceIsContract ? "On-chain contract verified." : "No on-chain contract."} ${autoAbilityAudit?.claimedAbilities?.length ? `Abilities: ${autoAbilityAudit.claimedAbilities.join(", ")}.` : ""} ${autoAbilityAudit?.reasoningStatus === "verified" ? "Reasoning logs verified." : autoAbilityAudit?.reasoningStatus === "mismatch" ? "Reasoning logs mismatch." : "No reasoning logs found."}`.replace(/\s+/g, " ").trim(),
         verdict,
         source: "web",
-        metadata: { cognitionScore, scoredTests, wallet, socialLink, abilities: autoAbilityAudit?.claimedAbilities },
+        metadata: { cognitionScore: finalCognitionScore, scoredTests, wallet, socialLink, abilities: autoAbilityAudit?.claimedAbilities },
       }).catch(() => {});
 
       const fullResult = {
         agentName: agentName.trim(),
         wallet: wallet || null,
-        cognitionScore,
+        cognitionScore: finalCognitionScore,
         verdict,
         apolVerdict,
         scoredTests,
