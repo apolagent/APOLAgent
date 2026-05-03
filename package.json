@@ -84,15 +84,20 @@
     "ws": "^8.18.0",
     "x402-express": "^1.2.0",
     "zod": "^3.24.2",
+    "@replit/vite-plugin-runtime-error-modal": "^0.0.3",
+    "@tailwindcss/typography": "^0.5.15",
+    "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.5.0",
     "esbuild": "^0.25.12",
+    "postcss": "^8.5.12",
+    "tailwindcss": "^3.4.19",
     "tsx": "^4.21.0",
+    "vite": "^7.3.2",
     "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
     "@replit/vite-plugin-cartographer": "^0.4.4",
     "@replit/vite-plugin-dev-banner": "^0.1.1",
-    "@replit/vite-plugin-runtime-error-modal": "^0.0.3",
-    "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "^4.2.4",
     "@types/connect-pg-simple": "^7.0.3",
     "@types/express": "^5.0.0",
@@ -103,13 +108,8 @@
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "@types/ws": "^8.5.13",
-    "@vitejs/plugin-react": "^4.7.0",
-    "autoprefixer": "^10.5.0",
     "drizzle-kit": "^0.31.10",
-    "postcss": "^8.5.12",
-    "tailwindcss": "^3.4.19",
-    "typescript": "5.6.3",
-    "vite": "^7.3.2"
+    "typescript": "5.6.3"
   },
   "overrides": {
     "drizzle-kit": {
