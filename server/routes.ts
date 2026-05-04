@@ -216,13 +216,22 @@ const routesDexCache = new Map<string, { data: DexData; timestamp: number }>();
 let routesEthCache: { price: number; timestamp: number } | null = null;
 const ROUTES_CACHE_TTL = 60000;
 
+async function dexFetch(url: string, timeoutMs: number): Promise<any> {
+  const headers = { "User-Agent": "Mozilla/5.0 (compatible; APOLAgent/1.0; +https://apolagent.online)" };
+  let resp = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+  if (resp.status === 429) {
+    await new Promise<void>(r => setTimeout(r, 2000));
+    resp = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+  }
+  return resp.ok ? (resp.json() as Promise<any>) : null;
+}
+
 async function getEthUsdPrice(): Promise<number> {
   if (routesEthCache && Date.now() - routesEthCache.timestamp < ROUTES_CACHE_TTL) {
     return routesEthCache.price;
   }
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/tokens/v1/base/${WETH}`, { signal: AbortSignal.timeout(6000) })
-      .then((r) => (r.ok ? (r.json() as any) : null));
+    const data = await dexFetch(`${DEXSCREENER_BASE}/tokens/v1/base/${WETH}`, 6000);
     const pairs = Array.isArray(data) ? data : [];
     const price = parseFloat(pairs[0]?.priceUsd || "0") || 0;
     if (price > 0) routesEthCache = { price, timestamp: Date.now() };
@@ -238,7 +247,7 @@ async function getDexScreenerData(addr: string): Promise<DexData> {
   }
   const empty: DexData = { priceUsd: 0, liquidity: 0, dexMcap: 0, dexFdv: 0, volume24h: 0, pairCreatedAt: null, poolVersion: null };
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/tokens/v1/base/${addr}`, { signal: AbortSignal.timeout(6000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await dexFetch(`${DEXSCREENER_BASE}/tokens/v1/base/${addr}`, 6000);
     const pairs = Array.isArray(data) ? data : [];
     const pair = pairs.length > 1
       ? pairs.reduce((best: any, p: any) => (parseFloat(p?.liquidity?.usd || "0") > parseFloat(best?.liquidity?.usd || "0") ? p : best), pairs[0])
@@ -377,7 +386,7 @@ async function getBlockaidTokenScan(addr: string): Promise<BlockaidTokenResult |
 
 async function getDexScreenerSocials(addr: string): Promise<{ twitter: string | null; website: string | null; description: string | null }> {
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/tokens/v1/base/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await dexFetch(`${DEXSCREENER_BASE}/tokens/v1/base/${addr}`, 4000);
     const pair = (Array.isArray(data) ? data : [])[0];
     const info = pair?.info || {};
     const socials = info.socials || [];
@@ -754,7 +763,7 @@ async function detectPlatformFromProxyImpl(tokenAddr: string): Promise<string | 
 
 async function detectPlatformFromQuoteToken(tokenAddr: string): Promise<string | null> {
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/tokens/v1/base/${tokenAddr}`, { signal: AbortSignal.timeout(5000) }).then(r => r.ok ? r.json() as any : null);
+    const data = await dexFetch(`${DEXSCREENER_BASE}/tokens/v1/base/${tokenAddr}`, 5000);
     const pairs = (Array.isArray(data) ? data : []).filter((p: any) => (p?.chainId || "").toLowerCase() === "base");
     if (pairs.length === 0) return null;
     const lq = (p: any) => parseFloat(p?.liquidity?.usd || "0") || 0;
@@ -1746,7 +1755,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let linkedCA: string | null = null;
       let linkedSymbol: string | null = null;
       try {
-        const dexData = await fetch(`${DEXSCREENER_BASE}/latest/dex/search?q=${encodeURIComponent(handle)}`, { signal: AbortSignal.timeout(5000) }).then(r => r.ok ? r.json() as any : null);
+        const dexData = await dexFetch(`${DEXSCREENER_BASE}/latest/dex/search?q=${encodeURIComponent(handle)}`, 5000);
         const pair = dexData?.pairs?.find((p: any) => p.chainId === "base");
         if (pair?.baseToken?.address) {
           linkedCA = pair.baseToken.address;
