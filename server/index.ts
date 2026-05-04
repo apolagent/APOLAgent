@@ -205,6 +205,7 @@ app.use((req, res, next) => {
     const tkn = process.env.APOL_BOT_TOKEN!;
     const WEBHOOK_PATH = `/bot-webhook-${tkn}`;
     const WEBHOOK_URL = `https://apolagent.online${WEBHOOK_PATH}`;
+    const maskToken = (s: string) => s.split(tkn).join("***");
 
     const hardResetWebhook = async (attempt = 1): Promise<void> => {
       if (attempt > 5) {
@@ -231,7 +232,7 @@ app.use((req, res, next) => {
         const infoData = await infoRes.json() as any;
         log(`[HARD RESET] getWebhookInfo after clear: url="${infoData?.result?.url || "(empty)"}", pending=${infoData?.result?.pending_update_count ?? "?"}`, "bot");
 
-        log(`[HARD RESET] Step 4: Registering webhook → ${WEBHOOK_URL}`, "bot");
+        log(`[HARD RESET] Step 4: Registering webhook → ${maskToken(WEBHOOK_URL)}`, "bot");
         const setRes = await fetch(`https://api.telegram.org/bot${tkn}/setWebhook`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -254,12 +255,12 @@ app.use((req, res, next) => {
           const confirmData = await confirmRes.json() as any;
           const confirmedUrl = confirmData?.result?.url || "";
           const lastError = confirmData?.result?.last_error_message || "none";
-          log(`[HARD RESET] CONFIRMED: url="${confirmedUrl}", last_error="${lastError}"`, "bot");
+          log(`[HARD RESET] CONFIRMED: url="${maskToken(confirmedUrl)}", last_error="${lastError}"`, "bot");
 
           if (confirmedUrl === WEBHOOK_URL) {
-            log(`✅ WEBHOOK LIVE → ${WEBHOOK_URL}`, "bot");
+            log(`✅ WEBHOOK LIVE → ${maskToken(WEBHOOK_URL)}`, "bot");
           } else {
-            log(`⚠️ URL MISMATCH! Expected ${WEBHOOK_URL} but got ${confirmedUrl}`, "bot");
+            log(`⚠️ URL MISMATCH! Expected ${maskToken(WEBHOOK_URL)} but got ${maskToken(confirmedUrl)}`, "bot");
           }
 
           bot.telegram.setMyCommands([
@@ -292,12 +293,11 @@ app.use((req, res, next) => {
 
     const webhookHealthCheck = async () => {
       try {
-        const tkn2 = process.env.APOL_BOT_TOKEN!;
-        const infoRes = await fetch(`https://api.telegram.org/bot${tkn2}/getWebhookInfo`, { signal: AbortSignal.timeout(8000) });
+        const infoRes = await fetch(`https://api.telegram.org/bot${tkn}/getWebhookInfo`, { signal: AbortSignal.timeout(8000) });
         const infoData = await infoRes.json() as any;
         const currentUrl = infoData?.result?.url || "";
         if (!currentUrl || !currentUrl.includes("apolagent.online")) {
-          log(`[HEALTH] Webhook missing or wrong (url="${currentUrl}"). Re-registering...`, "bot");
+          log(`[HEALTH] Webhook missing or wrong (url="${maskToken(currentUrl)}"). Re-registering...`, "bot");
           await hardResetWebhook();
         }
       } catch (e: any) {
