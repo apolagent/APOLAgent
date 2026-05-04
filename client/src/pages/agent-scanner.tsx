@@ -107,6 +107,12 @@ type DetectiveResult = {
   sellSimulationSuccess?: boolean | null;
   sellSimRevertReason?: string | null;
   blockaidResultType?: string | null;
+  // Honeypot.is
+  honeypotIsResult?: { isHoneypot: boolean; honeypotReason: string | null; sellTax: number; buyTax: number } | null;
+  // De.Fi Shield
+  defiShieldRisks?: string[];
+  // GoPlus sell simulation
+  goPlusSellSimSuccess?: boolean | null;
 };
 
 type TestResult = { scored: boolean; score: number; maxScore: number; label: string; detail: string; timingPattern?: string[]; isContract?: boolean };
@@ -1443,11 +1449,41 @@ export default function AgentScanner() {
                         checkResult.sellSimulationSuccess != null
                           ? {
                               label: checkResult.sellSimulationSuccess
-                                ? "Sell Simulation: PASS"
-                                : `Sell Simulation: BLOCKED${checkResult.sellSimRevertReason ? ` (${checkResult.sellSimRevertReason})` : ""}`,
+                                ? "Sell Sim (Blockaid): PASS"
+                                : `Sell Sim (Blockaid): BLOCKED${checkResult.sellSimRevertReason ? ` (${checkResult.sellSimRevertReason})` : ""}`,
                               value: checkResult.sellSimulationSuccess,
                               skip: false,
                               bad: false,
+                            }
+                          : null,
+                        checkResult.goPlusSellSimSuccess != null
+                          ? {
+                              label: checkResult.goPlusSellSimSuccess
+                                ? "Sell Sim (GoPlus): PASS"
+                                : "Sell Sim (GoPlus): FAIL",
+                              value: checkResult.goPlusSellSimSuccess,
+                              skip: false,
+                              bad: false,
+                            }
+                          : null,
+                        checkResult.honeypotIsResult != null
+                          ? {
+                              label: checkResult.honeypotIsResult.isHoneypot
+                                ? `Honeypot.is: SELL BLOCKED${checkResult.honeypotIsResult.honeypotReason ? ` — ${checkResult.honeypotIsResult.honeypotReason}` : ""}`
+                                : "Honeypot.is: CLEAN",
+                              value: checkResult.honeypotIsResult.isHoneypot,
+                              skip: false,
+                              bad: true,
+                            }
+                          : null,
+                        checkResult.defiShieldRisks != null
+                          ? {
+                              label: checkResult.defiShieldRisks.length === 0
+                                ? "De.Fi Shield: CLEAN"
+                                : `De.Fi Shield: ${checkResult.defiShieldRisks.length} risk${checkResult.defiShieldRisks.length > 1 ? "s" : ""}`,
+                              value: checkResult.defiShieldRisks.length > 0,
+                              skip: false,
+                              bad: true,
                             }
                           : null,
                       ].filter(Boolean).map((item, i) => {

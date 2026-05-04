@@ -401,6 +401,88 @@ async function getBlockaidTokenScan(addr: string): Promise<BlockaidTokenResult |
   } catch { return null; }
 }
 
+interface GoPlusSecurityData {
+  isMintable: boolean;
+  isProxy: boolean;
+  isOpenSource: boolean;
+  hasBlacklist: boolean;
+  canPause: boolean;
+  creatorPercent: number;
+  ownerPercent: number;
+  goPlusIsHoneypot: boolean;
+  goPlusSellSimSuccess: boolean | null;
+}
+
+async function getGoPlusSecurityData(addr: string): Promise<GoPlusSecurityData | null> {
+  try {
+    const resp = await fetch(`${GOPLUS_BASE}/api/v1/token_security/${BASE_CHAIN_ID}?contract_addresses=${addr}`, { signal: AbortSignal.timeout(5000) });
+    if (!resp.ok) return null;
+    const data = await resp.json() as any;
+    const token = data?.result?.[addr.toLowerCase()];
+    if (!token) return null;
+    const goPlusIsHoneypot = token.is_honeypot === "1";
+    const goPlusSellSimSuccess = goPlusIsHoneypot ? false
+      : token.cannot_sell_all === "1" ? false
+      : true;
+    return {
+      isMintable: token.is_mintable === "1",
+      isProxy: token.is_proxy === "1",
+      isOpenSource: token.is_open_source === "1",
+      hasBlacklist: token.is_blacklisted === "1" || token.is_blacklisted === 1,
+      canPause: token.can_take_back_ownership === "1" || token.owner_change_balance === "1",
+      creatorPercent: parseFloat(token.creator_percent || "0") * 100,
+      ownerPercent: parseFloat(token.owner_percent || "0") * 100,
+      goPlusIsHoneypot,
+      goPlusSellSimSuccess,
+    };
+  } catch { return null; }
+}
+
+interface HoneypotIsResult {
+  isHoneypot: boolean;
+  honeypotReason: string | null;
+  sellTax: number;
+  buyTax: number;
+}
+
+async function getHoneypotIs(addr: string): Promise<HoneypotIsResult | null> {
+  try {
+    const resp = await fetch(`https://api.honeypot.is/v2/IsHoneypot?address=${addr}&chainID=8453`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json() as any;
+    return {
+      isHoneypot: data.honeypotResult?.isHoneypot === true,
+      honeypotReason: data.honeypotResult?.honeypotReason ?? null,
+      sellTax: data.simulationResult?.sellTaxPercent ?? 0,
+      buyTax: data.simulationResult?.buyTaxPercent ?? 0,
+    };
+  } catch { return null; }
+}
+
+interface DeFiShieldResult {
+  risks: string[];
+}
+
+async function getDeFiShield(addr: string): Promise<DeFiShieldResult | null> {
+  const apiKey = process.env.DEFI_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const resp = await fetch(`https://api.de.fi/v1/token-scanner?address=${addr}&chainId=8453`, {
+      headers: { "Authorization": `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json() as any;
+    const issues: any[] = data?.issues ?? data?.risks ?? data?.findings ?? [];
+    const risks = (Array.isArray(issues) ? issues : [])
+      .map((item: any) => item.impact ?? item.description ?? item.title ?? String(item))
+      .filter(Boolean) as string[];
+    return { risks };
+  } catch { return null; }
+}
+
 interface ContractActivity {
   txCount: number;
   contractAgeDays: number;
@@ -712,7 +794,7 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
 
   const platformFromDeployer = detectPlatform(address, deployer, []);
 
-  let [holderCount, topHolders, ethUsd, dexData, creationPlatform, deployerChainPlatform, proxyImplPlatform, blockaidData] = await Promise.all([
+  let [holderCount, topHolders, ethUsd, dexData, creationPlatform, deployerChainPlatform, proxyImplPlatform, blockaidData, goplusData, honeypotIsData, defiShieldData] = await Promise.all([
     softTimeout(getHolderCount(address), 8000, 0),
     softTimeout(getTopHolders(address), 8000, []),
     softTimeout(getEthUsdPrice(), 8000, 0),
@@ -721,10 +803,17 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
     !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
     !platformFromDeployer ? softTimeout(detectPlatformFromProxyImpl(address), 5000, null) : Promise.resolve(null),
     softTimeout(getBlockaidTokenScan(address), 9000, null),
+    softTimeout(getGoPlusSecurityData(address), 6000, null),
+    softTimeout(getHoneypotIs(address), 9000, null),
+    softTimeout(getDeFiShield(address), 11000, null),
   ]);
   const blockaid = blockaidData as BlockaidTokenResult | null;
   const blockaidMalicious = blockaid?.isMalicious ?? false;
   const blockaidSellFail = blockaid?.sellSimulationSuccess === false;
+  const honeypotIs = honeypotIsData as HoneypotIsResult | null;
+  const defiShield = defiShieldData as DeFiShieldResult | null;
+  const goplus = goplusData as GoPlusSecurityData | null;
+  const goPlusSellSimSuccess = goplus?.goPlusSellSimSuccess ?? null;
 
   log(`runScan P2 ${Date.now() - t0}ms holders=${holderCount} dex=$${dexData.priceUsd} ethUsd=${ethUsd} proxy=${proxyImplPlatform}`, "bot");
 
@@ -767,12 +856,16 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
 
   let buyTax = isManaged ? 0 : sim.buyTax;
   let sellTax = isManaged ? 0 : sim.sellTax;
-  let isHoneypot = isManaged ? false : sim.isHoneypot;
+  let isHoneypot = isManaged ? false : (
+    sim.isHoneypot ||
+    honeypotIs?.isHoneypot === true ||
+    goplus?.goPlusIsHoneypot === true
+  );
 
   if (!isManaged && !sim.simulationSuccess && fallbackData) {
     buyTax = fallbackData.buyTax;
     sellTax = fallbackData.sellTax;
-    isHoneypot = fallbackData.isHoneypot;
+    if (!isHoneypot) isHoneypot = fallbackData.isHoneypot;
   }
 
   let tokenPriceUsd = dexData.priceUsd;
@@ -812,14 +905,19 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
   const flags: string[] = [];
   if (isFakeApol) flags.push("🚨 FAKE $APOL — APOL Agent does NOT have an official token or CA yet. This is a SCAM.");
   if (isHoneypot) flags.push("🚨 Honeypot — SELL BLOCKED");
+  if (honeypotIs?.isHoneypot) flags.push(`🚨 Honeypot.is: SELL BLOCKED${honeypotIs.honeypotReason ? ` — ${honeypotIs.honeypotReason}` : ""}`);
   if (blockaidSellFail && !isHoneypot) flags.push("🚫 Sell simulation FAILED — sell transactions blocked (Blockaid)");
+  if (goPlusSellSimSuccess === false && !isHoneypot) flags.push("🚫 GoPlus: Sell simulation FAILED");
   if (blockaidMalicious) flags.push(`🚨 BLOCKAID: Malicious contract detected${blockaid?.attackTypes?.length ? ` (${blockaid.attackTypes.join(", ")})` : ""}`);
+  if (defiShield?.risks?.length) {
+    for (const r of defiShield.risks) flags.push(`⚠️ De.Fi Shield: ${r}`);
+  }
   if (buyTax > 5 || sellTax > 5) flags.push(`💰 High tax: Buy ${buyTax}% / Sell ${sellTax}%`);
   if (holderCount > 0 && holderCount < 100) flags.push("👥 Low holder count");
   if (liquidity > 0 && liquidity < 10000) flags.push("💧 Very Low Liquidity");
   if (!hasPool) flags.push("⚠️ No Uniswap liquidity pool");
 
-  const riskLevel = isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10 || blockaidMalicious || blockaidSellFail
+  const riskLevel = isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10 || blockaidMalicious || blockaidSellFail || goPlusSellSimSuccess === false
     ? "🔴 HIGH RISK"
     : flags.length > 0
       ? "🟡 CAUTION"
@@ -863,9 +961,28 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
     lines.push(`👥 <b>Holders:</b> ${holderStr}`);
     lines.push(`💰 <b>Buy Tax:</b> ${buyTax.toFixed(1)}%  |  <b>Sell Tax:</b> ${sellTax.toFixed(1)}%`);
     if (blockaid?.sellSimulationSuccess === true) {
-      lines.push(`🟢 <b>Sell Simulation:</b> PASS`);
+      lines.push(`🟢 <b>Sell Simulation (Blockaid):</b> PASS`);
     } else if (blockaid?.sellSimulationSuccess === false) {
-      lines.push(`🔴 <b>Sell Simulation:</b> BLOCKED${blockaid.sellRevertReason ? ` — ${blockaid.sellRevertReason}` : ""}`);
+      lines.push(`🔴 <b>Sell Simulation (Blockaid):</b> BLOCKED${blockaid.sellRevertReason ? ` — ${blockaid.sellRevertReason}` : ""}`);
+    }
+    if (goPlusSellSimSuccess === true) {
+      lines.push(`🟢 <b>Sell Simulation (GoPlus):</b> PASS`);
+    } else if (goPlusSellSimSuccess === false) {
+      lines.push(`🔴 <b>Sell Simulation (GoPlus):</b> FAIL`);
+    }
+    if (honeypotIs !== null) {
+      if (honeypotIs.isHoneypot) {
+        lines.push(`🔴 <b>Honeypot.is:</b> SELL BLOCKED${honeypotIs.honeypotReason ? ` — ${honeypotIs.honeypotReason}` : ""}`);
+      } else {
+        lines.push(`🟢 <b>Honeypot.is:</b> CLEAN`);
+      }
+    }
+    if (defiShield !== null) {
+      if (defiShield.risks.length === 0) {
+        lines.push(`🟢 <b>De.Fi Shield:</b> CLEAN`);
+      } else {
+        lines.push(`🔴 <b>De.Fi Shield:</b> ${defiShield.risks.length} risk${defiShield.risks.length > 1 ? "s" : ""} — ${defiShield.risks.slice(0, 2).join(", ")}${defiShield.risks.length > 2 ? "…" : ""}`);
+      }
     }
 
     if (clankerData) {
