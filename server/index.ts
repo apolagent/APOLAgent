@@ -69,6 +69,8 @@ const agentConcurrencyGuard = makeConcurrencyGuard(MAX_CONCURRENT_AGENT, "agent 
 
 // Apply general limiter to all /api routes
 app.use("/api", generalApiLimiter);
+// ── Health check endpoint (for Render + UptimeRobot) ──────────────────────
+app.get("/health", (_req, res) => res.status(200).json({ status: "ok" }));
 
 // Apply stricter limiters + concurrency guards to the expensive scan endpoints
 app.use("/api/detective/analyze", scanLimiter, scanConcurrencyGuard);
