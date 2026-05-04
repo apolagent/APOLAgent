@@ -219,11 +219,18 @@ const ROUTES_CACHE_TTL = 60000;
 async function dexFetch(url: string, timeoutMs: number): Promise<any> {
   const headers = { "User-Agent": "Mozilla/5.0 (compatible; APOLAgent/1.0; +https://apolagent.online)" };
   let resp = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+  console.log(`[DexScreener] GET ${url} → ${resp.status}`);
   if (resp.status === 429) {
+    console.log(`[DexScreener] 429 rate-limited, retrying after 2s…`);
     await new Promise<void>(r => setTimeout(r, 2000));
     resp = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+    console.log(`[DexScreener] RETRY ${url} → ${resp.status}`);
   }
-  return resp.ok ? (resp.json() as Promise<any>) : null;
+  if (!resp.ok) {
+    console.log(`[DexScreener] Non-OK response (${resp.status}), returning null`);
+    return null;
+  }
+  return resp.json() as Promise<any>;
 }
 
 async function getEthUsdPrice(): Promise<number> {
@@ -247,7 +254,9 @@ async function getDexScreenerData(addr: string): Promise<DexData> {
   }
   const empty: DexData = { priceUsd: 0, liquidity: 0, dexMcap: 0, dexFdv: 0, volume24h: 0, pairCreatedAt: null, poolVersion: null };
   try {
-    const data = await dexFetch(`${DEXSCREENER_BASE}/tokens/v1/base/${addr}`, 6000);
+    const url = `${DEXSCREENER_BASE}/tokens/v1/base/${addr}`;
+    const data = await dexFetch(url, 6000);
+    console.log(`[getDexScreenerData] addr=${addr} response=${data === null ? "null" : `${Array.isArray(data) ? data.length : "non-array"} pairs`}`);
     const pairs = Array.isArray(data) ? data : [];
     const pair = pairs.length > 1
       ? pairs.reduce((best: any, p: any) => (parseFloat(p?.liquidity?.usd || "0") > parseFloat(best?.liquidity?.usd || "0") ? p : best), pairs[0])
@@ -265,7 +274,8 @@ async function getDexScreenerData(addr: string): Promise<DexData> {
     };
     if (result.priceUsd > 0) routesDexCache.set(key, { data: result, timestamp: Date.now() });
     return result.priceUsd > 0 ? result : cached?.data || result;
-  } catch {
+  } catch (err: any) {
+    console.log(`[getDexScreenerData] addr=${addr} error=${err?.message ?? err}`);
     return cached?.data || empty;
   }
 }
