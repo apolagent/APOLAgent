@@ -283,6 +283,17 @@ async function getDeployer(addr: string): Promise<string | null> {
 }
 
 async function getHolderCount(addr: string): Promise<number> {
+  const moralisKey = process.env.MORALIS_API_KEY;
+  if (moralisKey) {
+    try {
+      const data = await fetch(
+        `https://deep-index.moralis.io/api/v2.2/erc20/${addr}/owners?chain=base&limit=1`,
+        { headers: { "X-API-Key": moralisKey }, signal: AbortSignal.timeout(6000) },
+      ).then((r) => (r.ok ? (r.json() as any) : null));
+      const count = parseInt(data?.total_count || "0", 10);
+      if (count > 0) return count;
+    } catch {}
+  }
   try {
     const data = await fetch(`${BLOCKSCOUT_BASE}/api/v2/tokens/${addr}/counters`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
     return parseInt(data?.token_holders_count || "0", 10);
