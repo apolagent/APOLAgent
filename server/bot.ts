@@ -26,6 +26,16 @@ const DEX_CACHE_TTL = 60000;
 let ETH_PRICE_CACHE: { price: number; timestamp: number } | null = null;
 const ETH_CACHE_TTL = 60000;
 
+async function dexFetch(url: string, timeoutMs: number): Promise<any> {
+  const headers = { "User-Agent": "Mozilla/5.0 (compatible; APOLAgent/1.0; +https://apolagent.online)" };
+  let resp = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+  if (resp.status === 429) {
+    await new Promise<void>(r => setTimeout(r, 2000));
+    resp = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+  }
+  return resp.ok ? (resp.json() as Promise<any>) : null;
+}
+
 const PAYMENT_RECEIVER = "0x857aca6a8a743c9262d64819d239f509a1cd0a85";
 const SUBSCRIPTION_PRICE_WEI = BigInt("20000000000000000");
 const SUBSCRIPTION_PRICE_ETH = "0.02";
@@ -293,7 +303,7 @@ async function getEthUsdPrice(): Promise<number> {
   }
   const tryDexScreener = async (): Promise<number> => {
     try {
-      const data = await fetch(`${DEXSCREENER_BASE}/tokens/v1/base/${WETH}`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
+      const data = await dexFetch(`${DEXSCREENER_BASE}/tokens/v1/base/${WETH}`, 5000);
       const pairs = Array.isArray(data) ? data : [];
       return parseFloat(pairs[0]?.priceUsd || "0") || 0;
     } catch { return 0; }
@@ -317,7 +327,7 @@ async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liq
     return cached.data;
   }
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/tokens/v1/base/${addr}`, { signal: AbortSignal.timeout(8000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await dexFetch(`${DEXSCREENER_BASE}/tokens/v1/base/${addr}`, 8000);
     const pairs = Array.isArray(data) ? data : [];
     const pair = pairs.length > 1
       ? pairs.reduce((best: any, p: any) => (parseFloat(p?.liquidity?.usd || "0") > parseFloat(best?.liquidity?.usd || "0") ? p : best), pairs[0])
@@ -544,7 +554,7 @@ async function getContractActivity(addr: string): Promise<ContractActivity> {
 
 async function searchDexScreener(query: string): Promise<{ address: string; name: string; symbol: string; chain: string } | null> {
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/latest/dex/search?q=${encodeURIComponent(query)}`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await dexFetch(`${DEXSCREENER_BASE}/latest/dex/search?q=${encodeURIComponent(query)}`, 5000);
     const pair = data?.pairs?.find((p: any) => p.chainId === "base");
     if (!pair) return null;
     return { address: pair.baseToken?.address || "", name: pair.baseToken?.name || "", symbol: pair.baseToken?.symbol || "", chain: "base" };
@@ -1093,7 +1103,7 @@ function getProtocolUrl(platform: string | null, address: string): string | null
 
 async function getDexScreenerSocials(addr: string): Promise<{ twitter: string | null; website: string | null; telegram: string | null; description: string | null }> {
   try {
-    const data = await fetch(`${DEXSCREENER_BASE}/tokens/v1/base/${addr}`, { signal: AbortSignal.timeout(4000) }).then((r) => r.ok ? r.json() as any : null);
+    const data = await dexFetch(`${DEXSCREENER_BASE}/tokens/v1/base/${addr}`, 4000);
     const pairs = Array.isArray(data) ? data : [];
     const pair = pairs[0];
     const info = pair?.info || {};
