@@ -1,4 +1,3 @@
-[APOL_profile_README.3.md](https://github.com/user-attachments/files/27415431/APOL_profile_README.3.md)
 <p align="center">
   <img src="https://i.postimg.cc/Zqmm1CcP/APOL-Logo.png" width="120" alt="APOL Agent Logo"/>
 </p>
@@ -14,14 +13,14 @@
   <a href="https://t.me/APOLAgentBot"><img src="https://img.shields.io/badge/Telegram-Bot-26A5E4?style=for-the-badge&logo=telegram&logoColor=white"/></a>
   <a href="https://t.me/ApolAgent"><img src="https://img.shields.io/badge/Telegram-Community-26A5E4?style=for-the-badge&logo=telegram&logoColor=white"/></a>
   <a href="https://x.com/APOLAgentBot_"><img src="https://img.shields.io/badge/X-@APOLAgentBot_-000000?style=for-the-badge&logo=x&logoColor=white"/></a>
-  <a href="https://img.shields.io/badge/Base-Blockchain-0052FF?style=for-the-badge&logo=coinbase&logoColor=white"><img src="https://img.shields.io/badge/Base-Blockchain-0052FF?style=for-the-badge&logo=coinbase&logoColor=white"/></a>
+  <a href="https://base.org"><img src="https://img.shields.io/badge/Base-Blockchain-0052FF?style=for-the-badge&logo=coinbase&logoColor=white"/></a>
 </p>
 
 ---
 
 ## What is APOL Agent?
 
-APOL Agent is an autonomous on-chain forensic security tool built on Base blockchain, purpose-built for AI agent verification. Before you trust an agent with your wallet, your protocol, or your community, APOL tells you what it actually is, scanning its contract logic, deployer history, on-chain behavior, and claimed capabilities against known scam patterns and manipulation signatures.
+APOL Agent is an autonomous on-chain forensic security tool built on Base blockchain, purpose-built for AI agent verification. Before you trust an agent with your wallet, your protocol, or your community, APOL tells you what it actually is — scanning its contract logic, deployer history, on-chain behavior, and claimed capabilities against known scam patterns and manipulation signatures.
 
 Token security, wallet forensics, and rug detection are part of the stack. AI agent verification is the mission.
 
