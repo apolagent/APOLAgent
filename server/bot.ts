@@ -835,6 +835,10 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
   const defiShield = defiShieldData as DeFiShieldResult | null;
   const goplus = goplusData as GoPlusSecurityData | null;
   const goPlusSellSimSuccess = goplus?.goPlusSellSimSuccess ?? null;
+  const isMintable = goplus?.isMintable ?? false;
+  const isOpenSource = goplus?.isOpenSource ?? null;
+  const hasBlacklist = goplus?.hasBlacklist ?? false;
+  const canPause = goplus?.canPause ?? false;
 
   log(`runScan P2 ${Date.now() - t0}ms holders=${holderCount} dex=$${dexData.priceUsd} ethUsd=${ethUsd} proxy=${proxyImplPlatform}`, "bot");
 
@@ -937,8 +941,12 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
   if (holderCount > 0 && holderCount < 100) flags.push("👥 Low holder count");
   if (liquidity > 0 && liquidity < 10000) flags.push("💧 Very Low Liquidity");
   if (!hasPool) flags.push("⚠️ No Uniswap liquidity pool");
+  if (isOpenSource === false) flags.push("⚠️ Unverified contract (not open source)");
+  if (isMintable) flags.push("🪙 MINTABLE — owner can print tokens");
+  if (hasBlacklist) flags.push("🚫 Blacklist function detected");
+  if (canPause) flags.push("⏸ Owner can pause trading");
 
-  const riskLevel = isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10 || blockaidMalicious || blockaidSellFail || goPlusSellSimSuccess === false
+  const riskLevel = isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10 || blockaidMalicious || blockaidSellFail || goPlusSellSimSuccess === false || isMintable || canPause || hasBlacklist
     ? "🔴 HIGH RISK"
     : flags.length > 0
       ? "🟡 CAUTION"
