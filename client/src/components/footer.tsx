@@ -1,5 +1,4 @@
 import { Link } from "wouter";
-import { Github } from "lucide-react";
 import { useWalletContext } from "@/hooks/use-wallet";
 
 const ADMIN_WALLET = "0x857aca6a8a743c9262d64819d239f509a1cd0a85";
@@ -133,18 +132,19 @@ export default function Footer() {
               target="_blank"
               rel="noopener noreferrer"
               data-testid="link-github"
-              aria-label="GitHub"
               style={{
-                display: "inline-flex",
-                alignItems: "center",
+                fontSize: "10px",
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
                 color: "rgba(255,255,255,0.5)",
                 textDecoration: "none",
+                fontFamily: "JetBrains Mono, monospace",
                 transition: "color 0.15s",
               }}
               onMouseEnter={e => (e.currentTarget.style.color = "#ffffff")}
               onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}
             >
-              <Github size={14} />
+              GitHub
             </a>
           </div>
 
