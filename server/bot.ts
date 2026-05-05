@@ -890,11 +890,12 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
 
   let holdersComplete = topHolders.length > 0;
 
-  if (alchemyPrice === 0 || holderCount === 0) {
+  if (alchemyPrice === 0 || holderCount === 0 || !goplusData) {
     const retries = await Promise.all([
       alchemyPrice === 0 ? softTimeout(getAlchemyPrice(address), 5000, 0) : Promise.resolve(alchemyPrice),
       holderCount === 0 ? softTimeout(getHolderCount(address), 5000, 0) : Promise.resolve(holderCount),
       topHolders.length === 0 ? softTimeout(getTopHolders(address), 5000, []) : Promise.resolve(topHolders),
+      !goplusData ? softTimeout(getGoPlusSecurityData(address), 6000, null) : Promise.resolve(goplusData),
     ]);
     if (alchemyPrice === 0) alchemyPrice = retries[0] as number;
     if (holderCount === 0) holderCount = retries[1] as number;
@@ -902,6 +903,7 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
       topHolders = retries[2] as typeof topHolders;
       holdersComplete = topHolders.length > 0;
     }
+    if (!goplusData) goplusData = retries[3] as GoPlusSecurityData | null;
     log(`runScan P2-retry ${Date.now() - t0}ms holders=${holderCount} alchemy=$${alchemyPrice}`, "bot");
   }
 

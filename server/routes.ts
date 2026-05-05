@@ -1019,10 +1019,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ethUsd = results[5].status === "fulfilled" ? results[5].value : 0;
       const dexData = results[6].status === "fulfilled" ? results[6].value : { volume24h: 0, pairCreatedAt: null, poolVersion: null, dexId: null };
       const alchemyPrice: number = results[7]?.status === "fulfilled" ? (results[7].value as number) : 0;
-      const goplusData = results[8]?.status === "fulfilled" ? results[8].value : null;
+      let goplusData = results[8]?.status === "fulfilled" ? results[8].value : null;
       const blockaidData = results[9]?.status === "fulfilled" ? results[9].value : null;
       const honeypotIsData = results[10]?.status === "fulfilled" ? results[10].value : null;
       const defiShieldData = results[11]?.status === "fulfilled" ? results[11].value : null;
+
+      if (!goplusData) {
+        goplusData = await getGoPlusSecurityData(address).catch(() => null);
+      }
 
       let fallbackData: FallbackTokenData | null = null;
       if (holderCount === 0 || (!sim.simulationSuccess && !deployer)) {
