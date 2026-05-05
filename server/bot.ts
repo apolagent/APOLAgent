@@ -21,7 +21,7 @@ const SCAN_IN_FLIGHT = new Map<string, Promise<string>>();
 const PENDING_COMMAND = new Map<number, { command: string; timestamp: number }>();
 const PENDING_TTL = 120000;
 
-const DEX_CACHE = new Map<string, { data: { priceUsd: number; liquidity: number; poolVersion: string | null }; timestamp: number }>();
+const DEX_CACHE = new Map<string, { data: { priceUsd: number; liquidity: number; poolVersion: string | null; dexMcap: number; dexFdv: number; dexId: string | null }; timestamp: number }>();
 const DEX_CACHE_TTL = 60000;
 let ETH_PRICE_CACHE: { price: number; timestamp: number } | null = null;
 const ETH_CACHE_TTL = 60000;
@@ -331,7 +331,7 @@ async function getEthUsdPrice(): Promise<number> {
   return price || ETH_PRICE_CACHE?.price || 0;
 }
 
-async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liquidity: number; poolVersion: string | null; dexMcap: number; dexFdv: number }> {
+async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liquidity: number; poolVersion: string | null; dexMcap: number; dexFdv: number; dexId: string | null }> {
   const key = addr.toLowerCase();
   const cached = DEX_CACHE.get(key);
   if (cached && Date.now() - cached.timestamp < DEX_CACHE_TTL) {
@@ -343,19 +343,21 @@ async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liq
     const pair = pairs.length > 1
       ? pairs.reduce((best: any, p: any) => (parseFloat(p?.liquidity?.usd || "0") > parseFloat(best?.liquidity?.usd || "0") ? p : best), pairs[0])
       : pairs[0] || null;
-    const dexId: string = (pair?.dexId || "").toLowerCase();
-    const poolVersion: string | null = dexId.includes("v4") ? "v4" : dexId.includes("v3") ? "v3" : pair ? "v2" : null;
+    const rawDexId: string = (pair?.dexId || "").toLowerCase();
+    const labels: string[] = Array.isArray(pair?.labels) ? (pair.labels as string[]).map((l: string) => l.toLowerCase()) : [];
+    const poolVersion: string | null = labels.includes("v4") ? "v4" : labels.includes("v3") ? "v3" : labels.includes("v2") ? "v2" : pair ? "v2" : null;
     const result = {
       priceUsd: parseFloat(pair?.priceUsd || "0") || 0,
       liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0,
       poolVersion,
       dexMcap: parseFloat(pair?.marketCap || "0") || 0,
       dexFdv: parseFloat(pair?.fdv || "0") || 0,
+      dexId: pair ? rawDexId || null : null,
     };
     if (result.priceUsd > 0) DEX_CACHE.set(key, { data: result, timestamp: Date.now() });
     return result.priceUsd > 0 ? result : cached?.data || result;
   } catch {
-    return cached?.data || { priceUsd: 0, liquidity: 0, poolVersion: null, dexMcap: 0, dexFdv: 0 };
+    return cached?.data || { priceUsd: 0, liquidity: 0, poolVersion: null, dexMcap: 0, dexFdv: 0, dexId: null };
   }
 }
 
@@ -819,7 +821,7 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
     softTimeout(getHolderCount(address), 8000, 0),
     softTimeout(getTopHolders(address), 8000, []),
     softTimeout(getEthUsdPrice(), 8000, 0),
-    softTimeout(getDexScreenerData(address), 10000, { priceUsd: 0, liquidity: 0, poolVersion: null, dexMcap: 0, dexFdv: 0 }),
+    softTimeout(getDexScreenerData(address), 10000, { priceUsd: 0, liquidity: 0, poolVersion: null, dexMcap: 0, dexFdv: 0, dexId: null }),
     !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
     !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
     !platformFromDeployer ? softTimeout(detectPlatformFromProxyImpl(address), 5000, null) : Promise.resolve(null),
@@ -846,7 +848,7 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
 
   if (dexData.priceUsd === 0 || holderCount === 0) {
     const retries = await Promise.all([
-      dexData.priceUsd === 0 ? softTimeout(getDexScreenerData(address), 5000, { priceUsd: 0, liquidity: 0, poolVersion: null, dexMcap: 0, dexFdv: 0 }) : Promise.resolve(dexData),
+      dexData.priceUsd === 0 ? softTimeout(getDexScreenerData(address), 5000, { priceUsd: 0, liquidity: 0, poolVersion: null, dexMcap: 0, dexFdv: 0, dexId: null }) : Promise.resolve(dexData),
       holderCount === 0 ? softTimeout(getHolderCount(address), 5000, 0) : Promise.resolve(holderCount),
       topHolders.length === 0 ? softTimeout(getTopHolders(address), 5000, []) : Promise.resolve(topHolders),
     ]);
@@ -871,7 +873,15 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
 
   const scanCount = await storage.incrementLookup(address, tokenInfo.name, tokenInfo.symbol);
 
-  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || proxyImplPlatform || creationPlatform || deployerChainPlatform;
+  const dexPlatform: string | null = (() => {
+    const d = dexData.dexId?.toLowerCase() ?? "";
+    if (d.includes("apestore")) return "ApeStore";
+    if (d.includes("clanker")) return "Clanker";
+    if (d.includes("virtuals")) return "Virtuals";
+    if (d.includes("flaunch")) return "Flaunch";
+    return null;
+  })();
+  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || proxyImplPlatform || creationPlatform || deployerChainPlatform || dexPlatform;
   const lpStatus = detectLpStatus(topHolders, platform, holdersComplete);
   const isVirtuals = platform === "Virtuals";
   const isManaged = !!(platform && MANAGED_PROTOCOLS.has(platform));
@@ -904,7 +914,8 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
   const liquidity = dexData.liquidity;
 
   const hasPool = sim.simulationSuccess || isManaged || !!platform || dexData.priceUsd > 0 || dexData.liquidity > 0;
-  const poolLabel = dexData.poolVersion ? `Uniswap ${dexData.poolVersion.toUpperCase()}` : "Uniswap";
+  const dexName = dexData.dexId ? dexData.dexId.charAt(0).toUpperCase() + dexData.dexId.slice(1) : "Uniswap";
+  const poolLabel = dexData.poolVersion ? `${dexName} ${dexData.poolVersion.toUpperCase()}` : dexName;
   const dexStatus = hasPool ? `${poolLabel} ✅` : "No Pool Found ⚠️";
 
   let contractOwner: string | null = null;
@@ -1360,7 +1371,7 @@ async function runAgentScan(address: string, searchedName: string | null, paid: 
     softTimeout(getHolderCount(address), 8000, 0),
     softTimeout(getTopHolders(address), 8000, []),
     softTimeout(getEthUsdPrice(), 8000, 0),
-    softTimeout(getDexScreenerData(address), 10000, { priceUsd: 0, liquidity: 0, poolVersion: null, dexMcap: 0, dexFdv: 0 }),
+    softTimeout(getDexScreenerData(address), 10000, { priceUsd: 0, liquidity: 0, poolVersion: null, dexMcap: 0, dexFdv: 0, dexId: null }),
     softTimeout(getDexScreenerSocials(address), 8000, { twitter: null, website: null, telegram: null, description: null }),
     !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
     !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),

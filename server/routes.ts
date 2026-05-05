@@ -222,7 +222,7 @@ async function getTopHolders(addr: string): Promise<{ address: string; percent: 
   } catch { return []; }
 }
 
-type DexData = { priceUsd: number; liquidity: number; dexMcap: number; dexFdv: number; volume24h: number; pairCreatedAt: number | null; poolVersion: string | null };
+type DexData = { priceUsd: number; liquidity: number; dexMcap: number; dexFdv: number; volume24h: number; pairCreatedAt: number | null; poolVersion: string | null; dexId: string | null };
 const routesDexCache = new Map<string, { data: DexData; timestamp: number }>();
 let routesEthCache: { price: number; timestamp: number } | null = null;
 const ROUTES_CACHE_TTL = 60000;
@@ -263,7 +263,7 @@ async function getDexScreenerData(addr: string): Promise<DexData> {
   if (cached && Date.now() - cached.timestamp < ROUTES_CACHE_TTL) {
     return cached.data;
   }
-  const empty: DexData = { priceUsd: 0, liquidity: 0, dexMcap: 0, dexFdv: 0, volume24h: 0, pairCreatedAt: null, poolVersion: null };
+  const empty: DexData = { priceUsd: 0, liquidity: 0, dexMcap: 0, dexFdv: 0, volume24h: 0, pairCreatedAt: null, poolVersion: null, dexId: null };
   try {
     const url = `${DEXSCREENER_BASE}/tokens/v1/base/${addr}`;
     const data = await dexFetch(url, 6000);
@@ -272,8 +272,9 @@ async function getDexScreenerData(addr: string): Promise<DexData> {
     const pair = pairs.length > 1
       ? pairs.reduce((best: any, p: any) => (parseFloat(p?.liquidity?.usd || "0") > parseFloat(best?.liquidity?.usd || "0") ? p : best), pairs[0])
       : pairs[0] || null;
-    const dexId: string = (pair?.dexId || "").toLowerCase();
-    const poolVersion: string | null = dexId.includes("v4") ? "V4" : dexId.includes("v3") ? "V3" : pair ? "V2" : null;
+    const rawDexId: string = (pair?.dexId || "").toLowerCase();
+    const labels: string[] = Array.isArray(pair?.labels) ? (pair.labels as string[]).map((l: string) => l.toLowerCase()) : [];
+    const poolVersion: string | null = labels.includes("v4") ? "V4" : labels.includes("v3") ? "V3" : labels.includes("v2") ? "V2" : pair ? "V2" : null;
     const result: DexData = {
       priceUsd: parseFloat(pair?.priceUsd || "0") || 0,
       liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0,
@@ -282,6 +283,7 @@ async function getDexScreenerData(addr: string): Promise<DexData> {
       volume24h: parseFloat(pair?.volume?.h24 || "0") || 0,
       pairCreatedAt: pair?.pairCreatedAt ? Number(pair.pairCreatedAt) : null,
       poolVersion,
+      dexId: pair ? rawDexId || null : null,
     };
     if (result.priceUsd > 0) routesDexCache.set(key, { data: result, timestamp: Date.now() });
     return result.priceUsd > 0 ? result : cached?.data || result;
@@ -971,7 +973,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let holderCount = results[3].status === "fulfilled" ? results[3].value : 0;
       const topHolders = results[4].status === "fulfilled" ? results[4].value : [];
       const ethUsd = results[5].status === "fulfilled" ? results[5].value : 0;
-      let dexData = results[6].status === "fulfilled" ? results[6].value : { priceUsd: 0, liquidity: 0, dexMcap: 0, dexFdv: 0, volume24h: 0, pairCreatedAt: null, poolVersion: null };
+      let dexData = results[6].status === "fulfilled" ? results[6].value : { priceUsd: 0, liquidity: 0, dexMcap: 0, dexFdv: 0, volume24h: 0, pairCreatedAt: null, poolVersion: null, dexId: null };
       const goplusData = results[7]?.status === "fulfilled" ? results[7].value : null;
       const blockaidData = results[8]?.status === "fulfilled" ? results[8].value : null;
       const honeypotIsData = results[9]?.status === "fulfilled" ? results[9].value : null;
@@ -1153,6 +1155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tokenAgeDays,
         topHoldersList: displayHolders,
         poolVersion: dexData.poolVersion,
+        dexId: dexData.dexId,
         // Blockaid sell simulation
         sellSimulationSuccess: blockaidData?.sellSimulationSuccess ?? null,
         sellSimRevertReason: blockaidData?.sellRevertReason ?? null,
