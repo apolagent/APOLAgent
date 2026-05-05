@@ -222,10 +222,17 @@ async function getTopHolders(addr: string): Promise<{ address: string; percent: 
   } catch { return []; }
 }
 
-type DexData = { priceUsd: number; liquidity: number; dexMcap: number; dexFdv: number; volume24h: number; pairCreatedAt: number | null; poolVersion: string | null; dexId: string | null };
+type DexData = { volume24h: number; pairCreatedAt: number | null; poolVersion: string | null; dexId: string | null };
 const routesDexCache = new Map<string, { data: DexData; timestamp: number }>();
 let routesEthCache: { price: number; timestamp: number } | null = null;
 const ROUTES_CACHE_TTL = 60000;
+const routesAlchemyPriceCache = new Map<string, { price: number; timestamp: number }>();
+const ROUTES_ALCHEMY_PRICE_TTL = 30000;
+
+function getAlchemyKey(): string {
+  const m = BASE_RPC.match(/\/v2\/([a-zA-Z0-9_-]+)/);
+  return m?.[1] ?? "";
+}
 
 async function dexFetch(url: string, timeoutMs: number): Promise<any> {
   const headers = { "User-Agent": "Mozilla/5.0 (compatible; APOLAgent/1.0; +https://apolagent.online)" };
@@ -248,13 +255,31 @@ async function getEthUsdPrice(): Promise<number> {
   if (routesEthCache && Date.now() - routesEthCache.timestamp < ROUTES_CACHE_TTL) {
     return routesEthCache.price;
   }
-  try {
-    const data = await dexFetch(`${DEXSCREENER_BASE}/tokens/v1/base/${WETH}`, 6000);
-    const pairs = Array.isArray(data) ? data : [];
-    const price = parseFloat(pairs[0]?.priceUsd || "0") || 0;
-    if (price > 0) routesEthCache = { price, timestamp: Date.now() };
-    return price || routesEthCache?.price || 0;
-  } catch { return routesEthCache?.price || 0; }
+  const tryAlchemy = async (): Promise<number> => {
+    const apiKey = getAlchemyKey();
+    if (!apiKey) return 0;
+    try {
+      const resp = await fetch(`https://api.g.alchemy.com/prices/v1/${apiKey}/tokens/by-address`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "accept": "application/json" },
+        body: JSON.stringify({ addresses: [{ network: "base-mainnet", address: WETH }] }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!resp.ok) return 0;
+      const data = await resp.json() as any;
+      return parseFloat(data?.data?.[0]?.prices?.[0]?.value || "0") || 0;
+    } catch { return 0; }
+  };
+  const tryCoingecko = async (): Promise<number> => {
+    try {
+      const data = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
+      return parseFloat(data?.ethereum?.usd || "0") || 0;
+    } catch { return 0; }
+  };
+  const [alchemyResult, cgResult] = await Promise.all([tryAlchemy(), tryCoingecko()]);
+  const price = alchemyResult > 0 ? alchemyResult : cgResult;
+  if (price > 0) routesEthCache = { price, timestamp: Date.now() };
+  return price || routesEthCache?.price || 0;
 }
 
 async function getDexScreenerData(addr: string): Promise<DexData> {
@@ -263,7 +288,7 @@ async function getDexScreenerData(addr: string): Promise<DexData> {
   if (cached && Date.now() - cached.timestamp < ROUTES_CACHE_TTL) {
     return cached.data;
   }
-  const empty: DexData = { priceUsd: 0, liquidity: 0, dexMcap: 0, dexFdv: 0, volume24h: 0, pairCreatedAt: null, poolVersion: null, dexId: null };
+  const empty: DexData = { volume24h: 0, pairCreatedAt: null, poolVersion: null, dexId: null };
   try {
     const url = `${DEXSCREENER_BASE}/tokens/v1/base/${addr}`;
     const data = await dexFetch(url, 6000);
@@ -272,25 +297,43 @@ async function getDexScreenerData(addr: string): Promise<DexData> {
     const pair = pairs.length > 1
       ? pairs.reduce((best: any, p: any) => (parseFloat(p?.liquidity?.usd || "0") > parseFloat(best?.liquidity?.usd || "0") ? p : best), pairs[0])
       : pairs[0] || null;
+    if (!pair) return cached?.data || empty;
     const rawDexId: string = (pair?.dexId || "").toLowerCase();
     const labels: string[] = Array.isArray(pair?.labels) ? (pair.labels as string[]).map((l: string) => l.toLowerCase()) : [];
-    const poolVersion: string | null = labels.includes("v4") ? "V4" : labels.includes("v3") ? "V3" : labels.includes("v2") ? "V2" : pair ? "V2" : null;
+    const poolVersion: string | null = labels.includes("v4") ? "V4" : labels.includes("v3") ? "V3" : "V2";
     const result: DexData = {
-      priceUsd: parseFloat(pair?.priceUsd || "0") || 0,
-      liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0,
-      dexMcap: parseFloat(pair?.marketCap || "0") || 0,
-      dexFdv: parseFloat(pair?.fdv || "0") || 0,
       volume24h: parseFloat(pair?.volume?.h24 || "0") || 0,
       pairCreatedAt: pair?.pairCreatedAt ? Number(pair.pairCreatedAt) : null,
       poolVersion,
-      dexId: pair ? rawDexId || null : null,
+      dexId: rawDexId || null,
     };
-    if (result.priceUsd > 0) routesDexCache.set(key, { data: result, timestamp: Date.now() });
-    return result.priceUsd > 0 ? result : cached?.data || result;
+    routesDexCache.set(key, { data: result, timestamp: Date.now() });
+    return result;
   } catch (err: any) {
     console.log(`[getDexScreenerData] addr=${addr} error=${err?.message ?? err}`);
     return cached?.data || empty;
   }
+}
+
+async function getAlchemyPrice(addr: string): Promise<number> {
+  const key = addr.toLowerCase();
+  const cached = routesAlchemyPriceCache.get(key);
+  if (cached && Date.now() - cached.timestamp < ROUTES_ALCHEMY_PRICE_TTL) return cached.price;
+  const apiKey = getAlchemyKey();
+  if (!apiKey) return 0;
+  try {
+    const resp = await fetch(`https://api.g.alchemy.com/prices/v1/${apiKey}/tokens/by-address`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "accept": "application/json" },
+      body: JSON.stringify({ addresses: [{ network: "base-mainnet", address: addr }] }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return 0;
+    const data = await resp.json() as any;
+    const price = parseFloat(data?.data?.[0]?.prices?.[0]?.value || "0") || 0;
+    if (price > 0) routesAlchemyPriceCache.set(key, { price, timestamp: Date.now() });
+    return price;
+  } catch { return 0; }
 }
 
 interface GoPlusSecurityData {
@@ -958,6 +1001,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           getTopHolders(address),
           getEthUsdPrice(),
           getDexScreenerData(address),
+          getAlchemyPrice(address),
           getGoPlusSecurityData(address),
           getBlockaidTokenScan(address),
           getHoneypotIs(address),
@@ -973,11 +1017,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let holderCount = results[3].status === "fulfilled" ? results[3].value : 0;
       const topHolders = results[4].status === "fulfilled" ? results[4].value : [];
       const ethUsd = results[5].status === "fulfilled" ? results[5].value : 0;
-      let dexData = results[6].status === "fulfilled" ? results[6].value : { priceUsd: 0, liquidity: 0, dexMcap: 0, dexFdv: 0, volume24h: 0, pairCreatedAt: null, poolVersion: null, dexId: null };
-      const goplusData = results[7]?.status === "fulfilled" ? results[7].value : null;
-      const blockaidData = results[8]?.status === "fulfilled" ? results[8].value : null;
-      const honeypotIsData = results[9]?.status === "fulfilled" ? results[9].value : null;
-      const defiShieldData = results[10]?.status === "fulfilled" ? results[10].value : null;
+      const dexData = results[6].status === "fulfilled" ? results[6].value : { volume24h: 0, pairCreatedAt: null, poolVersion: null, dexId: null };
+      const alchemyPrice: number = results[7]?.status === "fulfilled" ? (results[7].value as number) : 0;
+      const goplusData = results[8]?.status === "fulfilled" ? results[8].value : null;
+      const blockaidData = results[9]?.status === "fulfilled" ? results[9].value : null;
+      const honeypotIsData = results[10]?.status === "fulfilled" ? results[10].value : null;
+      const defiShieldData = results[11]?.status === "fulfilled" ? results[11].value : null;
 
       let fallbackData: FallbackTokenData | null = null;
       if (holderCount === 0 || (!sim.simulationSuccess && !deployer)) {
@@ -1017,13 +1062,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         sellTax = fallbackData.sellTax;
         if (!isHoneypot) isHoneypot = fallbackData.isHoneypot;
       }
-      let tokenPriceUsd = dexData.priceUsd;
+      let tokenPriceUsd = alchemyPrice;
       if (tokenPriceUsd === 0 && sim.tokensReceived > BigInt(0) && ethUsd > 0) {
         const tokensWholeUnits = Number(sim.tokensReceived) / (10 ** tokenInfo.decimals);
         tokenPriceUsd = tokensWholeUnits > 0 ? (0.001 / tokensWholeUnits) * ethUsd : 0;
       }
-      const calculatedMcap = Number(tokenInfo.totalSupply) * tokenPriceUsd;
-      const mcap = dexData.dexMcap > 0 ? dexData.dexMcap : (dexData.dexFdv > 0 ? dexData.dexFdv : calculatedMcap);
+      const mcap = Number(tokenInfo.totalSupply) * tokenPriceUsd;
 
       const nameUpper = tokenInfo.name.toUpperCase();
       const symbolUpper = tokenInfo.symbol.toUpperCase();
@@ -1040,7 +1084,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? Math.floor((Date.now() - dexData.pairCreatedAt) / (1000 * 60 * 60 * 24))
         : null;
       const isNewToken = tokenAgeDays !== null && tokenAgeDays < 14;
-      const isInDex = tokenPriceUsd > 0 || dexData.liquidity > 0;
+      const isInDex = tokenPriceUsd > 0;
 
       // Top 5 non-LP/non-burn holders for display
       const displayHolders = topHolders
@@ -1083,7 +1127,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isMintable) redFlags.push("MINTABLE — OWNER CAN PRINT");
       if (hasBlacklist) redFlags.push("BLACKLIST FUNCTION");
       if (canPause) redFlags.push("OWNER CAN PAUSE TRADING");
-      if (mcap > 0 && dexData.liquidity > 0 && dexData.liquidity / mcap < 0.03) redFlags.push("LOW LIQUIDITY RATIO");
 
       const isHighRisk = isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10 || isMintable || canPause || hasBlacklist || blockaidMalicious || blockaidSellFail || goPlusSellSimSuccess === false;
       const riskLevel = isHighRisk ? "High" : buyTax > 0 || sellTax > 0 ? "Caution" : "Clean";
@@ -1134,7 +1177,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         holderCount,
         priceUsd: tokenPriceUsd,
         mcap,
-        liquidity: dexData.liquidity,
+        liquidity: 0,
         volume24h: dexData.volume24h,
         deployer,
         scanCount,

@@ -14,6 +14,11 @@ function log(message: string, source = "bot") {
 
 const BASE_RPC = process.env.BASE_RPC_URL || "";
 
+function getAlchemyKey(): string {
+  const m = BASE_RPC.match(/\/v2\/([a-zA-Z0-9_-]+)/);
+  return m?.[1] ?? "";
+}
+
 const SCAN_CACHE = new Map<string, { result: string; timestamp: number }>();
 const SCAN_CACHE_TTL = 60000;
 const SCAN_IN_FLIGHT = new Map<string, Promise<string>>();
@@ -21,10 +26,12 @@ const SCAN_IN_FLIGHT = new Map<string, Promise<string>>();
 const PENDING_COMMAND = new Map<number, { command: string; timestamp: number }>();
 const PENDING_TTL = 120000;
 
-const DEX_CACHE = new Map<string, { data: { priceUsd: number; liquidity: number; poolVersion: string | null; dexMcap: number; dexFdv: number; dexId: string | null }; timestamp: number }>();
+const DEX_CACHE = new Map<string, { data: { poolVersion: string | null; dexId: string | null; volume24h: number; pairCreatedAt: number | null }; timestamp: number }>();
 const DEX_CACHE_TTL = 60000;
 let ETH_PRICE_CACHE: { price: number; timestamp: number } | null = null;
 const ETH_CACHE_TTL = 60000;
+const ALCHEMY_PRICE_CACHE = new Map<string, { price: number; timestamp: number }>();
+const ALCHEMY_PRICE_CACHE_TTL = 30000;
 
 async function dexFetch(url: string, timeoutMs: number): Promise<any> {
   const headers = { "User-Agent": "Mozilla/5.0 (compatible; APOLAgent/1.0; +https://apolagent.online)" };
@@ -312,11 +319,19 @@ async function getEthUsdPrice(): Promise<number> {
   if (ETH_PRICE_CACHE && Date.now() - ETH_PRICE_CACHE.timestamp < ETH_CACHE_TTL) {
     return ETH_PRICE_CACHE.price;
   }
-  const tryDexScreener = async (): Promise<number> => {
+  const tryAlchemy = async (): Promise<number> => {
+    const apiKey = getAlchemyKey();
+    if (!apiKey) return 0;
     try {
-      const data = await dexFetch(`${DEXSCREENER_BASE}/tokens/v1/base/${WETH}`, 5000);
-      const pairs = Array.isArray(data) ? data : [];
-      return parseFloat(pairs[0]?.priceUsd || "0") || 0;
+      const resp = await fetch(`https://api.g.alchemy.com/prices/v1/${apiKey}/tokens/by-address`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "accept": "application/json" },
+        body: JSON.stringify({ addresses: [{ network: "base-mainnet", address: WETH }] }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!resp.ok) return 0;
+      const data = await resp.json() as any;
+      return parseFloat(data?.data?.[0]?.prices?.[0]?.value || "0") || 0;
     } catch { return 0; }
   };
   const tryCoingecko = async (): Promise<number> => {
@@ -325,40 +340,61 @@ async function getEthUsdPrice(): Promise<number> {
       return parseFloat(data?.ethereum?.usd || "0") || 0;
     } catch { return 0; }
   };
-  const [dxResult, cgResult] = await Promise.all([tryDexScreener(), tryCoingecko()]);
-  const price = dxResult > 0 ? dxResult : cgResult;
+  const [alchemyResult, cgResult] = await Promise.all([tryAlchemy(), tryCoingecko()]);
+  const price = alchemyResult > 0 ? alchemyResult : cgResult;
   if (price > 0) ETH_PRICE_CACHE = { price, timestamp: Date.now() };
   return price || ETH_PRICE_CACHE?.price || 0;
 }
 
-async function getDexScreenerData(addr: string): Promise<{ priceUsd: number; liquidity: number; poolVersion: string | null; dexMcap: number; dexFdv: number; dexId: string | null }> {
+async function getDexScreenerData(addr: string): Promise<{ poolVersion: string | null; dexId: string | null; volume24h: number; pairCreatedAt: number | null }> {
   const key = addr.toLowerCase();
   const cached = DEX_CACHE.get(key);
   if (cached && Date.now() - cached.timestamp < DEX_CACHE_TTL) {
     return cached.data;
   }
+  const empty = { poolVersion: null, dexId: null, volume24h: 0, pairCreatedAt: null };
   try {
     const data = await dexFetch(`${DEXSCREENER_BASE}/tokens/v1/base/${addr}`, 8000);
     const pairs = Array.isArray(data) ? data : [];
     const pair = pairs.length > 1
       ? pairs.reduce((best: any, p: any) => (parseFloat(p?.liquidity?.usd || "0") > parseFloat(best?.liquidity?.usd || "0") ? p : best), pairs[0])
       : pairs[0] || null;
+    if (!pair) return cached?.data || empty;
     const rawDexId: string = (pair?.dexId || "").toLowerCase();
     const labels: string[] = Array.isArray(pair?.labels) ? (pair.labels as string[]).map((l: string) => l.toLowerCase()) : [];
-    const poolVersion: string | null = labels.includes("v4") ? "v4" : labels.includes("v3") ? "v3" : labels.includes("v2") ? "v2" : pair ? "v2" : null;
+    const poolVersion: string | null = labels.includes("v4") ? "v4" : labels.includes("v3") ? "v3" : "v2";
     const result = {
-      priceUsd: parseFloat(pair?.priceUsd || "0") || 0,
-      liquidity: parseFloat(pair?.liquidity?.usd || "0") || 0,
       poolVersion,
-      dexMcap: parseFloat(pair?.marketCap || "0") || 0,
-      dexFdv: parseFloat(pair?.fdv || "0") || 0,
-      dexId: pair ? rawDexId || null : null,
+      dexId: rawDexId || null,
+      volume24h: parseFloat(pair?.volume?.h24 || "0") || 0,
+      pairCreatedAt: pair?.pairCreatedAt ? Number(pair.pairCreatedAt) : null,
     };
-    if (result.priceUsd > 0) DEX_CACHE.set(key, { data: result, timestamp: Date.now() });
-    return result.priceUsd > 0 ? result : cached?.data || result;
+    DEX_CACHE.set(key, { data: result, timestamp: Date.now() });
+    return result;
   } catch {
-    return cached?.data || { priceUsd: 0, liquidity: 0, poolVersion: null, dexMcap: 0, dexFdv: 0, dexId: null };
+    return cached?.data || empty;
   }
+}
+
+async function getAlchemyPrice(addr: string): Promise<number> {
+  const key = addr.toLowerCase();
+  const cached = ALCHEMY_PRICE_CACHE.get(key);
+  if (cached && Date.now() - cached.timestamp < ALCHEMY_PRICE_CACHE_TTL) return cached.price;
+  const apiKey = getAlchemyKey();
+  if (!apiKey) return 0;
+  try {
+    const resp = await fetch(`https://api.g.alchemy.com/prices/v1/${apiKey}/tokens/by-address`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "accept": "application/json" },
+      body: JSON.stringify({ addresses: [{ network: "base-mainnet", address: addr }] }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return 0;
+    const data = await resp.json() as any;
+    const price = parseFloat(data?.data?.[0]?.prices?.[0]?.value || "0") || 0;
+    if (price > 0) ALCHEMY_PRICE_CACHE.set(key, { price, timestamp: Date.now() });
+    return price;
+  } catch { return 0; }
 }
 
 interface FallbackTokenData {
@@ -824,11 +860,12 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
 
   const platformFromDeployer = detectPlatform(address, deployer, []);
 
-  let [holderCount, topHolders, ethUsd, dexData, creationPlatform, deployerChainPlatform, proxyImplPlatform, blockaidData, goplusData, honeypotIsData, defiShieldData] = await Promise.all([
+  let [holderCount, topHolders, ethUsd, dexData, alchemyPrice, creationPlatform, deployerChainPlatform, proxyImplPlatform, blockaidData, goplusData, honeypotIsData, defiShieldData] = await Promise.all([
     softTimeout(getHolderCount(address), 8000, 0),
     softTimeout(getTopHolders(address), 8000, []),
     softTimeout(getEthUsdPrice(), 8000, 0),
-    softTimeout(getDexScreenerData(address), 10000, { priceUsd: 0, liquidity: 0, poolVersion: null, dexMcap: 0, dexFdv: 0, dexId: null }),
+    softTimeout(getDexScreenerData(address), 10000, { poolVersion: null, dexId: null, volume24h: 0, pairCreatedAt: null }),
+    softTimeout(getAlchemyPrice(address), 6000, 0),
     !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
     !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
     !platformFromDeployer ? softTimeout(detectPlatformFromProxyImpl(address), 5000, null) : Promise.resolve(null),
@@ -849,23 +886,23 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
   const hasBlacklist = goplus?.hasBlacklist ?? false;
   const canPause = goplus?.canPause ?? false;
 
-  log(`runScan P2 ${Date.now() - t0}ms holders=${holderCount} dex=$${dexData.priceUsd} ethUsd=${ethUsd} proxy=${proxyImplPlatform}`, "bot");
+  log(`runScan P2 ${Date.now() - t0}ms holders=${holderCount} alchemy=$${alchemyPrice} ethUsd=${ethUsd} proxy=${proxyImplPlatform}`, "bot");
 
   let holdersComplete = topHolders.length > 0;
 
-  if (dexData.priceUsd === 0 || holderCount === 0) {
+  if (alchemyPrice === 0 || holderCount === 0) {
     const retries = await Promise.all([
-      dexData.priceUsd === 0 ? softTimeout(getDexScreenerData(address), 5000, { priceUsd: 0, liquidity: 0, poolVersion: null, dexMcap: 0, dexFdv: 0, dexId: null }) : Promise.resolve(dexData),
+      alchemyPrice === 0 ? softTimeout(getAlchemyPrice(address), 5000, 0) : Promise.resolve(alchemyPrice),
       holderCount === 0 ? softTimeout(getHolderCount(address), 5000, 0) : Promise.resolve(holderCount),
       topHolders.length === 0 ? softTimeout(getTopHolders(address), 5000, []) : Promise.resolve(topHolders),
     ]);
-    if (dexData.priceUsd === 0) dexData = retries[0] as typeof dexData;
+    if (alchemyPrice === 0) alchemyPrice = retries[0] as number;
     if (holderCount === 0) holderCount = retries[1] as number;
     if (topHolders.length === 0) {
       topHolders = retries[2] as typeof topHolders;
       holdersComplete = topHolders.length > 0;
     }
-    log(`runScan P2-retry ${Date.now() - t0}ms holders=${holderCount} dex=$${dexData.priceUsd}`, "bot");
+    log(`runScan P2-retry ${Date.now() - t0}ms holders=${holderCount} alchemy=$${alchemyPrice}`, "bot");
   }
 
   let fallbackData: FallbackTokenData | null = null;
@@ -910,17 +947,15 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
     if (!isHoneypot) isHoneypot = fallbackData.isHoneypot;
   }
 
-  let tokenPriceUsd = dexData.priceUsd;
+  let tokenPriceUsd = alchemyPrice;
   if (tokenPriceUsd === 0 && sim.tokensReceived > BigInt(0) && ethUsd > 0) {
     const tokensWholeUnits = Number(sim.tokensReceived) / (10 ** tokenInfo.decimals);
     tokenPriceUsd = tokensWholeUnits > 0 ? (0.001 / tokensWholeUnits) * ethUsd : 0;
   }
 
-  const calculatedMcap = Number(tokenInfo.totalSupply) * tokenPriceUsd;
-  const mcap = dexData.dexMcap > 0 ? dexData.dexMcap : (dexData.dexFdv > 0 ? dexData.dexFdv : calculatedMcap);
-  const liquidity = dexData.liquidity;
+  const mcap = Number(tokenInfo.totalSupply) * tokenPriceUsd;
 
-  const hasPool = sim.simulationSuccess || isManaged || !!platform || dexData.priceUsd > 0 || dexData.liquidity > 0;
+  const hasPool = sim.simulationSuccess || isManaged || !!platform || tokenPriceUsd > 0;
   const dexName = dexData.dexId ? dexData.dexId.charAt(0).toUpperCase() + dexData.dexId.slice(1) : "Uniswap";
   const poolLabel = dexData.poolVersion ? `${dexName} ${dexData.poolVersion.toUpperCase()}` : dexName;
   const dexStatus = hasPool ? `${poolLabel} ✅` : "No Pool Found ⚠️";
@@ -957,7 +992,6 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
   }
   if (buyTax > 5 || sellTax > 5) flags.push(`💰 High tax: Buy ${buyTax}% / Sell ${sellTax}%`);
   if (holderCount > 0 && holderCount < 100) flags.push("👥 Low holder count");
-  if (liquidity > 0 && liquidity < 10000) flags.push("💧 Very Low Liquidity");
   if (!hasPool) flags.push("⚠️ No Uniswap liquidity pool");
   if (isOpenSource === false) flags.push("⚠️ Unverified contract (not open source)");
   if (isMintable) flags.push("🪙 MINTABLE — owner can print tokens");
@@ -987,7 +1021,6 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
 
   const priceStr = tokenPriceUsd > 0 ? formatPrice(tokenPriceUsd) : "N/A";
   const mcapStr = mcap > 0 ? formatUsd(mcap) : "N/A";
-  const liqStr = liquidity > 0 ? formatUsd(liquidity) : "N/A";
   const holderStr = holderCount > 0 ? holderCount.toLocaleString() : "N/A";
 
   const lines: string[] = [
@@ -1002,7 +1035,6 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
   ];
 
   if (paid) {
-    lines.push(`💧 <b>Liquidity:</b> ${liqStr}`);
     lines.push(`📡 <b>Status:</b> ${dexStatus}`);
     lines.push(`🔒 <b>LP Status:</b> ${lpStatus}`);
     lines.push(`👥 <b>Holders:</b> ${holderStr}`);
@@ -1374,11 +1406,12 @@ async function runAgentScan(address: string, searchedName: string | null, paid: 
 
   const platformFromDeployer = detectPlatform(address, deployer, []);
 
-  let [holderCount, topHolders, ethUsd, dexData, dexSocials, creationPlatform, deployerChainPlatform, proxyImplPlatform] = await Promise.all([
+  let [holderCount, topHolders, ethUsd, dexData, alchemyPrice, dexSocials, creationPlatform, deployerChainPlatform, proxyImplPlatform] = await Promise.all([
     softTimeout(getHolderCount(address), 8000, 0),
     softTimeout(getTopHolders(address), 8000, []),
     softTimeout(getEthUsdPrice(), 8000, 0),
-    softTimeout(getDexScreenerData(address), 10000, { priceUsd: 0, liquidity: 0, poolVersion: null, dexMcap: 0, dexFdv: 0, dexId: null }),
+    softTimeout(getDexScreenerData(address), 10000, { poolVersion: null, dexId: null, volume24h: 0, pairCreatedAt: null }),
+    softTimeout(getAlchemyPrice(address), 6000, 0),
     softTimeout(getDexScreenerSocials(address), 8000, { twitter: null, website: null, telegram: null, description: null }),
     !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
     !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
@@ -1423,13 +1456,12 @@ async function runAgentScan(address: string, searchedName: string | null, paid: 
     { claimedAbilities: [], sourceTexts: [], reasoningUrl: null, reasoningStatus: "no_source" as const, reasoningDetail: "Timeout", abilityMismatch: null },
   );
 
-  let tokenPriceUsd = dexData.priceUsd;
+  let tokenPriceUsd = alchemyPrice as number;
   if (tokenPriceUsd === 0 && sim.tokensReceived > BigInt(0) && ethUsd > 0) {
     const tokensWholeUnits = Number(sim.tokensReceived) / (10 ** tokenInfo.decimals);
     tokenPriceUsd = tokensWholeUnits > 0 ? (0.001 / tokensWholeUnits) * ethUsd : 0;
   }
-  const calculatedMcap = Number(tokenInfo.totalSupply) * tokenPriceUsd;
-  const mcap = dexData.dexMcap > 0 ? dexData.dexMcap : (dexData.dexFdv > 0 ? dexData.dexFdv : calculatedMcap);
+  const mcap = Number(tokenInfo.totalSupply) * tokenPriceUsd;
 
   const agentFlags: string[] = [];
   const agentPasses: string[] = [];
@@ -1461,7 +1493,6 @@ async function runAgentScan(address: string, searchedName: string | null, paid: 
   else if (deployerContracts <= 1) agentPasses.push("✅ Focused creator — Single deployment");
 
   if (holderCount > 0 && holderCount < 50) agentFlags.push("👥 Very few holders");
-  if (dexData.liquidity > 0 && dexData.liquidity < 5000) agentFlags.push("💧 Critically low liquidity");
 
   if (platform) agentPasses.push(`✅ Deployed via ${platform} protocol`);
   if (sim.simulationSuccess) agentPasses.push("✅ Buy/Sell simulation passed");
@@ -1630,7 +1661,6 @@ async function runAgentScan(address: string, searchedName: string | null, paid: 
   lines.push(`📊 <b>TOKEN HEALTH</b>`);
   lines.push(`   💲 Price: ${tokenPriceUsd > 0 ? formatPrice(tokenPriceUsd) : "N/A"}`);
   lines.push(`   📈 MCap: ${mcap > 0 ? formatUsd(mcap) : "N/A"}`);
-  lines.push(`   💧 Liquidity: ${dexData.liquidity > 0 ? formatUsd(dexData.liquidity) : "N/A"}`);
   lines.push(`   👥 Holders: ${holderCount > 0 ? holderCount.toLocaleString() : "N/A"}`);
   lines.push(`   💰 Tax: Buy ${buyTax.toFixed(1)}% / Sell ${sellTax.toFixed(1)}%`);
   if (clankerData) {
