@@ -796,6 +796,13 @@ function isContractAddress(text: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(text.trim());
 }
 
+// Extract the first valid Ethereum address from arbitrary text (handles extra
+// whitespace, forwarded messages, inline pasting, invisible Unicode, etc.).
+function extractContractAddress(text: string): string | null {
+  const match = text.match(/0x[a-fA-F0-9]{40}(?![a-fA-F0-9])/i);
+  return match ? match[0] : null;
+}
+
 async function runScan(address: string, paid: boolean = false): Promise<string> {
   const t0 = Date.now();
   log(`runScan START for ${address.slice(0, 10)}...`, "bot");
@@ -1816,7 +1823,7 @@ async function handleScanX(ctx: any, input: string): Promise<void> {
 
     const bioDisplay = profile.bio ? profile.bio.slice(0, 120) : "None";
 
-    const bioCAMatch = profile.bio.match(/0x[a-fA-F0-9]{40}/);
+    const bioCAMatch = profile.bio.match(/0x[a-fA-F0-9]{40}(?![a-fA-F0-9])/i);
     const bioCA = bioCAMatch ? bioCAMatch[0] : null;
 
     let linkedCA = "Not Found";
@@ -2179,12 +2186,14 @@ export function createBot(): Telegraf | null {
 
   bot.command("scan", async (ctx) => {
     const input = ctx.message.text.replace(/^\/scan(@\w+)?\s*/i, "").trim();
-    if (!isContractAddress(input)) {
+    const address = isContractAddress(input) ? input.trim() : extractContractAddress(input);
+    if (!address) {
       PENDING_COMMAND.set(ctx.chat.id, { command: "scan", timestamp: Date.now() });
       ctx.reply("🔍 Send Base contract address.", { parse_mode: "HTML" });
       return;
     }
-    await handleScan(ctx, input);
+    log(`scan command: extracted address=${address} (input length=${input.length})`, "bot");
+    await handleScan(ctx, address);
   });
 
   bot.command("scanx", async (ctx) => {
@@ -2356,12 +2365,13 @@ export function createBot(): Telegraf | null {
         } else if (cmd === "scanx") {
           await handleScanX(ctx, text);
         } else if (cmd === "scanagent") {
-          if (isContractAddress(text)) {
-            const displayId = `${text.slice(0, 8)}. . .${text.slice(-6)}`;
+          const agentAddr = isContractAddress(text) ? text.trim() : extractContractAddress(text);
+          if (agentAddr) {
+            const displayId = `${agentAddr.slice(0, 8)}. . .${agentAddr.slice(-6)}`;
             const paid = await isPaidUser(ctx);
             const loadingMsg = await ctx.reply(`🔍 <b>Analyzing Forensic Data...</b>\n\n📍 ${displayId}\n<i>Consulting APOL intelligence database. This may take a moment.</i>`, { parse_mode: "HTML" });
             try {
-              const result = await softTimeout(runAgentScan(text, null, paid), 30000, null);
+              const result = await softTimeout(runAgentScan(agentAddr, null, paid), 30000, null);
               log(`scanagent result: ${result ? `${result.text.length} chars` : "NULL"}`, "bot");
               if (result) {
                 const opts: any = { parse_mode: "HTML", link_preview_options: { is_disabled: true } };
@@ -2405,7 +2415,11 @@ export function createBot(): Telegraf | null {
             }
           }
         } else {
-          if (isContractAddress(text)) await handleScan(ctx, text);
+          const addr = isContractAddress(text) ? text.trim() : extractContractAddress(text);
+          if (addr) {
+            log(`bot.on(text) pending=scan extracted address=${addr} len=${text.length}`, "bot");
+            await handleScan(ctx, addr);
+          }
         }
       } catch (e: any) {
         log(`bot.on(text) pending handler THREW: ${e?.message}`, "bot");
@@ -2414,10 +2428,11 @@ export function createBot(): Telegraf | null {
     }
 
     PENDING_COMMAND.delete(chatId);
-    if (isContractAddress(text)) {
-      log(`bot.on(text) dispatching handleScan for ${text.slice(0, 10)}...`, "bot");
+    const addr = isContractAddress(text) ? text.trim() : extractContractAddress(text);
+    if (addr) {
+      log(`bot.on(text) dispatching handleScan address=${addr} (raw len=${text.length})`, "bot");
       try {
-        await handleScan(ctx, text);
+        await handleScan(ctx, addr);
       } catch (e: any) {
         log(`bot.on(text) handleScan THREW: ${e?.message}`, "bot");
       }
