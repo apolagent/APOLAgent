@@ -1048,20 +1048,22 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
       lines.push(`🟢 <b>Sell Simulation (GoPlus):</b> PASS`);
     } else if (goPlusSellSimSuccess === false) {
       lines.push(`🔴 <b>Sell Simulation (GoPlus):</b> FAIL`);
+    } else {
+      lines.push(`⬜ <b>Sell Simulation (GoPlus):</b> N/A`);
     }
-    if (honeypotIs !== null) {
-      if (honeypotIs.isHoneypot) {
-        lines.push(`🔴 <b>Honeypot.is:</b> SELL BLOCKED${honeypotIs.honeypotReason ? ` — ${honeypotIs.honeypotReason}` : ""}`);
-      } else {
-        lines.push(`🟢 <b>Honeypot.is:</b> CLEAN`);
-      }
+    if (honeypotIs === null) {
+      lines.push(`⬜ <b>Honeypot.is:</b> N/A`);
+    } else if (honeypotIs.isHoneypot) {
+      lines.push(`🔴 <b>Honeypot.is:</b> SELL BLOCKED${honeypotIs.honeypotReason ? ` — ${honeypotIs.honeypotReason}` : ""}`);
+    } else {
+      lines.push(`🟢 <b>Honeypot.is:</b> CLEAN`);
     }
-    if (defiShield !== null) {
-      if (defiShield.risks.length === 0) {
-        lines.push(`🟢 <b>De.Fi Shield:</b> CLEAN`);
-      } else {
-        lines.push(`🔴 <b>De.Fi Shield:</b> ${defiShield.risks.length} risk${defiShield.risks.length > 1 ? "s" : ""} — ${defiShield.risks.slice(0, 2).join(", ")}${defiShield.risks.length > 2 ? "…" : ""}`);
-      }
+    if (defiShield === null) {
+      lines.push(`⬜ <b>De.Fi Shield:</b> N/A`);
+    } else if (defiShield.risks.length === 0) {
+      lines.push(`🟢 <b>De.Fi Shield:</b> CLEAN`);
+    } else {
+      lines.push(`🔴 <b>De.Fi Shield:</b> ${defiShield.risks.length} risk${defiShield.risks.length > 1 ? "s" : ""} — ${defiShield.risks.slice(0, 2).join(", ")}${defiShield.risks.length > 2 ? "…" : ""}`);
     }
 
     if (clankerData) {
