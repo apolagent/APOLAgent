@@ -879,12 +879,6 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
   const blockaidSellFail = blockaid?.sellSimulationSuccess === false;
   const honeypotIs = honeypotIsData as HoneypotIsResult | null;
   const defiShield = defiShieldData as DeFiShieldResult | null;
-  const goplus = goplusData as GoPlusSecurityData | null;
-  const goPlusSellSimSuccess = goplus?.goPlusSellSimSuccess ?? null;
-  const isMintable = goplus?.isMintable ?? false;
-  const isOpenSource = goplus?.isOpenSource ?? null;
-  const hasBlacklist = goplus?.hasBlacklist ?? false;
-  const canPause = goplus?.canPause ?? false;
 
   log(`runScan P2 ${Date.now() - t0}ms holders=${holderCount} alchemy=$${alchemyPrice} ethUsd=${ethUsd} proxy=${proxyImplPlatform}`, "bot");
 
@@ -906,6 +900,14 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
     if (!goplusData) goplusData = retries[3] as GoPlusSecurityData | null;
     log(`runScan P2-retry ${Date.now() - t0}ms holders=${holderCount} alchemy=$${alchemyPrice}`, "bot");
   }
+
+  // Derived after retry so isMintable/goPlusSellSimSuccess reflect the retried value
+  const goplus = goplusData as GoPlusSecurityData | null;
+  const goPlusSellSimSuccess = goplus?.goPlusSellSimSuccess ?? null;
+  const isMintable = goplus?.isMintable ?? false;
+  const isOpenSource = goplus?.isOpenSource ?? null;
+  const hasBlacklist = goplus?.hasBlacklist ?? false;
+  const canPause = goplus?.canPause ?? false;
 
   let fallbackData: FallbackTokenData | null = null;
   const needsFallback = holderCount === 0 || (!sim.simulationSuccess && !deployer);
