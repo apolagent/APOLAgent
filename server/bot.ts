@@ -291,18 +291,22 @@ async function getDeployer(addr: string): Promise<string | null> {
 
 async function getHolderCount(addr: string): Promise<number> {
   const moralisKey = process.env.MORALIS_API_KEY;
+  log(`[getHolderCount] addr=${addr} moralisKey=${moralisKey ? `present(${moralisKey.slice(0, 6)}...)` : "MISSING"}`, "bot");
   if (moralisKey) {
     try {
-      const data = await fetch(
+      const resp = await fetch(
         `https://deep-index.moralis.io/api/v2.2/erc20/${addr}/owners?chain=base&limit=1`,
         { headers: { "X-API-Key": moralisKey }, signal: AbortSignal.timeout(6000) },
-      ).then((r) => (r.ok ? (r.json() as any) : null));
-      const count = parseInt(data?.total_count || "0", 10);
+      );
+      const data = resp.ok ? (await resp.json() as any) : null;
+      log(`[getHolderCount] moralis status=${resp.status} total=${data?.total ?? "N/A"} total_count=${data?.total_count ?? "N/A"} data=${JSON.stringify(data).slice(0, 200)}`, "bot");
+      const count = parseInt(data?.total ?? data?.total_count ?? "0", 10);
       if (count > 0) return count;
-    } catch {}
+    } catch (e: any) { log(`[getHolderCount] moralis error: ${e?.message ?? e}`, "bot"); }
   }
   try {
     const data = await fetch(`${BLOCKSCOUT_BASE}/api/v2/tokens/${addr}/counters`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
+    log(`[getHolderCount] blockscout fallback token_holders_count=${data?.token_holders_count ?? "N/A"}`, "bot");
     return parseInt(data?.token_holders_count || "0", 10);
   } catch { return 0; }
 }
@@ -881,6 +885,7 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
   const defiShield = defiShieldData as DeFiShieldResult | null;
 
   log(`runScan P2 ${Date.now() - t0}ms holders=${holderCount} alchemy=$${alchemyPrice} ethUsd=${ethUsd} proxy=${proxyImplPlatform}`, "bot");
+  log(`[P2 results] [0]holderCount=${holderCount} [1]topHolders.len=${topHolders.length} [2]ethUsd=${ethUsd} [3]dexData=${JSON.stringify(dexData)} [4]alchemyPrice=${alchemyPrice} [5]creationPlatform=${creationPlatform} [6]deployerChainPlatform=${deployerChainPlatform} [7]proxyImplPlatform=${proxyImplPlatform} [8]blockaidData=${blockaidData === null ? "null" : "present"} [9]goplusData=${goplusData === null ? "null" : JSON.stringify(goplusData).slice(0, 120)} [10]honeypotIsData=${honeypotIsData === null ? "null" : JSON.stringify(honeypotIsData)} [11]defiShieldData=${defiShieldData === null ? "null" : JSON.stringify(defiShieldData)}`, "bot");
 
   let holdersComplete = topHolders.length > 0;
 

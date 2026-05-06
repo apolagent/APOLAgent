@@ -202,7 +202,7 @@ async function getHolderCount(addr: string): Promise<number> {
         `https://deep-index.moralis.io/api/v2.2/erc20/${addr}/owners?chain=base&limit=1`,
         { headers: { "X-API-Key": moralisKey }, signal: AbortSignal.timeout(6000) },
       ).then((r) => (r.ok ? (r.json() as any) : null));
-      const count = parseInt(data?.total_count || "0", 10);
+      const count = parseInt(data?.total ?? data?.total_count ?? "0", 10);
       if (count > 0) return count;
     } catch {}
   }
