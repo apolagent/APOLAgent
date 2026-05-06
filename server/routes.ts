@@ -1215,7 +1215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Honeypot.is
         honeypotIsResult: honeypotIsData ?? null,
         // De.Fi Shield
-        defiShieldRisks: defiShieldData?.risks ?? [],
+        defiShieldRisks: defiShieldData?.risks ?? null,
         // GoPlus sell simulation
         goPlusSellSimSuccess,
       });

@@ -850,194 +850,48 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
   const t0 = Date.now();
   log(`runScan START for ${address.slice(0, 10)}...`, "bot");
 
-  let phase1End = 0;
-  const [simR, tokenR, deployerR] = await Promise.allSettled([
-    softTimeout(simulateToken(address), 12000, { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: "Timeout" } as SimResult),
-    softTimeout(getTokenInfo(address), 8000, { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18 }),
-    softTimeout(getDeployer(address), 7000, null),
-  ]);
-  phase1End = Date.now();
-  log(`runScan P1 ${phase1End - t0}ms sim=${simR.status} token=${tokenR.status} deployer=${deployerR.status}`, "bot");
-
-  const sim: SimResult = simR.status === "fulfilled" ? simR.value
-    : { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: "Simulation error" };
-  const tokenInfo = tokenR.status === "fulfilled" ? tokenR.value
-    : { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18 };
-  let deployer = deployerR.status === "fulfilled" ? deployerR.value : null;
-
-  const platformFromDeployer = detectPlatform(address, deployer, []);
-
-  // Promise.all slot mapping (indices match destructured order):
-  // [0] holderCount        [1] topHolders         [2] ethUsd
-  // [3] dexData            [4] alchemyPrice        [5] creationPlatform
-  // [6] deployerChainPlatform  [7] proxyImplPlatform  [8] blockaidData
-  // [9] goplusData         [10] honeypotIsData     [11] defiShieldData
-  let [holderCount, topHolders, ethUsd, dexData, alchemyPrice, creationPlatform, deployerChainPlatform, proxyImplPlatform, blockaidData, goplusData, honeypotIsData, defiShieldData] = await Promise.all([
-    softTimeout(getHolderCount(address), 8000, 0),             // [0]
-    softTimeout(getTopHolders(address), 8000, []),             // [1]
-    softTimeout(getEthUsdPrice(), 8000, 0),                    // [2]
-    softTimeout(getDexScreenerData(address), 10000, { poolVersion: null, dexId: null, volume24h: 0, pairCreatedAt: null }), // [3]
-    softTimeout(getAlchemyPrice(address), 6000, 0),            // [4]
-    !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),        // [5]
-    !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null), // [6]
-    !platformFromDeployer ? softTimeout(detectPlatformFromProxyImpl(address), 5000, null) : Promise.resolve(null),         // [7]
-    softTimeout(getBlockaidTokenScan(address), 9000, null),    // [8]
-    softTimeout(getGoPlusSecurityData(address), 6000, null),   // [9]
-    softTimeout(getHoneypotIs(address), 9000, null),           // [10]
-    softTimeout(getDeFiShield(address), 11000, null),          // [11]
-  ]);
-  const blockaid = blockaidData as BlockaidTokenResult | null;
-  const blockaidMalicious = blockaid?.isMalicious ?? false;
-  const blockaidSellFail = blockaid?.sellSimulationSuccess === false;
-  const honeypotIs = honeypotIsData as HoneypotIsResult | null;
-  const defiShield = defiShieldData as DeFiShieldResult | null;
-
-  log(`runScan P2 ${Date.now() - t0}ms holders=${holderCount} alchemy=$${alchemyPrice} goplus=${goplusData ? "ok" : "null"} honeypot=${honeypotIs ? "ok" : "null"} defi=${defiShield ? "ok" : process.env.DEFI_API_KEY ? "null(api-err)" : "null(no-key)"}`, "bot");
-
-  let holdersComplete = topHolders.length > 0;
-
-  if (alchemyPrice === 0 || holderCount === 0 || !goplusData) {
-    const retries = await Promise.all([
-      alchemyPrice === 0 ? softTimeout(getAlchemyPrice(address), 5000, 0) : Promise.resolve(alchemyPrice),
-      holderCount === 0 ? softTimeout(getHolderCount(address), 5000, 0) : Promise.resolve(holderCount),
-      topHolders.length === 0 ? softTimeout(getTopHolders(address), 5000, []) : Promise.resolve(topHolders),
-      !goplusData ? softTimeout(getGoPlusSecurityData(address), 6000, null) : Promise.resolve(goplusData),
-    ]);
-    if (alchemyPrice === 0) alchemyPrice = retries[0] as number;
-    if (holderCount === 0) holderCount = retries[1] as number;
-    if (topHolders.length === 0) {
-      topHolders = retries[2] as typeof topHolders;
-      holdersComplete = topHolders.length > 0;
-    }
-    if (!goplusData) goplusData = retries[3] as GoPlusSecurityData | null;
-    log(`runScan P2-retry ${Date.now() - t0}ms holders=${holderCount} alchemy=$${alchemyPrice}`, "bot");
-  }
-
-  // Derived after retry so isMintable/goPlusSellSimSuccess reflect the retried value
-  const goplus = goplusData as GoPlusSecurityData | null;
-  const goPlusSellSimSuccess = goplus?.goPlusSellSimSuccess ?? null;
-  const isMintable = goplus?.isMintable ?? false;
-  const isOpenSource = goplus?.isOpenSource ?? null;
-  const hasBlacklist = goplus?.hasBlacklist ?? false;
-  const canPause = goplus?.canPause ?? false;
-
-  let fallbackData: FallbackTokenData | null = null;
-  const needsFallback = holderCount === 0 || (!sim.simulationSuccess && !deployer);
-  if (needsFallback) {
-    fallbackData = await softTimeout(getFallbackTokenData(address), 5000, null);
-    if (fallbackData) {
-      if (holderCount === 0 && fallbackData.holderCount > 0) holderCount = fallbackData.holderCount;
-      if (!deployer && fallbackData.creatorAddress) deployer = fallbackData.creatorAddress.toLowerCase();
-    }
-  }
-
-  const scanCount = await storage.incrementLookup(address, tokenInfo.name, tokenInfo.symbol);
-
-  const dexPlatform: string | null = (() => {
-    const d = dexData.dexId?.toLowerCase() ?? "";
-    if (d.includes("apestore")) return "ApeStore";
-    if (d.includes("clanker")) return "Clanker";
-    if (d.includes("virtuals")) return "Virtuals";
-    if (d.includes("flaunch")) return "Flaunch";
-    return null;
-  })();
-  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || proxyImplPlatform || creationPlatform || deployerChainPlatform || dexPlatform;
-  const lpStatus = detectLpStatus(topHolders, platform, holdersComplete);
-  const isVirtuals = platform === "Virtuals";
-  const isManaged = !!(platform && MANAGED_PROTOCOLS.has(platform));
-  const isClanker = platform === "Clanker";
-
-  const clankerData = isClanker ? await softTimeout(fetchClankerData(address), 5000, null) : null;
-
-  let buyTax = isManaged ? 0 : sim.buyTax;
-  let sellTax = isManaged ? 0 : sim.sellTax;
-  let isHoneypot = isManaged ? false : (
-    sim.isHoneypot ||
-    honeypotIs?.isHoneypot === true ||
-    goplus?.goPlusIsHoneypot === true
-  );
-
-  if (!isManaged && !sim.simulationSuccess && fallbackData) {
-    buyTax = fallbackData.buyTax;
-    sellTax = fallbackData.sellTax;
-    if (!isHoneypot) isHoneypot = fallbackData.isHoneypot;
-  }
-
-  let tokenPriceUsd = alchemyPrice;
-  if (tokenPriceUsd === 0 && sim.tokensReceived > BigInt(0) && ethUsd > 0) {
-    const tokensWholeUnits = Number(sim.tokensReceived) / (10 ** tokenInfo.decimals);
-    tokenPriceUsd = tokensWholeUnits > 0 ? (0.001 / tokensWholeUnits) * ethUsd : 0;
-  }
-
-  const mcap = Number(tokenInfo.totalSupply) * tokenPriceUsd;
-
-  const hasPool = sim.simulationSuccess || isManaged || !!platform || tokenPriceUsd > 0;
-  const dexName = dexData.dexId ? dexData.dexId.charAt(0).toUpperCase() + dexData.dexId.slice(1) : "Uniswap";
-  const poolLabel = dexData.poolVersion ? `${dexName} ${dexData.poolVersion.toUpperCase()}` : dexName;
-  const dexStatus = hasPool ? `${poolLabel} ✅` : "No Pool Found ⚠️";
-
-  let contractOwner: string | null = null;
-  let isOwnerRenounced = false;
-  let ownerCheckDone = false;
+  const port = process.env.PORT || 10000;
+  let result: any;
   try {
-    const ownerSig = "0x8da5cb5b";
-    const [ownerResult] = await rpcBatch([
-      { method: "eth_call", params: [{ to: address, data: ownerSig }, "latest"] },
-    ]);
-    if (ownerResult && ownerResult !== "0x" && ownerResult.length >= 66) {
-      contractOwner = "0x" + ownerResult.slice(26).toLowerCase();
-      const DEAD = ["0x0000000000000000000000000000000000000000", "0x000000000000000000000000000000000000dead", "0x0000000000000000000000000000000000000001"];
-      isOwnerRenounced = DEAD.includes(contractOwner);
-      ownerCheckDone = true;
-    }
-  } catch {}
-
-  const nameUpper = tokenInfo.name.toUpperCase();
-  const symbolUpper = tokenInfo.symbol.toUpperCase();
-  const isFakeApol = symbolUpper === "APOL" || nameUpper === "APOL" || nameUpper === "APOL AGENT" || nameUpper.includes("APOLAGENT");
-
-  const flags: string[] = [];
-  if (isFakeApol) flags.push("🚨 FAKE $APOL — APOL Agent does NOT have an official token or CA yet. This is a SCAM.");
-  if (isHoneypot) flags.push("🚨 Honeypot — SELL BLOCKED");
-  if (honeypotIs?.isHoneypot) flags.push(`🚨 Honeypot.is: SELL BLOCKED${honeypotIs.honeypotReason ? ` — ${honeypotIs.honeypotReason}` : ""}`);
-  if (blockaidSellFail && !isHoneypot) flags.push("🚫 Sell simulation FAILED — sell transactions blocked (Blockaid)");
-  if (goPlusSellSimSuccess === false && !isHoneypot) flags.push("🚫 GoPlus: Sell simulation FAILED");
-  if (blockaidMalicious) flags.push(`🚨 BLOCKAID: Malicious contract detected${blockaid?.attackTypes?.length ? ` (${blockaid.attackTypes.join(", ")})` : ""}`);
-  if (defiShield?.risks?.length) {
-    for (const r of defiShield.risks) flags.push(`⚠️ De.Fi Shield: ${r}`);
+    const resp = await fetch(
+      `http://localhost:${port}/api/detective/analyze?address=${encodeURIComponent(address)}&chain=base`,
+      { signal: AbortSignal.timeout(45000) },
+    );
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    result = await resp.json();
+  } catch (e: any) {
+    log(`runScan error: ${e?.message ?? e}`, "bot");
+    return `⚠️ Scan failed — please try again.`;
   }
-  if (buyTax > 5 || sellTax > 5) flags.push(`💰 High tax: Buy ${buyTax}% / Sell ${sellTax}%`);
-  if (holderCount > 0 && holderCount < 100) flags.push("👥 Low holder count");
-  if (!hasPool) flags.push("⚠️ No Uniswap liquidity pool");
-  if (isOpenSource === false) flags.push("⚠️ Unverified contract (not open source)");
-  if (isMintable) flags.push("🪙 MINTABLE — owner can print tokens");
-  if (hasBlacklist) flags.push("🚫 Blacklist function detected");
-  if (canPause) flags.push("⏸ Owner can pause trading");
 
-  const riskLevel = isFakeApol || isHoneypot || buyTax > 10 || sellTax > 10 || blockaidMalicious || blockaidSellFail || goPlusSellSimSuccess === false || isMintable || canPause || hasBlacklist
-    ? "🔴 HIGH RISK"
-    : flags.length > 0
-      ? "🟡 CAUTION"
-      : "🟢 LOW RISK";
+  const riskShort: string = result.riskLevel ?? "Unknown";
+  log(`runScan DONE for ${address.slice(0, 10)}... in ${Date.now() - t0}ms — ${result.tokenSymbol} risk=${riskShort}`, "bot");
 
-  log(`runScan DONE for ${address.slice(0, 10)}... in ${Date.now() - t0}ms — ${tokenInfo.symbol} risk=${riskLevel.includes("HIGH") ? "HIGH" : riskLevel.includes("CAUTION") ? "MID" : "LOW"} sim=${sim.simulationSuccess}`, "bot");
-
-  const riskShort = riskLevel.includes("HIGH") ? "High" : riskLevel.includes("CAUTION") ? "Caution" : "Clean";
   storage.logAgentActivity({
     action: "contract_scan",
     target: address,
-    detail: `Analyzed ${tokenInfo.symbol || "unknown"} via Telegram. Simulation: ${sim.simulationSuccess ? "success" : "failed"}. Risk: ${riskShort}. ${isHoneypot ? "Honeypot detected." : ""} ${buyTax > 0 || sellTax > 0 ? `Tax: ${buyTax}%/${sellTax}%.` : "No tax."} ${platform ? `Platform: ${platform}.` : ""} Holders: ${holderCount}.`.replace(/\s+/g, " ").trim(),
+    detail: `Analyzed ${result.tokenSymbol || "unknown"} via Telegram. Risk: ${riskShort}. ${result.isHoneypot ? "Honeypot detected." : ""} ${(result.buyTax ?? 0) > 0 || (result.sellTax ?? 0) > 0 ? `Tax: ${result.buyTax}%/${result.sellTax}%.` : "No tax."} ${result.platform ? `Platform: ${result.platform}.` : ""} Holders: ${result.holderCount ?? 0}.`.replace(/\s+/g, " ").trim(),
     verdict: riskShort,
     source: "telegram",
-    metadata: { tokenSymbol: tokenInfo.symbol, tokenName: tokenInfo.name, isHoneypot, buyTax, sellTax, platform, holderCount, mcap },
+    metadata: { tokenSymbol: result.tokenSymbol, tokenName: result.tokenName, isHoneypot: result.isHoneypot, buyTax: result.buyTax, sellTax: result.sellTax, platform: result.platform, holderCount: result.holderCount, mcap: result.mcap },
   }).catch(() => {});
 
   const shortAddr = address.slice(0, 8) + "..." + address.slice(-6);
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 
-  const priceStr = tokenPriceUsd > 0 ? formatPrice(tokenPriceUsd) : "N/A";
-  const mcapStr = mcap > 0 ? formatUsd(mcap) : "N/A";
-  const holderStr = holderCount > 0 ? holderCount.toLocaleString() : "N/A";
+  const priceStr = (result.priceUsd ?? 0) > 0 ? formatPrice(result.priceUsd) : "N/A";
+  const mcapStr = (result.mcap ?? 0) > 0 ? formatUsd(result.mcap) : "N/A";
+  const holderStr = (result.holderCount ?? 0) > 0 ? (result.holderCount as number).toLocaleString() : "N/A";
+
+  const hasPool = result.simulationSuccess || !!result.platform || (result.priceUsd ?? 0) > 0;
+  const dexName = result.dexId ? (result.dexId as string).charAt(0).toUpperCase() + (result.dexId as string).slice(1) : "Uniswap";
+  const poolLabel = result.poolVersion ? `${dexName} ${(result.poolVersion as string).toUpperCase()}` : dexName;
+  const dexStatus = hasPool ? `${poolLabel} ✅` : "No Pool Found ⚠️";
+
+  const riskEmoji = result.isHighRisk ? "🔴 HIGH RISK" : ((result.redFlags?.length ?? 0) > 0 ? "🟡 CAUTION" : "🟢 LOW RISK");
+
+  const honeypotIs = result.honeypotIsResult as { isHoneypot: boolean; honeypotReason: string | null } | null;
+  const defiRisks = result.defiShieldRisks as string[] | null;
 
   const lines: string[] = [
     `🏛 <b>APOL AGENT — CONTRACT SNAPSHOT</b>`,
@@ -1045,28 +899,31 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
     `📍 <b>Address:</b> <code>${shortAddr}</code>`,
     `⛓ <b>Chain:</b> Base Mainnet`,
     ``,
-    `<b>${esc(tokenInfo.name)}</b> ($${esc(tokenInfo.symbol)}) 👁️ ${scanCount}`,
+    `<b>${esc(result.tokenName ?? "Unknown")}</b> ($${esc(result.tokenSymbol ?? "???")}) 👁️ ${result.scanCount ?? 1}`,
     `💲 <b>Price:</b> ${priceStr}`,
     `📊 <b>Market Cap:</b> ${mcapStr}`,
   ];
 
   if (paid) {
     lines.push(`📡 <b>Status:</b> ${dexStatus}`);
-    lines.push(`🔒 <b>LP Status:</b> ${lpStatus}`);
+    lines.push(`🔒 <b>LP Status:</b> ${result.lpStatus ?? "Unknown"}`);
     lines.push(`👥 <b>Holders:</b> ${holderStr}`);
-    lines.push(`💰 <b>Buy Tax:</b> ${buyTax.toFixed(1)}%  |  <b>Sell Tax:</b> ${sellTax.toFixed(1)}%`);
-    if (blockaid?.sellSimulationSuccess === true) {
+    lines.push(`💰 <b>Buy Tax:</b> ${(result.buyTax ?? 0).toFixed(1)}%  |  <b>Sell Tax:</b> ${(result.sellTax ?? 0).toFixed(1)}%`);
+
+    if (result.sellSimulationSuccess === true) {
       lines.push(`🟢 <b>Sell Simulation (Blockaid):</b> PASS`);
-    } else if (blockaid?.sellSimulationSuccess === false) {
-      lines.push(`🔴 <b>Sell Simulation (Blockaid):</b> BLOCKED${blockaid.sellRevertReason ? ` — ${blockaid.sellRevertReason}` : ""}`);
+    } else if (result.sellSimulationSuccess === false) {
+      lines.push(`🔴 <b>Sell Simulation (Blockaid):</b> BLOCKED${result.sellSimRevertReason ? ` — ${result.sellSimRevertReason}` : ""}`);
     }
-    if (goPlusSellSimSuccess === true) {
+
+    if (result.goPlusSellSimSuccess === true) {
       lines.push(`🟢 <b>Sell Simulation (GoPlus):</b> PASS`);
-    } else if (goPlusSellSimSuccess === false) {
+    } else if (result.goPlusSellSimSuccess === false) {
       lines.push(`🔴 <b>Sell Simulation (GoPlus):</b> FAIL`);
     } else {
       lines.push(`⬜ <b>Sell Simulation (GoPlus):</b> N/A`);
     }
+
     if (honeypotIs === null) {
       lines.push(`⬜ <b>Honeypot.is:</b> N/A`);
     } else if (honeypotIs.isHoneypot) {
@@ -1074,46 +931,29 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
     } else {
       lines.push(`🟢 <b>Honeypot.is:</b> CLEAN`);
     }
-    if (defiShield === null) {
+
+    if (defiRisks === null) {
       lines.push(`⬜ <b>De.Fi Shield:</b> N/A`);
-    } else if (defiShield.risks.length === 0) {
+    } else if (defiRisks.length === 0) {
       lines.push(`🟢 <b>De.Fi Shield:</b> CLEAN`);
     } else {
-      lines.push(`🔴 <b>De.Fi Shield:</b> ${defiShield.risks.length} risk${defiShield.risks.length > 1 ? "s" : ""} — ${defiShield.risks.slice(0, 2).join(", ")}${defiShield.risks.length > 2 ? "…" : ""}`);
-    }
-
-    if (clankerData) {
-      if (clankerData.volume24h > 0) lines.push(`📈 <b>24h Volume:</b> ${formatUsd(clankerData.volume24h)}`);
-      if (clankerData.rewardsAvailable) lines.push(`💎 <b>Clanker Rewards:</b> Available`);
-      if (clankerData.warnings.length > 0) lines.push(`⚠️ <b>Clanker Warnings:</b> ${clankerData.warnings.join(", ")}`);
+      lines.push(`🔴 <b>De.Fi Shield:</b> ${defiRisks.length} risk${defiRisks.length > 1 ? "s" : ""} — ${defiRisks.slice(0, 2).join(", ")}${defiRisks.length > 2 ? "…" : ""}`);
     }
 
     lines.push(``);
-    lines.push(`<b>RISK LEVEL:</b> ${riskLevel}`);
+    lines.push(`<b>RISK LEVEL:</b> ${riskEmoji}`);
     lines.push(``);
 
-    if (isManaged || platform) {
+    if (result.platform || result.deployer) {
       lines.push(`📋 <b>DEPLOYER</b>`);
-      if (deployer) lines.push(`• <code>${deployer.slice(0, 10)}...</code>`);
-      lines.push(`• Deployed via ${platform}`);
-    } else if (ownerCheckDone) {
-      if (isOwnerRenounced) {
-        lines.push(`✅ <b>CONTRACT RENOUNCED</b>`);
-        lines.push(`• Ownership burned. No admin keys.`);
-      } else if (contractOwner) {
-        lines.push(`⚠️ <b>CONTRACT NOT RENOUNCED</b>`);
-        lines.push(`• Owner: <code>${contractOwner.slice(0, 10)}...</code>`);
-      }
-    } else if (deployer) {
-      lines.push(`📋 <b>DEPLOYER</b>`);
-      lines.push(`• <code>${deployer.slice(0, 10)}...</code>`);
-      lines.push(`• Ownership status: Unknown`);
+      if (result.deployer) lines.push(`• <code>${(result.deployer as string).slice(0, 10)}...</code>`);
+      if (result.platform) lines.push(`• Deployed via ${result.platform}`);
     }
 
-    if (flags.length > 0) {
+    if ((result.redFlags as string[] | undefined)?.length) {
       lines.push(``);
       lines.push(`🚩 <b>FLAGS DETECTED:</b>`);
-      for (const f of flags) lines.push(`   ${f}`);
+      for (const f of result.redFlags as string[]) lines.push(`   ${f}`);
     }
 
     lines.push(``);
@@ -1122,6 +962,7 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
   } else {
     lines.push(UPGRADE_FOOTER);
   }
+
   lines.push(``);
   lines.push(`⚡ ${elapsed}s · APOL Forensic Engine`);
 
