@@ -291,7 +291,6 @@ async function getDeployer(addr: string): Promise<string | null> {
 
 async function getHolderCount(addr: string): Promise<number> {
   const moralisKey = process.env.MORALIS_API_KEY;
-  log(`[getHolderCount] addr=${addr} moralisKey=${moralisKey ? `present(${moralisKey.slice(0, 6)}...)` : "MISSING"}`, "bot");
   if (moralisKey) {
     try {
       const resp = await fetch(
@@ -299,14 +298,13 @@ async function getHolderCount(addr: string): Promise<number> {
         { headers: { "X-API-Key": moralisKey }, signal: AbortSignal.timeout(6000) },
       );
       const data = resp.ok ? (await resp.json() as any) : null;
-      log(`[getHolderCount] moralis status=${resp.status} total=${data?.total ?? "N/A"} total_count=${data?.total_count ?? "N/A"} data=${JSON.stringify(data).slice(0, 200)}`, "bot");
+      // Moralis v2.2 returns `total`; fall back to `total_count` for safety
       const count = parseInt(data?.total ?? data?.total_count ?? "0", 10);
       if (count > 0) return count;
-    } catch (e: any) { log(`[getHolderCount] moralis error: ${e?.message ?? e}`, "bot"); }
+    } catch {}
   }
   try {
     const data = await fetch(`${BLOCKSCOUT_BASE}/api/v2/tokens/${addr}/counters`, { signal: AbortSignal.timeout(5000) }).then((r) => r.ok ? r.json() as any : null);
-    log(`[getHolderCount] blockscout fallback token_holders_count=${data?.token_holders_count ?? "N/A"}`, "bot");
     return parseInt(data?.token_holders_count || "0", 10);
   } catch { return 0; }
 }
@@ -864,19 +862,24 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
 
   const platformFromDeployer = detectPlatform(address, deployer, []);
 
+  // Promise.all slot mapping (indices match destructured order):
+  // [0] holderCount        [1] topHolders         [2] ethUsd
+  // [3] dexData            [4] alchemyPrice        [5] creationPlatform
+  // [6] deployerChainPlatform  [7] proxyImplPlatform  [8] blockaidData
+  // [9] goplusData         [10] honeypotIsData     [11] defiShieldData
   let [holderCount, topHolders, ethUsd, dexData, alchemyPrice, creationPlatform, deployerChainPlatform, proxyImplPlatform, blockaidData, goplusData, honeypotIsData, defiShieldData] = await Promise.all([
-    softTimeout(getHolderCount(address), 8000, 0),
-    softTimeout(getTopHolders(address), 8000, []),
-    softTimeout(getEthUsdPrice(), 8000, 0),
-    softTimeout(getDexScreenerData(address), 10000, { poolVersion: null, dexId: null, volume24h: 0, pairCreatedAt: null }),
-    softTimeout(getAlchemyPrice(address), 6000, 0),
-    !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
-    !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
-    !platformFromDeployer ? softTimeout(detectPlatformFromProxyImpl(address), 5000, null) : Promise.resolve(null),
-    softTimeout(getBlockaidTokenScan(address), 9000, null),
-    softTimeout(getGoPlusSecurityData(address), 6000, null),
-    softTimeout(getHoneypotIs(address), 9000, null),
-    softTimeout(getDeFiShield(address), 11000, null),
+    softTimeout(getHolderCount(address), 8000, 0),             // [0]
+    softTimeout(getTopHolders(address), 8000, []),             // [1]
+    softTimeout(getEthUsdPrice(), 8000, 0),                    // [2]
+    softTimeout(getDexScreenerData(address), 10000, { poolVersion: null, dexId: null, volume24h: 0, pairCreatedAt: null }), // [3]
+    softTimeout(getAlchemyPrice(address), 6000, 0),            // [4]
+    !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),        // [5]
+    !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null), // [6]
+    !platformFromDeployer ? softTimeout(detectPlatformFromProxyImpl(address), 5000, null) : Promise.resolve(null),         // [7]
+    softTimeout(getBlockaidTokenScan(address), 9000, null),    // [8]
+    softTimeout(getGoPlusSecurityData(address), 6000, null),   // [9]
+    softTimeout(getHoneypotIs(address), 9000, null),           // [10]
+    softTimeout(getDeFiShield(address), 11000, null),          // [11]
   ]);
   const blockaid = blockaidData as BlockaidTokenResult | null;
   const blockaidMalicious = blockaid?.isMalicious ?? false;
@@ -884,8 +887,7 @@ async function runScan(address: string, paid: boolean = false): Promise<string> 
   const honeypotIs = honeypotIsData as HoneypotIsResult | null;
   const defiShield = defiShieldData as DeFiShieldResult | null;
 
-  log(`runScan P2 ${Date.now() - t0}ms holders=${holderCount} alchemy=$${alchemyPrice} ethUsd=${ethUsd} proxy=${proxyImplPlatform}`, "bot");
-  log(`[P2 results] [0]holderCount=${holderCount} [1]topHolders.len=${topHolders.length} [2]ethUsd=${ethUsd} [3]dexData=${JSON.stringify(dexData)} [4]alchemyPrice=${alchemyPrice} [5]creationPlatform=${creationPlatform} [6]deployerChainPlatform=${deployerChainPlatform} [7]proxyImplPlatform=${proxyImplPlatform} [8]blockaidData=${blockaidData === null ? "null" : "present"} [9]goplusData=${goplusData === null ? "null" : JSON.stringify(goplusData).slice(0, 120)} [10]honeypotIsData=${honeypotIsData === null ? "null" : JSON.stringify(honeypotIsData)} [11]defiShieldData=${defiShieldData === null ? "null" : JSON.stringify(defiShieldData)}`, "bot");
+  log(`runScan P2 ${Date.now() - t0}ms holders=${holderCount} alchemy=$${alchemyPrice} goplus=${goplusData ? "ok" : "null"} honeypot=${honeypotIs ? "ok" : "null"} defi=${defiShield ? "ok" : process.env.DEFI_API_KEY ? "null(api-err)" : "null(no-key)"}`, "bot");
 
   let holdersComplete = topHolders.length > 0;
 
