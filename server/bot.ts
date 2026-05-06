@@ -297,9 +297,10 @@ async function getHolderCount(addr: string): Promise<number> {
         `https://deep-index.moralis.io/api/v2.2/erc20/${addr}/owners?chain=base&limit=1`,
         { headers: { "X-API-Key": moralisKey }, signal: AbortSignal.timeout(6000) },
       );
-      const data = resp.ok ? (await resp.json() as any) : null;
+      const raw = resp.ok ? (await resp.json() as any) : null;
+      log(`[getHolderCount] moralis status=${resp.status} total=${raw?.total ?? "N/A"} total_count=${raw?.total_count ?? "N/A"} body=${JSON.stringify(raw).slice(0, 300)}`, "bot");
       // Moralis v2.2 returns `total`; fall back to `total_count` for safety
-      const count = parseInt(data?.total ?? data?.total_count ?? "0", 10);
+      const count = parseInt(raw?.total ?? raw?.total_count ?? "0", 10);
       if (count > 0) return count;
     } catch {}
   }
@@ -534,7 +535,11 @@ async function getDeFiShield(addr: string): Promise<DeFiShieldResult | null> {
       headers: { "Authorization": `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(10000),
     });
-    if (!resp.ok) return null;
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => "(unreadable)");
+      log(`[getDeFiShield] status=${resp.status} body=${body.slice(0, 300)}`, "bot");
+      return null;
+    }
     const data = await resp.json() as any;
     const issues: any[] = data?.issues ?? data?.risks ?? data?.findings ?? [];
     const risks = (Array.isArray(issues) ? issues : [])

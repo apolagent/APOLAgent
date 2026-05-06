@@ -408,7 +408,11 @@ async function getDeFiShield(addr: string): Promise<DeFiShieldResult | null> {
       headers: { "Authorization": `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(10000),
     });
-    if (!resp.ok) return null;
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => "(unreadable)");
+      console.log(`[getDeFiShield] status=${resp.status} body=${body.slice(0, 300)}`);
+      return null;
+    }
     const data = await resp.json() as any;
     const issues: any[] = data?.issues ?? data?.risks ?? data?.findings ?? [];
     const risks = (Array.isArray(issues) ? issues : [])
