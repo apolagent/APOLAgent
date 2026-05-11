@@ -200,6 +200,15 @@ type AgentResult = {
     gasPattern: "OPTIMIZED" | "VARIABLE" | "INEFFICIENT";
     insight: string;
   };
+  decisionEntropy?: {
+    contractDiversity: number;
+    actionRepeatRate: number;
+    decisionEntropy: number;
+    patternScore: number;
+    uniqueContractRatio: number;
+    entropyPattern: "ALGORITHMIC" | "ADAPTIVE" | "RANDOM";
+    insight: string;
+  };
 };
 
 type StatusColor = "green" | "red" | "yellow" | "grey";
@@ -787,6 +796,53 @@ function AdvancedResults({ result }: { result: AgentResult }) {
                   </div>
                 </div>
                 <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.55)", lineHeight: 1.5 }}>{gp.insight}</div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ── Decision Pattern Entropy ── */}
+      {result.decisionEntropy && (
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "12px" }}>
+            <Activity size={12} color={G} />
+            <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.6)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Decision Pattern Entropy</span>
+          </div>
+          {(() => {
+            const de = result.decisionEntropy!;
+            const patternColor = de.entropyPattern === "ALGORITHMIC" ? G : de.entropyPattern === "ADAPTIVE" ? "#facc15" : "#f87171";
+            const patternBg = de.entropyPattern === "ALGORITHMIC" ? "rgba(0,255,0,0.08)" : de.entropyPattern === "ADAPTIVE" ? "rgba(250,204,21,0.08)" : "rgba(248,113,113,0.08)";
+            const barColor = de.patternScore > 65 ? G : de.patternScore > 35 ? "#facc15" : "#f87171";
+            return (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px", flexWrap: "wrap" }}>
+                  <div style={{ padding: "4px 12px", border: `1px solid ${patternColor}`, background: patternBg, fontSize: "11px", fontWeight: 900, color: patternColor, letterSpacing: "0.1em" }}>
+                    {de.entropyPattern}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.4)", whiteSpace: "nowrap" }}>Pattern Score</span>
+                    <div style={{ width: "60px", height: "5px", background: "rgba(255,255,255,0.08)", position: "relative", flexShrink: 0 }}>
+                      <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${de.patternScore}%`, background: barColor, transition: "width 0.4s ease" }} />
+                    </div>
+                    <span style={{ fontSize: "10px", fontWeight: 700, color: barColor, minWidth: "36px" }}>{de.patternScore}/100</span>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px", marginBottom: "10px" }}>
+                  <div>
+                    <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>Contract Diversity</div>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: de.contractDiversity <= 20 ? G : "rgba(255,255,255,0.7)" }}>{de.contractDiversity}%</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>Repeat Rate</div>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: de.actionRepeatRate >= 60 ? G : "rgba(255,255,255,0.7)" }}>{de.actionRepeatRate}%</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>Entropy</div>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>{de.decisionEntropy} bits</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.55)", lineHeight: 1.5 }}>{de.insight}</div>
               </>
             );
           })()}

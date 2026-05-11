@@ -917,6 +917,70 @@ function analyzeGasPatterns(samples: { gasPrice: number; baseFee: number | null 
   return { averageGasPrice: mean, gasVariance: variance, optimalGasPercent, gasConsistencyScore, overpayPercent, gasPattern, insight };
 }
 
+interface DecisionEntropyResult {
+  contractDiversity: number;
+  actionRepeatRate: number;
+  decisionEntropy: number;
+  patternScore: number;
+  uniqueContractRatio: number;
+  entropyPattern: "ALGORITHMIC" | "ADAPTIVE" | "RANDOM";
+  insight: string;
+}
+
+function analyzeDecisionEntropy(transfers: { to: string | null; contractAddress: string | null; category: string }[]): DecisionEntropyResult {
+  if (transfers.length === 0) {
+    return { contractDiversity: 0, actionRepeatRate: 0, decisionEntropy: 0, patternScore: 0, uniqueContractRatio: 0, entropyPattern: "RANDOM", insight: "Insufficient transaction data for entropy analysis." };
+  }
+
+  // Build destination frequency map (prefer contractAddress, fallback to to)
+  const destMap = new Map<string, number>();
+  for (const t of transfers) {
+    const dest = (t.contractAddress || t.to || "unknown").toLowerCase();
+    destMap.set(dest, (destMap.get(dest) ?? 0) + 1);
+  }
+
+  const total = transfers.length;
+  const uniqueContracts = destMap.size;
+  const uniqueContractRatio = uniqueContracts / total;
+
+  // Shannon entropy over destination distribution
+  let entropy = 0;
+  for (const count of destMap.values()) {
+    const p = count / total;
+    entropy -= p * Math.log2(p);
+  }
+  const maxEntropy = Math.log2(Math.max(uniqueContracts, 2));
+  const normalizedEntropy = maxEntropy > 0 ? Math.min(1, entropy / maxEntropy) : 0;
+
+  // Repeat rate: fraction of txs going to the most-common destination
+  const maxCount = Math.max(...destMap.values());
+  const actionRepeatRate = Math.round((maxCount / total) * 100);
+
+  // Contract diversity: unique contracts as % of total (capped at 100)
+  const contractDiversity = Math.min(100, Math.round(uniqueContractRatio * 100));
+
+  // patternScore: high score = low entropy = ALGORITHMIC (repetitive)
+  const patternScore = Math.round((1 - normalizedEntropy) * 70 + (1 - Math.min(1, uniqueContractRatio)) * 30);
+
+  const entropyPattern: DecisionEntropyResult["entropyPattern"] =
+    patternScore >= 65 ? "ALGORITHMIC"
+    : patternScore <= 30 ? "RANDOM"
+    : "ADAPTIVE";
+
+  const decisionEntropy = parseFloat(entropy.toFixed(3));
+
+  let insight: string;
+  if (entropyPattern === "ALGORITHMIC") {
+    insight = `Decision pattern is ALGORITHMIC — ${actionRepeatRate}% of transactions target the same destination, entropy ${decisionEntropy} bits, consistent with automated scripted behavior.`;
+  } else if (entropyPattern === "RANDOM") {
+    insight = `Decision pattern is RANDOM — high destination entropy ${decisionEntropy} bits across ${uniqueContracts} unique addresses, suggesting exploration or manual operation.`;
+  } else {
+    insight = `Decision pattern is ADAPTIVE — moderate entropy ${decisionEntropy} bits with ${contractDiversity}% unique contract diversity, suggesting semi-automated strategy execution.`;
+  }
+
+  return { contractDiversity, actionRepeatRate, decisionEntropy, patternScore, uniqueContractRatio: parseFloat(uniqueContractRatio.toFixed(3)), entropyPattern, insight };
+}
+
 async function getContractActivity(addr: string): Promise<ContractActivity> {
   const result: ContractActivity = { txCount: 0, contractAgeDays: 0, hasContractCode: false, codeSize: 0, activityPerDay: 0 };
   try {
@@ -1445,6 +1509,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let activityPatternResult: ActivityPatternResult | null = null;
       let reactionTimeResult: ReactionTimeResult | null = null;
       let gasPatternResult: GasPatternResult | null = null;
+      let decisionEntropyResult: DecisionEntropyResult | null = null;
 
       if (wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet)) {
         const [simR, tokenR, deployerR] = await Promise.allSettled([
@@ -1551,6 +1616,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   .filter((ts: number | null): ts is number => ts !== null);
                 activityPatternResult = analyzeActivityPattern(txTimestamps);
                 reactionTimeResult = analyzeReactionTime(txTimestamps);
+                const txDiversityData = walletTransfers.map((t: any) => ({
+                  to: t.to || null,
+                  contractAddress: t.rawContract?.address || null,
+                  category: t.category || "",
+                }));
+                decisionEntropyResult = analyzeDecisionEntropy(txDiversityData);
                 try {
                   const sampleTransfers = walletTransfers.slice(0, 15);
                   const txHashes: string[] = sampleTransfers.map((t: any) => t.hash).filter(Boolean);
@@ -1792,7 +1863,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const logsScore = logsStatus === "verified" ? 20 : logsStatus === "mismatch" ? 0 : 5;
       const reactionScore = Math.round((reactionTimeResult?.consistencyScore ?? 0) / 100 * 10);
       const gasScore = Math.round((gasPatternResult?.gasConsistencyScore ?? 0) / 100 * 10);
-      const rawScore = speedScore + traceScore + contextScore + socialScore + logsScore + activityScore + codeSizeScore + reactionScore + gasScore;
+      const entropyScore = Math.round((decisionEntropyResult?.patternScore ?? 0) / 100 * 10);
+      const rawScore = speedScore + traceScore + contextScore + socialScore + logsScore + activityScore + codeSizeScore + reactionScore + gasScore + entropyScore;
 
       const hasAutoAbilities = !claimedAbilities && autoAbilityAudit && autoAbilityAudit.claimedAbilities.length > 0;
       const hasAutoLogs = !logsUrl && autoAbilityAudit && (autoAbilityAudit.reasoningStatus === "verified" || autoAbilityAudit.reasoningStatus === "mismatch");
@@ -1918,6 +1990,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         activityPattern: activityPatternResult ?? undefined,
         reactionTime: reactionTimeResult ?? undefined,
         gasPattern: gasPatternResult ?? undefined,
+        decisionEntropy: decisionEntropyResult ?? undefined,
       };
 
       let slug: string | null = null;
