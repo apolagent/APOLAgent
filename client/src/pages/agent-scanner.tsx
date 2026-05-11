@@ -191,6 +191,15 @@ type AgentResult = {
     reactionPattern: "AUTONOMOUS" | "ASSISTED" | "MANUAL";
     insight: string;
   };
+  gasPattern?: {
+    averageGasPrice: number;
+    gasVariance: number;
+    optimalGasPercent: number;
+    gasConsistencyScore: number;
+    overpayPercent: number;
+    gasPattern: "OPTIMIZED" | "VARIABLE" | "INEFFICIENT";
+    insight: string;
+  };
 };
 
 type StatusColor = "green" | "red" | "yellow" | "grey";
@@ -729,6 +738,55 @@ function AdvancedResults({ result }: { result: AgentResult }) {
                   </div>
                 </div>
                 <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.55)", lineHeight: 1.5 }}>{rt.insight}</div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ── Gas Pattern Analysis ── */}
+      {result.gasPattern && (
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "12px" }}>
+            <Zap size={12} color={G} />
+            <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.6)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Gas Pattern Analysis</span>
+          </div>
+          {(() => {
+            const gp = result.gasPattern!;
+            const patternColor = gp.gasPattern === "OPTIMIZED" ? G : gp.gasPattern === "INEFFICIENT" ? "#f87171" : "#facc15";
+            const patternBg = gp.gasPattern === "OPTIMIZED" ? "rgba(0,255,0,0.08)" : gp.gasPattern === "INEFFICIENT" ? "rgba(248,113,113,0.08)" : "rgba(250,204,21,0.08)";
+            const barColor = gp.gasConsistencyScore > 65 ? G : gp.gasConsistencyScore > 35 ? "#facc15" : "#f87171";
+            return (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px", flexWrap: "wrap" }}>
+                  <div style={{ padding: "4px 12px", border: `1px solid ${patternColor}`, background: patternBg, fontSize: "11px", fontWeight: 900, color: patternColor, letterSpacing: "0.1em" }}>
+                    {gp.gasPattern}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.4)", whiteSpace: "nowrap" }}>Consistency</span>
+                    <div style={{ width: "60px", height: "5px", background: "rgba(255,255,255,0.08)", position: "relative", flexShrink: 0 }}>
+                      <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${gp.gasConsistencyScore}%`, background: barColor, transition: "width 0.4s ease" }} />
+                    </div>
+                    <span style={{ fontSize: "10px", fontWeight: 700, color: barColor, minWidth: "36px" }}>{gp.gasConsistencyScore}/100</span>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px", marginBottom: "10px" }}>
+                  <div>
+                    <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>Avg Gas</div>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>{gp.averageGasPrice.toFixed(2)} gwei</div>
+                  </div>
+                  {gp.optimalGasPercent > 0 && (
+                    <div>
+                      <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>Optimal</div>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: gp.optimalGasPercent >= 60 ? G : "rgba(255,255,255,0.7)" }}>{gp.optimalGasPercent}%</div>
+                    </div>
+                  )}
+                  <div>
+                    <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>Overpay</div>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: gp.overpayPercent >= 40 ? "#f87171" : "rgba(255,255,255,0.7)" }}>{gp.overpayPercent}%</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.55)", lineHeight: 1.5 }}>{gp.insight}</div>
               </>
             );
           })()}

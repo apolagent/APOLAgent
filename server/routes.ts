@@ -860,6 +860,63 @@ function analyzeReactionTime(timestamps: number[]): ReactionTimeResult {
   return { averageReactionTime: mean, medianReactionTime: median, minReactionTime: minGap, consistencyScore, subSecondPercent, reactionPattern, insight };
 }
 
+interface GasPatternResult {
+  averageGasPrice: number;
+  gasVariance: number;
+  optimalGasPercent: number;
+  gasConsistencyScore: number;
+  overpayPercent: number;
+  gasPattern: "OPTIMIZED" | "VARIABLE" | "INEFFICIENT";
+  insight: string;
+}
+
+function analyzeGasPatterns(samples: { gasPrice: number; baseFee: number | null }[]): GasPatternResult {
+  const empty: GasPatternResult = {
+    averageGasPrice: 0, gasVariance: 0, optimalGasPercent: 0,
+    gasConsistencyScore: 0, overpayPercent: 0, gasPattern: "INEFFICIENT",
+    insight: "Insufficient gas data for pattern analysis.",
+  };
+  if (samples.length < 2) return empty;
+
+  const prices = samples.map(s => s.gasPrice);
+  const mean = prices.reduce((a, b) => a + b, 0) / prices.length;
+  const variance = prices.reduce((acc, p) => acc + (p - mean) ** 2, 0) / prices.length;
+  const stdDev = Math.sqrt(variance);
+  const cv = mean > 0 ? stdDev / mean : 0;
+  const gasConsistencyScore = Math.min(100, Math.max(0, 100 - Math.round(cv * 50)));
+
+  const samplesWithBase = samples.filter(s => s.baseFee !== null && s.baseFee > 0);
+  const optimalCount = samplesWithBase.filter(s => s.gasPrice <= (s.baseFee! * 1.1) + 2).length;
+  const optimalGasPercent = samplesWithBase.length > 0
+    ? Math.round((optimalCount / samplesWithBase.length) * 100)
+    : 0;
+
+  const overpayThreshold = samplesWithBase.length > 0 ? null : mean * 2;
+  const overpayCount = samples.filter(s =>
+    s.baseFee !== null && s.baseFee > 0
+      ? s.gasPrice > s.baseFee * 2
+      : overpayThreshold !== null && s.gasPrice > overpayThreshold,
+  ).length;
+  const overpayPercent = Math.round((overpayCount / samples.length) * 100);
+
+  const gasPattern: GasPatternResult["gasPattern"] =
+    gasConsistencyScore >= 65 ? "OPTIMIZED"
+    : gasConsistencyScore <= 30 ? "INEFFICIENT"
+    : "VARIABLE";
+
+  const avgFmt = `${mean.toFixed(2)} gwei`;
+  let insight: string;
+  if (gasPattern === "OPTIMIZED") {
+    insight = `Gas usage is OPTIMIZED — consistency score ${gasConsistencyScore}/100 with average ${avgFmt}${optimalGasPercent > 0 ? `, ${optimalGasPercent}% of transactions priced within 10% of base fee` : ""}.`;
+  } else if (gasPattern === "INEFFICIENT") {
+    insight = `Gas usage is INEFFICIENT — high variance (consistency ${gasConsistencyScore}/100) with ${overpayPercent}% of transactions significantly overpaying at average ${avgFmt}.`;
+  } else {
+    insight = `Gas usage is VARIABLE — mixed pricing strategy (consistency ${gasConsistencyScore}/100), average ${avgFmt}, suggesting partial automation or manual overrides.`;
+  }
+
+  return { averageGasPrice: mean, gasVariance: variance, optimalGasPercent, gasConsistencyScore, overpayPercent, gasPattern, insight };
+}
+
 async function getContractActivity(addr: string): Promise<ContractActivity> {
   const result: ContractActivity = { txCount: 0, contractAgeDays: 0, hasContractCode: false, codeSize: 0, activityPerDay: 0 };
   try {
@@ -1387,6 +1444,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let treasuryUsd = 0;
       let activityPatternResult: ActivityPatternResult | null = null;
       let reactionTimeResult: ReactionTimeResult | null = null;
+      let gasPatternResult: GasPatternResult | null = null;
 
       if (wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet)) {
         const [simR, tokenR, deployerR] = await Promise.allSettled([
@@ -1493,6 +1551,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   .filter((ts: number | null): ts is number => ts !== null);
                 activityPatternResult = analyzeActivityPattern(txTimestamps);
                 reactionTimeResult = analyzeReactionTime(txTimestamps);
+                try {
+                  const sampleTransfers = walletTransfers.slice(0, 15);
+                  const txHashes: string[] = sampleTransfers.map((t: any) => t.hash).filter(Boolean);
+                  const uniqueBlockHexes: string[] = [...new Set<string>(sampleTransfers.map((t: any) => t.blockNum).filter(Boolean))].slice(0, 10);
+                  const [txDatas, blockDatas] = await Promise.all([
+                    rpcBatch(txHashes.map(h => ({ method: "eth_getTransactionByHash", params: [h] }))),
+                    rpcBatch(uniqueBlockHexes.map(n => ({ method: "eth_getBlockByNumber", params: [n, false] }))),
+                  ]);
+                  const blockBaseFeeMap = new Map<string, number>();
+                  for (let i = 0; i < uniqueBlockHexes.length; i++) {
+                    const b = blockDatas[i];
+                    if (b?.baseFeePerGas) blockBaseFeeMap.set(uniqueBlockHexes[i], Number(BigInt(b.baseFeePerGas)) / 1e9);
+                  }
+                  const gasSamples: { gasPrice: number; baseFee: number | null }[] = [];
+                  for (let i = 0; i < txHashes.length; i++) {
+                    const tx = txDatas[i];
+                    if (!tx) continue;
+                    const rawGas = tx.maxFeePerGas ?? tx.gasPrice;
+                    if (!rawGas) continue;
+                    const gasPriceGwei = Number(BigInt(rawGas)) / 1e9;
+                    const baseFee = blockBaseFeeMap.get(sampleTransfers[i]?.blockNum) ?? null;
+                    gasSamples.push({ gasPrice: gasPriceGwei, baseFee });
+                  }
+                  gasPatternResult = analyzeGasPatterns(gasSamples);
+                } catch {}
               } else {
                 speedScore = 5;
                 speedDetail = "Insufficient transaction history for timing analysis.";
@@ -1708,7 +1791,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const socialScore = socialStatus === "clear" ? 20 : socialStatus === "suspicious" ? 5 : 10;
       const logsScore = logsStatus === "verified" ? 20 : logsStatus === "mismatch" ? 0 : 5;
       const reactionScore = Math.round((reactionTimeResult?.consistencyScore ?? 0) / 100 * 10);
-      const rawScore = speedScore + traceScore + contextScore + socialScore + logsScore + activityScore + codeSizeScore + reactionScore;
+      const gasScore = Math.round((gasPatternResult?.gasConsistencyScore ?? 0) / 100 * 10);
+      const rawScore = speedScore + traceScore + contextScore + socialScore + logsScore + activityScore + codeSizeScore + reactionScore + gasScore;
 
       const hasAutoAbilities = !claimedAbilities && autoAbilityAudit && autoAbilityAudit.claimedAbilities.length > 0;
       const hasAutoLogs = !logsUrl && autoAbilityAudit && (autoAbilityAudit.reasoningStatus === "verified" || autoAbilityAudit.reasoningStatus === "mismatch");
@@ -1833,6 +1917,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         twitterHandle: dexSocialData.twitter || undefined,
         activityPattern: activityPatternResult ?? undefined,
         reactionTime: reactionTimeResult ?? undefined,
+        gasPattern: gasPatternResult ?? undefined,
       };
 
       let slug: string | null = null;
