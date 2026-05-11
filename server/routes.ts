@@ -2016,6 +2016,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         decisionEntropy: decisionEntropyResult ?? undefined,
       };
 
+      // Fire-and-forget behavioral snapshot — never blocks the scan response
+      if (wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet)) {
+        storage.saveAgentBehavioralSnapshot({
+          walletAddress: wallet.toLowerCase(),
+          chain: chain || "base",
+          botActivityScore: activityPatternResult?.botScore ?? null,
+          reactionConsistencyScore: reactionTimeResult?.consistencyScore ?? null,
+          gasConsistencyScore: gasPatternResult?.gasConsistencyScore ?? null,
+          decisionPatternScore: decisionEntropyResult?.patternScore ?? null,
+          overallAuthenticityScore: finalCognitionScore ?? null,
+          activityPattern: activityPatternResult?.verdict ?? null,
+          reactionPattern: reactionTimeResult?.reactionPattern ?? null,
+          gasPattern: gasPatternResult?.gasPattern ?? null,
+          decisionPattern: decisionEntropyResult?.entropyPattern ?? null,
+          verdict: verdict,
+        }).catch(() => {});
+      }
+
       let slug: string | null = null;
       try {
         const baseSlug = agentName.trim().toLowerCase()
@@ -2078,6 +2096,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Failed to load result" });
+    }
+  });
+
+  app.get("/api/agent/history/:address", async (req, res) => {
+    try {
+      const address = String(req.params.address || "").trim();
+      if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+        return res.status(400).json({ error: "Invalid wallet address" });
+      }
+      const snapshots = await storage.getAgentBehavioralHistory(address, 30);
+      const firstSeen = snapshots.length > 0 ? snapshots[0].scanDate : null;
+      const lastSeen = snapshots.length > 0 ? snapshots[snapshots.length - 1].scanDate : null;
+      res.json({ address, count: snapshots.length, firstSeen, lastSeen, snapshots });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Failed to load behavioral history" });
     }
   });
 

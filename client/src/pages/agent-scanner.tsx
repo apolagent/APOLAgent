@@ -322,6 +322,175 @@ function HolderBar({ holder, maxPct }: { holder: ContractScan["topHolders"][0]; 
   );
 }
 
+interface BehavioralSnapshot {
+  scanDate: string;
+  overallAuthenticityScore: number | null;
+  botActivityScore: number | null;
+  reactionConsistencyScore: number | null;
+  gasConsistencyScore: number | null;
+  decisionPatternScore: number | null;
+  activityPattern: string | null;
+  reactionPattern: string | null;
+  gasPattern: string | null;
+  decisionPattern: string | null;
+  verdict: string | null;
+}
+
+interface BehavioralHistoryData {
+  address: string;
+  count: number;
+  firstSeen: string | null;
+  lastSeen: string | null;
+  snapshots: BehavioralSnapshot[];
+}
+
+function BehavioralHistory({ wallet }: { wallet: string }) {
+  const [data, setData] = useState<BehavioralHistoryData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/agent/history/${wallet}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [wallet]);
+
+  const G = "#00ff00";
+
+  if (loading) {
+    return (
+      <div style={{ border: "1px solid rgba(0,255,0,0.2)", background: "#000", padding: "16px 20px", display: "flex", alignItems: "center", gap: "8px", fontFamily: "'JetBrains Mono', monospace" }}>
+        <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.5)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Loading behavioral history…</span>
+      </div>
+    );
+  }
+
+  if (!data || data.count === 0) {
+    return (
+      <div style={{ border: "1px solid rgba(0,255,0,0.15)", background: "#000", padding: "14px 20px", fontFamily: "'JetBrains Mono', monospace" }}>
+        <div style={{ fontSize: "9px", color: "rgba(0,255,0,0.5)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "6px" }}>30-Day Behavioral History</div>
+        <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.4)" }}>First scan recorded. Scan again to begin tracking behavioral trends.</div>
+      </div>
+    );
+  }
+
+  const snapshots = data.snapshots;
+  const scores = snapshots.map(s => s.overallAuthenticityScore).filter((s): s is number => s !== null);
+
+  // Trend: compare mean of first third vs last third
+  let trendLabel = "STABLE";
+  let trendColor = "#facc15";
+  if (scores.length >= 3) {
+    const third = Math.max(1, Math.floor(scores.length / 3));
+    const firstMean = scores.slice(0, third).reduce((a, b) => a + b, 0) / third;
+    const lastMean = scores.slice(-third).reduce((a, b) => a + b, 0) / third;
+    const delta = lastMean - firstMean;
+    if (delta > 5) { trendLabel = "TRENDING UP ↑"; trendColor = G; }
+    else if (delta < -5) { trendLabel = "DECLINING ↓"; trendColor = "#f87171"; }
+  }
+
+  // SVG sparkline
+  const chartW = 220;
+  const chartH = 44;
+  const pad = 4;
+  const innerW = chartW - pad * 2;
+  const innerH = chartH - pad * 2;
+  const sparkPoints = scores.length >= 2
+    ? scores.map((s, i) => {
+        const x = pad + (i / (scores.length - 1)) * innerW;
+        const y = pad + innerH - (s / 100) * innerH;
+        return `${x},${y}`;
+      }).join(" ")
+    : null;
+
+  // Verdict timeline — collapse consecutive identical verdicts
+  const verdictChanges: { date: string; verdict: string }[] = [];
+  for (const snap of snapshots) {
+    if (!snap.verdict) continue;
+    if (verdictChanges.length === 0 || verdictChanges[verdictChanges.length - 1].verdict !== snap.verdict) {
+      verdictChanges.push({ date: snap.scanDate, verdict: snap.verdict });
+    }
+  }
+  const verdictColor = (v: string) =>
+    v === "Fully Autonomous" ? G
+    : v === "Semi-Autonomous" ? "#86efac"
+    : v === "Under Review" ? "#facc15"
+    : v === "Unverified" ? "#facc15"
+    : v === "Confirmed LARP" ? "#f87171"
+    : "rgba(255,255,255,0.4)";
+
+  return (
+    <div style={{ border: "1px solid rgba(0,255,0,0.25)", background: "#000", marginBottom: "1px" }}>
+      {/* Header */}
+      <div style={{ padding: "10px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px" }}>
+        <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.6)", letterSpacing: "0.12em", textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace" }}>
+          30-Day Behavioral History
+        </span>
+        <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", fontFamily: "'JetBrains Mono', monospace" }}>
+          {data.count} scan{data.count !== 1 ? "s" : ""}{data.firstSeen ? ` · since ${new Date(data.firstSeen).toLocaleDateString()}` : ""}
+        </span>
+      </div>
+
+      <div style={{ padding: "14px 20px", display: "flex", flexWrap: "wrap", gap: "24px", alignItems: "flex-start" }}>
+        {/* Sparkline */}
+        {sparkPoints && scores.length >= 2 && (
+          <div>
+            <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px", fontFamily: "'JetBrains Mono', monospace" }}>Authenticity Score</div>
+            <svg width={chartW} height={chartH} style={{ display: "block", overflow: "visible" }}>
+              <polyline points={sparkPoints} fill="none" stroke={G} strokeWidth="1.5" strokeLinejoin="round" opacity="0.8" />
+              {scores.map((s, i) => {
+                const x = pad + (i / (scores.length - 1)) * innerW;
+                const y = pad + innerH - (s / 100) * innerH;
+                return <circle key={i} cx={x} cy={y} r={2.5} fill={G} opacity="0.9" />;
+              })}
+            </svg>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "8px", color: "rgba(255,255,255,0.25)", fontFamily: "'JetBrains Mono', monospace", marginTop: "2px", width: chartW }}>
+              <span>0</span><span>100</span>
+            </div>
+          </div>
+        )}
+
+        {/* Trend + scan stats */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px", minWidth: "120px" }}>
+          <div>
+            <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "4px", fontFamily: "'JetBrains Mono', monospace" }}>Trend</div>
+            <div style={{ fontSize: "11px", fontWeight: 700, color: trendColor, fontFamily: "'JetBrains Mono', monospace" }}>{trendLabel}</div>
+          </div>
+          {scores.length > 0 && (
+            <div>
+              <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "4px", fontFamily: "'JetBrains Mono', monospace" }}>Latest Score</div>
+              <div style={{ fontSize: "18px", fontWeight: 900, color: G, fontFamily: "'JetBrains Mono', monospace" }}>{scores[scores.length - 1]}</div>
+            </div>
+          )}
+        </div>
+
+        {/* Verdict timeline */}
+        {verdictChanges.length > 0 && (
+          <div style={{ flex: 1, minWidth: "140px" }}>
+            <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "8px", fontFamily: "'JetBrains Mono', monospace" }}>Verdict Timeline</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              {verdictChanges.map((vc, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace", whiteSpace: "nowrap" }}>
+                    {new Date(vc.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </span>
+                  <span style={{ fontSize: "10px", fontWeight: 700, color: verdictColor(vc.verdict), fontFamily: "'JetBrains Mono', monospace" }}>
+                    {vc.verdict}
+                  </span>
+                  {i < verdictChanges.length - 1 && (
+                    <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.2)", marginLeft: "2px" }}>↓</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AdvancedResults({ result }: { result: AgentResult }) {
   const [briefingOpen, setBriefingOpen] = useState(false);
   const cs = result.contractScan;
@@ -2294,6 +2463,10 @@ export default function AgentScanner() {
                 </button>
               </div>
             </div>
+
+            {result.wallet && /^0x[a-fA-F0-9]{40}$/.test(result.wallet) && (
+              <BehavioralHistory wallet={result.wallet} />
+            )}
 
             <div id="advanced-results">
               <AdvancedResults result={result} />

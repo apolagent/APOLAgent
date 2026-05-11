@@ -1,4 +1,4 @@
-import { users, scamReports, heroNominations, votes, flaggedWallets, verificationRequests, scanLookups, agentActivityLogs, subscriptions, agentScanResults, usedPaymentTxHashes, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet, type InsertVerificationRequest, type VerificationRequest, type ScanLookup, type AgentActivityLog, type Subscription, type AgentScanResult } from "@shared/schema";
+import { users, scamReports, heroNominations, votes, flaggedWallets, verificationRequests, scanLookups, agentActivityLogs, subscriptions, agentScanResults, usedPaymentTxHashes, agentBehavioralSnapshots, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet, type InsertVerificationRequest, type VerificationRequest, type ScanLookup, type AgentActivityLog, type Subscription, type AgentScanResult, type AgentBehavioralSnapshot } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, gte, or, and, sql, sum } from "drizzle-orm";
 
@@ -48,6 +48,21 @@ export interface IStorage {
   saveAgentScanResult(data: { slug: string; agentName: string; wallet: string | null; chain: string; twitterHandle: string | null; socialLink: string | null; logsUrl: string | null; claimedAbilities: string | null; resultJson: any; tier: string }): Promise<AgentScanResult>;
   getAgentScanResultBySlug(slug: string): Promise<AgentScanResult | null>;
   upgradeAgentScanResultTier(slug: string, tier: string): Promise<AgentScanResult | null>;
+  saveAgentBehavioralSnapshot(data: {
+    walletAddress: string;
+    chain: string;
+    botActivityScore: number | null;
+    reactionConsistencyScore: number | null;
+    gasConsistencyScore: number | null;
+    decisionPatternScore: number | null;
+    overallAuthenticityScore: number | null;
+    activityPattern: string | null;
+    reactionPattern: string | null;
+    gasPattern: string | null;
+    decisionPattern: string | null;
+    verdict: string | null;
+  }): Promise<void>;
+  getAgentBehavioralHistory(walletAddress: string, days?: number): Promise<AgentBehavioralSnapshot[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -429,6 +444,37 @@ export class DatabaseStorage implements IStorage {
       .execute()
       .catch(() => {});
     return row;
+  }
+
+  async saveAgentBehavioralSnapshot(data: {
+    walletAddress: string;
+    chain: string;
+    botActivityScore: number | null;
+    reactionConsistencyScore: number | null;
+    gasConsistencyScore: number | null;
+    decisionPatternScore: number | null;
+    overallAuthenticityScore: number | null;
+    activityPattern: string | null;
+    reactionPattern: string | null;
+    gasPattern: string | null;
+    decisionPattern: string | null;
+    verdict: string | null;
+  }): Promise<void> {
+    await db.insert(agentBehavioralSnapshots).values(data);
+  }
+
+  async getAgentBehavioralHistory(walletAddress: string, days = 30): Promise<AgentBehavioralSnapshot[]> {
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    return db
+      .select()
+      .from(agentBehavioralSnapshots)
+      .where(
+        and(
+          eq(agentBehavioralSnapshots.walletAddress, walletAddress.toLowerCase()),
+          gte(agentBehavioralSnapshots.scanDate, cutoff),
+        )
+      )
+      .orderBy(agentBehavioralSnapshots.scanDate);
   }
 
   async checkInternalReports(address: string): Promise<boolean> {

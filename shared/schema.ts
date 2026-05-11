@@ -155,6 +155,26 @@ export const agentScanResults = pgTable("agent_scan_results", {
 
 export type AgentScanResult = typeof agentScanResults.$inferSelect;
 
+export const agentBehavioralSnapshots = pgTable("agent_behavioral_snapshots", {
+  id: serial("id").primaryKey(),
+  walletAddress: text("wallet_address").notNull(),
+  chain: text("chain").notNull().default("base"),
+  scanDate: timestamp("scan_date").defaultNow().notNull(),
+  botActivityScore: integer("bot_activity_score"),
+  reactionConsistencyScore: integer("reaction_consistency_score"),
+  gasConsistencyScore: integer("gas_consistency_score"),
+  decisionPatternScore: integer("decision_pattern_score"),
+  overallAuthenticityScore: integer("overall_authenticity_score"),
+  activityPattern: text("activity_pattern"),
+  reactionPattern: text("reaction_pattern"),
+  gasPattern: text("gas_pattern"),
+  decisionPattern: text("decision_pattern"),
+  verdict: text("verdict"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type AgentBehavioralSnapshot = typeof agentBehavioralSnapshots.$inferSelect;
+
 export const subscriptions = pgTable("subscriptions", {
   id: serial("id").primaryKey(),
   telegramUserId: text("telegram_user_id").unique(),
