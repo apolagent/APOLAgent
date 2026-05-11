@@ -409,7 +409,7 @@ function AdvancedResults({ result }: { result: AgentResult }) {
           <div style={{ fontSize: "20px", fontWeight: 900, color: riskColor, letterSpacing: "0.04em", marginBottom: "8px" }}>
             {result.cognitionScore !== null ? `${result.cognitionScore}%` : "N/A"}
           </div>
-          <div style={{ fontSize: "10px", color: riskColor, fontWeight: 700, letterSpacing: "0.06em" }}>{result.verdict.toUpperCase()}</div>
+          <ScoreBar value={result.cognitionScore ?? 0} max={100} color={riskColor} />
         </div>
       </div>
 
@@ -568,6 +568,45 @@ function AdvancedResults({ result }: { result: AgentResult }) {
               <span key={i} style={{ fontSize: "10px", padding: "3px 7px", border: "1px solid rgba(0,255,0,0.2)", color: "rgba(0,255,0,0.7)" }}>{t}</span>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ── Activity Pattern ── */}
+      {result.onChainActivityTest && result.onChainActivityTest.scored && (
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px" }}>
+            <Activity size={12} color={G} />
+            <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.6)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Activity Pattern</span>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px" }}>
+            {result.onChainActivityTest.txCount != null && (
+              <div>
+                <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>Tx Count</div>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>{result.onChainActivityTest.txCount}</div>
+              </div>
+            )}
+            {result.onChainActivityTest.activityPerDay != null && (
+              <div>
+                <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>Txs / Day</div>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>{result.onChainActivityTest.activityPerDay.toFixed(1)}</div>
+              </div>
+            )}
+            {result.onChainActivityTest.contractAgeDays != null && (
+              <div>
+                <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>Age</div>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>{result.onChainActivityTest.contractAgeDays}d</div>
+              </div>
+            )}
+            <div>
+              <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>Level</div>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: result.onChainActivityTest.label === "Active" ? G : (result.onChainActivityTest.label === "Dead" || result.onChainActivityTest.label === "Dormant") ? "#f87171" : "#facc15" }}>
+                {result.onChainActivityTest.label.toUpperCase()}
+              </div>
+            </div>
+          </div>
+          {result.onChainActivityTest.detail && (
+            <div style={{ marginTop: "8px", fontSize: "10px", color: "rgba(255,255,255,0.5)", lineHeight: 1.5 }}>{result.onChainActivityTest.detail}</div>
+          )}
         </div>
       )}
 
