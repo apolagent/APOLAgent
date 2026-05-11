@@ -792,6 +792,74 @@ function analyzeActivityPattern(timestamps: number[]): ActivityPatternResult {
   return { offHoursPercent, botScore, verdict, insight, hourDistribution: hourCounts };
 }
 
+interface ReactionTimeResult {
+  averageReactionTime: number;
+  medianReactionTime: number;
+  minReactionTime: number;
+  consistencyScore: number;
+  subSecondPercent: number;
+  reactionPattern: "AUTONOMOUS" | "ASSISTED" | "MANUAL";
+  insight: string;
+}
+
+function analyzeReactionTime(timestamps: number[]): ReactionTimeResult {
+  const empty: ReactionTimeResult = {
+    averageReactionTime: 0,
+    medianReactionTime: 0,
+    minReactionTime: 0,
+    consistencyScore: 0,
+    subSecondPercent: 0,
+    reactionPattern: "MANUAL",
+    insight: "Insufficient transaction data for reaction time analysis.",
+  };
+  if (timestamps.length < 2) return empty;
+
+  const sorted = [...timestamps].sort((a, b) => a - b);
+  const gaps: number[] = [];
+  for (let i = 1; i < sorted.length; i++) {
+    const g = sorted[i] - sorted[i - 1];
+    if (g > 0) gaps.push(g);
+  }
+  if (gaps.length === 0) return empty;
+
+  const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+  const sortedGaps = [...gaps].sort((a, b) => a - b);
+  const mid = Math.floor(sortedGaps.length / 2);
+  const median = sortedGaps.length % 2 === 0
+    ? (sortedGaps[mid - 1] + sortedGaps[mid]) / 2
+    : sortedGaps[mid];
+  const minGap = sortedGaps[0];
+
+  const subSecondCount = gaps.filter(g => g < 1).length;
+  const subSecondPercent = Math.round((subSecondCount / gaps.length) * 100);
+
+  // coefficient of variation: lower = more consistent = more bot-like
+  const variance = gaps.reduce((acc, g) => acc + (g - mean) ** 2, 0) / gaps.length;
+  const stdDev = Math.sqrt(variance);
+  const cv = mean > 0 ? stdDev / mean : 0;
+  const consistencyScore = Math.min(100, Math.max(0, 100 - Math.round(cv * 50)));
+
+  const reactionPattern: ReactionTimeResult["reactionPattern"] =
+    (consistencyScore >= 70 || subSecondPercent >= 20) ? "AUTONOMOUS"
+    : (consistencyScore <= 30 && subSecondPercent < 5) ? "MANUAL"
+    : "ASSISTED";
+
+  const avgFmt = mean < 1 ? `${Math.round(mean * 1000)}ms` : mean < 60 ? `${mean.toFixed(1)}s` : `${(mean / 60).toFixed(1)} min`;
+  let insight: string;
+  if (reactionPattern === "AUTONOMOUS") {
+    const signal = subSecondPercent >= 20
+      ? `${subSecondPercent}% of gaps are sub-second`
+      : `consistency score of ${consistencyScore}/100`;
+    insight = `Reaction pattern is AUTONOMOUS — ${signal}, with an average gap of ${avgFmt} between transactions.`;
+  } else if (reactionPattern === "MANUAL") {
+    insight = `Reaction pattern is MANUAL — high timing variability (consistency ${consistencyScore}/100) and average gap of ${avgFmt} suggest human operation.`;
+  } else {
+    insight = `Mixed reaction pattern — average gap of ${avgFmt} with ${subSecondPercent}% sub-second transactions and consistency score ${consistencyScore}/100.`;
+  }
+
+  return { averageReactionTime: mean, medianReactionTime: median, minReactionTime: minGap, consistencyScore, subSecondPercent, reactionPattern, insight };
+}
+
 async function getContractActivity(addr: string): Promise<ContractActivity> {
   const result: ContractActivity = { txCount: 0, contractAgeDays: 0, hasContractCode: false, codeSize: 0, activityPerDay: 0 };
   try {
@@ -1318,6 +1386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let treasuryEth = 0;
       let treasuryUsd = 0;
       let activityPatternResult: ActivityPatternResult | null = null;
+      let reactionTimeResult: ReactionTimeResult | null = null;
 
       if (wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet)) {
         const [simR, tokenR, deployerR] = await Promise.allSettled([
@@ -1423,6 +1492,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   .map((t: any) => t.metadata?.blockTimestamp ? Math.floor(new Date(t.metadata.blockTimestamp).getTime() / 1000) : null)
                   .filter((ts: number | null): ts is number => ts !== null);
                 activityPatternResult = analyzeActivityPattern(txTimestamps);
+                reactionTimeResult = analyzeReactionTime(txTimestamps);
               } else {
                 speedScore = 5;
                 speedDetail = "Insufficient transaction history for timing analysis.";
@@ -1637,7 +1707,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const traceScore = traceIsContract ? 20 : wallet ? 5 : 0;
       const socialScore = socialStatus === "clear" ? 20 : socialStatus === "suspicious" ? 5 : 10;
       const logsScore = logsStatus === "verified" ? 20 : logsStatus === "mismatch" ? 0 : 5;
-      const rawScore = speedScore + traceScore + contextScore + socialScore + logsScore + activityScore + codeSizeScore;
+      const reactionScore = Math.round((reactionTimeResult?.consistencyScore ?? 0) / 100 * 10);
+      const rawScore = speedScore + traceScore + contextScore + socialScore + logsScore + activityScore + codeSizeScore + reactionScore;
 
       const hasAutoAbilities = !claimedAbilities && autoAbilityAudit && autoAbilityAudit.claimedAbilities.length > 0;
       const hasAutoLogs = !logsUrl && autoAbilityAudit && (autoAbilityAudit.reasoningStatus === "verified" || autoAbilityAudit.reasoningStatus === "mismatch");
@@ -1761,6 +1832,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } : undefined,
         twitterHandle: dexSocialData.twitter || undefined,
         activityPattern: activityPatternResult ?? undefined,
+        reactionTime: reactionTimeResult ?? undefined,
       };
 
       let slug: string | null = null;

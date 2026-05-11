@@ -182,6 +182,15 @@ type AgentResult = {
     insight: string;
     hourDistribution?: number[];
   };
+  reactionTime?: {
+    averageReactionTime: number;
+    medianReactionTime: number;
+    minReactionTime: number;
+    consistencyScore: number;
+    subSecondPercent: number;
+    reactionPattern: "AUTONOMOUS" | "ASSISTED" | "MANUAL";
+    insight: string;
+  };
 };
 
 type StatusColor = "green" | "red" | "yellow" | "grey";
@@ -267,6 +276,13 @@ function ScoreBar({ value, max, color }: { value: number; max: number; color: st
       <span style={{ fontSize: "10px", color, fontWeight: 700, minWidth: "32px", textAlign: "right" }}>{pct}%</span>
     </div>
   );
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds < 1) return `${Math.round(seconds * 1000)}ms`;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  if (seconds < 3600) return `${(seconds / 60).toFixed(1)} min`;
+  return `${(seconds / 3600).toFixed(1)} hrs`;
 }
 
 function HolderBar({ holder, maxPct }: { holder: ContractScan["topHolders"][0]; maxPct: number }) {
@@ -665,6 +681,57 @@ function AdvancedResults({ result }: { result: AgentResult }) {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* ── Reaction Time Analysis ── */}
+      {result.reactionTime && (
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "12px" }}>
+            <Clock size={12} color={G} />
+            <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.6)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Reaction Time Analysis</span>
+          </div>
+          {(() => {
+            const rt = result.reactionTime!;
+            const patternColor = rt.reactionPattern === "AUTONOMOUS" ? G : rt.reactionPattern === "MANUAL" ? "#f87171" : "#facc15";
+            const patternBg = rt.reactionPattern === "AUTONOMOUS" ? "rgba(0,255,0,0.08)" : rt.reactionPattern === "MANUAL" ? "rgba(248,113,113,0.08)" : "rgba(250,204,21,0.08)";
+            const barColor = rt.consistencyScore > 65 ? G : rt.consistencyScore > 35 ? "#facc15" : "#f87171";
+            return (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px", flexWrap: "wrap" }}>
+                  <div style={{ padding: "4px 12px", border: `1px solid ${patternColor}`, background: patternBg, fontSize: "11px", fontWeight: 900, color: patternColor, letterSpacing: "0.1em" }}>
+                    {rt.reactionPattern}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.4)", whiteSpace: "nowrap" }}>Consistency</span>
+                    <div style={{ width: "60px", height: "5px", background: "rgba(255,255,255,0.08)", position: "relative", flexShrink: 0 }}>
+                      <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${rt.consistencyScore}%`, background: barColor, transition: "width 0.4s ease" }} />
+                    </div>
+                    <span style={{ fontSize: "10px", fontWeight: 700, color: barColor, minWidth: "36px" }}>{rt.consistencyScore}/100</span>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px", marginBottom: "10px" }}>
+                  <div>
+                    <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>Avg Gap</div>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>{formatDuration(rt.averageReactionTime)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>Median Gap</div>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>{formatDuration(rt.medianReactionTime)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>Min Gap</div>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>{formatDuration(rt.minReactionTime)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "2px" }}>Sub-second</div>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: rt.subSecondPercent >= 20 ? G : "rgba(255,255,255,0.7)" }}>{rt.subSecondPercent}%</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.55)", lineHeight: 1.5 }}>{rt.insight}</div>
+              </>
+            );
+          })()}
         </div>
       )}
 
