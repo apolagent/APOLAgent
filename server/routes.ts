@@ -844,7 +844,7 @@ function analyzeReactionTime(timestamps: number[]): ReactionTimeResult {
     : (consistencyScore <= 30 && subSecondPercent < 5) ? "MANUAL"
     : "ASSISTED";
 
-  const avgFmt = mean < 1 ? `${Math.round(mean * 1000)}ms` : mean < 60 ? `${mean.toFixed(1)}s` : `${(mean / 60).toFixed(1)} min`;
+  const avgFmt = mean < 1 ? `${Math.round(mean * 1000)}ms` : mean < 60 ? `${mean.toFixed(1)}s` : mean < 3600 ? `${(mean / 60).toFixed(1)} min` : `${(mean / 3600).toFixed(1)} hrs`;
   let insight: string;
   if (reactionPattern === "AUTONOMOUS") {
     const signal = subSecondPercent >= 20
@@ -1888,7 +1888,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         && (!autoAbilityAudit || autoAbilityAudit.claimedAbilities.length === 0)
         && !traceIsContract;
 
-      const cognitionScore = isVerifiedAgent ? 100 : zeroAgentTrace ? 0 : (scoredTests >= 2 ? Math.min(100, rawScore) : null);
+      // Sub-section weighted average: prefer this over rawScore when 2+ sections have data
+      const subSectionScores: number[] = [];
+      if (activityPatternResult) subSectionScores.push(activityPatternResult.botScore);
+      if (reactionTimeResult) subSectionScores.push(reactionTimeResult.consistencyScore);
+      if (gasPatternResult) subSectionScores.push(gasPatternResult.gasConsistencyScore);
+      if (decisionEntropyResult) subSectionScores.push(decisionEntropyResult.patternScore);
+      const subSectionAvg = subSectionScores.length >= 2
+        ? Math.round(subSectionScores.reduce((a, b) => a + b, 0) / subSectionScores.length)
+        : null;
+      const cognitionBase = subSectionAvg !== null ? subSectionAvg : Math.min(100, rawScore);
+
+      const cognitionScore = isVerifiedAgent ? 100 : zeroAgentTrace ? 0 : (scoredTests >= 2 ? cognitionBase : null);
       const isPartial = isVerifiedAgent ? false : zeroAgentTrace ? false : scoredTests < 3;
 
       // Blockaid override: if the agent's contract is flagged malicious, cap cognition at 5
@@ -1910,6 +1921,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       else if (finalCognitionScore !== null && finalCognitionScore <= 10 && scoredTests >= 4) verdict = "Confirmed LARP";
       else if (finalCognitionScore !== null) verdict = "Unverified";
       else verdict = "Inconclusive";
+
+      // Sub-section verdict capping: prevent headline from contradicting behavioral sub-sections
+      if (!isVerifiedAgent && !zeroAgentTrace && verdict !== "Confirmed LARP" && verdict !== "Insufficient Data" && verdict !== "Inconclusive") {
+        const subHumanSignals = (activityPatternResult?.verdict === "HUMAN-LIKE") || (reactionTimeResult?.reactionPattern === "MANUAL");
+        const subBotSignals = (activityPatternResult?.verdict === "BOT-LIKE") || (reactionTimeResult?.reactionPattern === "AUTONOMOUS") || (decisionEntropyResult?.entropyPattern === "ALGORITHMIC");
+        const subSplit = subHumanSignals && subBotSignals;
+        if (subSplit && (verdict === "Fully Autonomous" || verdict === "Semi-Autonomous")) {
+          verdict = "Under Review";
+        } else if (subHumanSignals && verdict === "Fully Autonomous") {
+          verdict = "Semi-Autonomous";
+        }
+      }
 
       let apolVerdict = "";
       if (isVerifiedAgent) apolVerdict = "Strong evidence of autonomous operation. On-chain activity, social presence, and reasoning logs are consistent with a real AI agent.";
