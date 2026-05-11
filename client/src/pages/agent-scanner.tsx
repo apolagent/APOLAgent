@@ -1362,87 +1362,8 @@ export default function AgentScanner() {
                   : <><Bot style={{ width: 18, height: 18 }} />Run LARP Detection</>}
               </button>
 
-              {!IS_INNER_CIRCLE_TEST_MODE && (
-                <button
-                  onClick={handleDeepDive}
-                  disabled={deepDivePending || deepDiveUnlocked}
-                  onMouseEnter={() => setDeepDiveHover(true)}
-                  onMouseLeave={() => setDeepDiveHover(false)}
-                  data-testid="button-deep-dive-scan"
-                  style={{
-                    flex: "0 0 auto",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "7px",
-                    padding: "12px 18px",
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    letterSpacing: "0.05em",
-                    textTransform: "uppercase",
-                    fontFamily: "'JetBrains Mono', monospace",
-                    background: deepDiveUnlocked ? "rgba(0,255,0,0.1)" : deepDiveHover && !deepDivePending ? G : "#000",
-                    color: deepDiveUnlocked ? G : deepDiveHover && !deepDivePending ? "#000" : G,
-                    border: deepDiveUnlocked ? `1px solid rgba(0,255,0,0.4)` : `1px solid ${G}`,
-                    borderRadius: "0",
-                    cursor: deepDiveUnlocked || deepDivePending ? "default" : "pointer",
-                    transition: "background 0.15s ease, color 0.15s ease",
-                    whiteSpace: "nowrap",
-                    opacity: deepDivePending ? 0.75 : 1,
-                  }}
-                >
-                  {deepDiveUnlocked ? (
-                    <><CheckCircle size={15} />Subscribed{subscriptionExpiresAt ? ` · expires ${new Date(subscriptionExpiresAt).toLocaleDateString()}` : ""}</>
-                  ) : deepDivePending ? (
-                    <><Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} />Confirming…</>
-                  ) : (
-                    <><Zap size={15} />Unlock Deep Dive · 30 days ({PAYMENT.deepDiveFee} ETH)</>
-                  )}
-                </button>
-              )}
             </div>
 
-            {!IS_INNER_CIRCLE_TEST_MODE && deepDiveTxHash && !deepDiveUnlocked && (
-              <div style={{
-                display: "flex", alignItems: "center", gap: "8px",
-                padding: "8px 12px", border: "1px solid rgba(0,255,0,0.2)",
-                background: "rgba(0,255,0,0.04)", fontSize: "11px", color: "rgba(0,255,0,0.7)",
-                fontFamily: "'JetBrains Mono', monospace",
-              }} data-testid="div-tx-pending">
-                <Loader2 size={12} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />
-                <span>TX SUBMITTED: Awaiting on-chain confirmation...</span>
-                <a href={`${CHAIN.explorerUrl}/tx/${deepDiveTxHash}`} target="_blank" rel="noopener noreferrer" style={{ color: G, marginLeft: "auto", flexShrink: 0 }}>
-                  <ExternalLink size={12} />
-                </a>
-              </div>
-            )}
-
-            {!IS_INNER_CIRCLE_TEST_MODE && deepDiveUnlocked && deepDiveTxHash && (
-              <div style={{
-                display: "flex", alignItems: "center", gap: "8px",
-                padding: "8px 12px", border: `1px solid rgba(0,255,0,0.4)`,
-                background: "rgba(0,255,0,0.06)", fontSize: "11px", color: G,
-                fontFamily: "'JetBrains Mono', monospace",
-              }} data-testid="div-tx-confirmed">
-                <CheckCircle size={12} style={{ flexShrink: 0 }} />
-                <span>TX CONFIRMED: Advanced Results unlocked below.</span>
-                <a href={`${CHAIN.explorerUrl}/tx/${deepDiveTxHash}`} target="_blank" rel="noopener noreferrer" style={{ color: G, marginLeft: "auto", flexShrink: 0 }}>
-                  <ExternalLink size={12} />
-                </a>
-              </div>
-            )}
-
-            {!IS_INNER_CIRCLE_TEST_MODE && deepDiveError && (
-              <div style={{
-                display: "flex", alignItems: "center", gap: "8px",
-                padding: "8px 12px", border: "1px solid rgba(255,68,68,0.4)",
-                background: "rgba(255,68,68,0.04)", fontSize: "11px", color: "#f87171",
-                fontFamily: "'JetBrains Mono', monospace",
-              }} data-testid="text-deep-dive-error">
-                <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                {deepDiveError}
-              </div>
-            )}
           </CardContent>
         </Card>
         )}
@@ -2375,29 +2296,7 @@ export default function AgentScanner() {
             </div>
 
             <div id="advanced-results">
-              {deepDiveUnlocked ? (
-                <AdvancedResults result={result} />
-              ) : (
-                <div style={{
-                  border: "1px solid rgba(0,255,0,0.2)",
-                  background: "#000",
-                  padding: "32px 20px",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "12px",
-                  textAlign: "center",
-                }} data-testid="div-advanced-results-locked">
-                  <Lock size={28} color="rgba(0,255,0,0.65)" />
-                  <p style={{ color: "rgba(0,255,0,0.7)", fontSize: "12px", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 700 }}>
-                    Advanced Forensic Report [Locked]
-                  </p>
-                  <p style={{ color: "rgba(255,255,255,0.72)", fontSize: "11px", maxWidth: "320px", lineHeight: "1.6" }}>
-                    Timing pattern matrix, raw log entries, full test narratives, and behavioral fingerprint.
-                    Unlock with Deep Dive Scan ({PAYMENT.deepDiveFee} ETH).
-                  </p>
-                </div>
-              )}
+              <AdvancedResults result={result} />
             </div>
 
             <div className="text-center pt-1">
