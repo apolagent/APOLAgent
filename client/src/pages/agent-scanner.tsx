@@ -592,11 +592,17 @@ function AdvancedResults({ result }: { result: AgentResult }) {
             const verdictBg = ap.verdict === "BOT-LIKE" ? "rgba(0,255,0,0.08)" : ap.verdict === "HUMAN-LIKE" ? "rgba(250,204,21,0.08)" : "rgba(167,139,250,0.08)";
             return (
               <>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px", flexWrap: "wrap" }}>
                   <div style={{ padding: "4px 12px", border: `1px solid ${verdictColor}`, background: verdictBg, fontSize: "11px", fontWeight: 900, color: verdictColor, letterSpacing: "0.1em" }}>
                     {ap.verdict}
                   </div>
-                  <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)" }}>Bot Score: <span style={{ color: verdictColor, fontWeight: 700 }}>{ap.botScore}/100</span></div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.4)", whiteSpace: "nowrap" }}>Bot Score</span>
+                    <div style={{ width: "60px", height: "5px", background: "rgba(255,255,255,0.08)", position: "relative", flexShrink: 0 }}>
+                      <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${ap.botScore}%`, background: ap.botScore > 65 ? "#f87171" : ap.botScore > 35 ? "#facc15" : G, transition: "width 0.4s ease" }} />
+                    </div>
+                    <span style={{ fontSize: "10px", fontWeight: 700, color: verdictColor, minWidth: "36px" }}>{ap.botScore}/100</span>
+                  </div>
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px", marginBottom: "10px" }}>
                   <div>

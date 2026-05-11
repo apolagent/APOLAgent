@@ -771,11 +771,12 @@ function analyzeActivityPattern(timestamps: number[]): ActivityPatternResult {
 
   // bot score: 0-100
   // off-hours activity weight: 40pts, 24/7 spread weight: 30pts, anti-business-hours weight: 30pts
-  const botScore = Math.min(100, Math.max(0,
-    Math.round((offHoursPercent / 100) * 40)
+  // high-volume flag: +15pts when txs/day > 500 (no human executes 500+ txs manually)
+  const baseScore = Math.round((offHoursPercent / 100) * 40)
     + Math.round((activeHours / 24) * 30)
-    + Math.round(((100 - bizPercent) / 100) * 30),
-  ));
+    + Math.round(((100 - bizPercent) / 100) * 30);
+  const highVolume = timestamps.length > 0 && (timestamps.length / Math.max(1, (timestamps[timestamps.length - 1] - timestamps[0]) / 86400)) > 500;
+  const botScore = Math.min(100, Math.max(0, baseScore + (highVolume ? 15 : 0)));
 
   const verdict: ActivityPatternResult["verdict"] = botScore >= 65 ? "BOT-LIKE" : botScore <= 35 ? "HUMAN-LIKE" : "MIXED";
 
