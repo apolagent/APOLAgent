@@ -734,6 +734,63 @@ interface ContractActivity {
   activityPerDay: number;
 }
 
+interface ActivityPatternResult {
+  offHoursPercent: number;
+  botScore: number;
+  verdict: "BOT-LIKE" | "HUMAN-LIKE" | "MIXED";
+  insight: string;
+  hourDistribution: number[];
+}
+
+function analyzeActivityPattern(timestamps: number[]): ActivityPatternResult {
+  const empty: ActivityPatternResult = {
+    offHoursPercent: 0,
+    botScore: 0,
+    verdict: "HUMAN-LIKE",
+    insight: "Insufficient transaction data for timing pattern analysis.",
+    hourDistribution: new Array(24).fill(0),
+  };
+  if (timestamps.length < 3) return empty;
+
+  const hourCounts = new Array(24).fill(0);
+  for (const ts of timestamps) {
+    const h = new Date(ts * 1000).getUTCHours();
+    hourCounts[h]++;
+  }
+
+  // off-hours: 0–6 and 22–23 UTC (human sleep window)
+  const offCount = hourCounts.slice(0, 7).reduce((a, b) => a + b, 0)
+                 + hourCounts.slice(22).reduce((a, b) => a + b, 0);
+  const offHoursPercent = Math.round((offCount / timestamps.length) * 100);
+
+  // business hours: 8–20 UTC
+  const bizCount = hourCounts.slice(8, 21).reduce((a, b) => a + b, 0);
+  const bizPercent = Math.round((bizCount / timestamps.length) * 100);
+
+  const activeHours = hourCounts.filter(c => c > 0).length;
+
+  // bot score: 0-100
+  // off-hours activity weight: 40pts, 24/7 spread weight: 30pts, anti-business-hours weight: 30pts
+  const botScore = Math.min(100, Math.max(0,
+    Math.round((offHoursPercent / 100) * 40)
+    + Math.round((activeHours / 24) * 30)
+    + Math.round(((100 - bizPercent) / 100) * 30),
+  ));
+
+  const verdict: ActivityPatternResult["verdict"] = botScore >= 65 ? "BOT-LIKE" : botScore <= 35 ? "HUMAN-LIKE" : "MIXED";
+
+  let insight: string;
+  if (verdict === "BOT-LIKE") {
+    insight = `${offHoursPercent}% of transactions occurred during off-hours across ${activeHours}/24 active hours — strongly consistent with automated bot activity.`;
+  } else if (verdict === "HUMAN-LIKE") {
+    insight = `${bizPercent}% of transactions occurred during typical business hours with ${activeHours}/24 active hours — consistent with manual human operation.`;
+  } else {
+    insight = `Mixed timing pattern: ${offHoursPercent}% off-hours, active in ${activeHours}/24 hour slots — partial automation possible but inconclusive.`;
+  }
+
+  return { offHoursPercent, botScore, verdict, insight, hourDistribution: hourCounts };
+}
+
 async function getContractActivity(addr: string): Promise<ContractActivity> {
   const result: ContractActivity = { txCount: 0, contractAgeDays: 0, hasContractCode: false, codeSize: 0, activityPerDay: 0 };
   try {
@@ -1259,6 +1316,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let deployerContractCount = 0;
       let treasuryEth = 0;
       let treasuryUsd = 0;
+      let activityPatternResult: ActivityPatternResult | null = null;
 
       if (wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet)) {
         const [simR, tokenR, deployerR] = await Promise.allSettled([
@@ -1349,7 +1407,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const walletResp = await fetch(BASE_RPC, {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "alchemy_getAssetTransfers",
-                  params: [{ fromBlock: "0x0", toBlock: "latest", fromAddress: wallet, category: ["external", "erc20"], maxCount: "0x32" }] }),
+                  params: [{ fromBlock: "0x0", toBlock: "latest", fromAddress: wallet, category: ["external", "erc20"], maxCount: "0x32", withMetadata: true }] }),
                 signal: AbortSignal.timeout(6000),
               });
               const walletData = await walletResp.json() as any;
@@ -1359,6 +1417,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 const uniqueBlocks = new Set(blockNums);
                 speedScore = Math.min(30, uniqueBlocks.size * 2);
                 speedDetail = uniqueBlocks.size >= 20 ? "High on-chain activity detected — consistent with autonomous agent." : uniqueBlocks.size >= 10 ? "Mixed activity patterns — some autonomous behavior." : "Limited activity — likely manual operator.";
+                // extract unix timestamps from Alchemy metadata for pattern analysis
+                const txTimestamps: number[] = walletTransfers
+                  .map((t: any) => t.metadata?.blockTimestamp ? Math.floor(new Date(t.metadata.blockTimestamp).getTime() / 1000) : null)
+                  .filter((ts: number | null): ts is number => ts !== null);
+                activityPatternResult = analyzeActivityPattern(txTimestamps);
               } else {
                 speedScore = 5;
                 speedDetail = "Insufficient transaction history for timing analysis.";
@@ -1696,6 +1759,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           recentTokens: recentDeployerData.recentTokens,
         } : undefined,
         twitterHandle: dexSocialData.twitter || undefined,
+        activityPattern: activityPatternResult ?? undefined,
       };
 
       let slug: string | null = null;
