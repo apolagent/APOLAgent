@@ -798,7 +798,7 @@ interface ReactionTimeResult {
   minReactionTime: number;
   consistencyScore: number;
   subSecondPercent: number;
-  reactionPattern: "AUTONOMOUS" | "ASSISTED" | "MANUAL";
+  reactionPattern: "AUTONOMOUS" | "ASSISTED" | "MANUAL" | "INSUFFICIENT_DATA";
   insight: string;
 }
 
@@ -809,10 +809,10 @@ function analyzeReactionTime(timestamps: number[]): ReactionTimeResult {
     minReactionTime: 0,
     consistencyScore: 0,
     subSecondPercent: 0,
-    reactionPattern: "MANUAL",
+    reactionPattern: "INSUFFICIENT_DATA",
     insight: "Insufficient transaction data for reaction time analysis.",
   };
-  if (timestamps.length < 2) return empty;
+  if (timestamps.length < 10) return empty;
 
   const sorted = [...timestamps].sort((a, b) => a - b);
   const gaps: number[] = [];
@@ -1879,6 +1879,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 if (socialAgeDays !== undefined && socialAgeDays < 14) flags.push("account < 14 days old");
                 if ((u.tweets || 0) < 5) flags.push("barely any tweets");
                 if (u.following > 0 && socialFollowers / u.following < 0.05) flags.push("suspicious follow ratio");
+                if (socialFollowers > 10000 && (u.tweets || 0) < 500) flags.push("HIGH FOLLOWER TO TWEET RATIO — possible bought followers or repurposed account");
 
                 if (flags.length >= 2) {
                   socialStatus = "suspicious";
@@ -2256,6 +2257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   function fixStoredReactionInsight(result: any): any {
     const rt = result?.reactionTime;
     if (!rt || typeof rt.averageReactionTime !== "number") return result;
+    if (rt.reactionPattern === "INSUFFICIENT_DATA") return result;
     const mean = rt.averageReactionTime;
     const avgFmt = mean < 1 ? `${Math.round(mean * 1000)}ms`
       : mean < 60 ? `${mean.toFixed(1)}s`
