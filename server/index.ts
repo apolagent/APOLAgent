@@ -1,6 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { execFile } from "child_process";
 import rateLimit from "express-rate-limit";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { db } from "./db";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createBot } from "./bot";
@@ -134,6 +136,8 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await migrate(db, { migrationsFolder: "./migrations" });
+
   const server = await registerRoutes(app);
 
   const bot = createBot();
