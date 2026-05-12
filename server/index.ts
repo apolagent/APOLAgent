@@ -1,8 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { execFile } from "child_process";
 import rateLimit from "express-rate-limit";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { db } from "./db";
+import { pool } from "./db";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createBot } from "./bot";
@@ -136,7 +135,27 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  await migrate(db, { migrationsFolder: "./migrations" });
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS "agent_behavioral_snapshots" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "wallet_address" text NOT NULL,
+      "chain" text DEFAULT 'base' NOT NULL,
+      "scan_date" timestamp DEFAULT now() NOT NULL,
+      "bot_activity_score" integer,
+      "reaction_consistency_score" integer,
+      "gas_consistency_score" integer,
+      "decision_pattern_score" integer,
+      "overall_authenticity_score" integer,
+      "activity_pattern" text,
+      "reaction_pattern" text,
+      "gas_pattern" text,
+      "decision_pattern" text,
+      "verdict" text,
+      "created_at" timestamp DEFAULT now() NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS "snapshots_wallet_date_idx"
+      ON "agent_behavioral_snapshots" ("wallet_address", "scan_date" DESC);
+  `);
 
   const server = await registerRoutes(app);
 
