@@ -1,6 +1,7 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
 import { rm, readFile } from "fs/promises";
+import { execSync } from "child_process";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -33,6 +34,19 @@ const allowlist = [
 ];
 
 async function buildAll() {
+  // Install Python deps so main.py (tweet scheduler) has tweepy at runtime.
+  // Tries pip3 first (Linux/Render), falls back to pip, silently skips if
+  // neither is available (e.g. Windows dev machines without Python).
+  for (const pip of ["pip3", "pip"]) {
+    try {
+      execSync(`${pip} install -r requirements.txt --quiet`, { stdio: "inherit" });
+      console.log(`Python deps installed via ${pip}`);
+      break;
+    } catch {
+      // try next
+    }
+  }
+
   await rm("dist", { recursive: true, force: true });
 
   console.log("building client...");
