@@ -222,6 +222,14 @@ type AgentResult = {
     gasAnomaly: { detected: boolean; delta: number };
     decisionAnomaly: { detected: boolean; delta: number };
   };
+  certificationTier?: {
+    tier: "UNVERIFIED" | "BRONZE" | "SILVER" | "GOLD";
+    rawTier: "UNVERIFIED" | "BRONZE" | "SILVER" | "GOLD";
+    anomalyCapped: boolean;
+    qualifyingSignals: number;
+    availableSignals: number;
+    averageForensicScore: number | null;
+  };
 };
 
 type StatusColor = "green" | "red" | "yellow" | "grey";
@@ -635,6 +643,72 @@ function AdvancedResults({ result }: { result: AgentResult }) {
           <ScoreBar value={result.cognitionScore ?? 0} max={100} color={riskColor} />
         </div>
       </div>
+
+      {/* ── Certification Tier Badge ── */}
+      {result.certificationTier && result.certificationTier.tier !== "UNVERIFIED" && (() => {
+        const ct = result.certificationTier!;
+        const palette = ct.tier === "GOLD"
+          ? { border: "#fbbf24", bg: "rgba(251,191,36,0.07)", text: "#fbbf24" }
+          : ct.tier === "SILVER"
+          ? { border: "#94a3b8", bg: "rgba(148,163,184,0.07)", text: "#b0bec5" }
+          : { border: "#b87333", bg: "rgba(184,115,51,0.07)", text: "#cd8f4a" };
+        const subtitle = ct.tier === "GOLD" ? "Elite Autonomous Operation"
+          : ct.tier === "SILVER" ? "Autonomous Behavior Confirmed"
+          : "Autonomous Indicators Present";
+        return (
+          <div style={{ padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: palette.bg }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ padding: "3px 10px", border: `1px solid ${palette.border}`, fontSize: "10px", fontWeight: 900, color: palette.text, letterSpacing: "0.12em" }}>
+                  {ct.tier} CERTIFIED
+                </div>
+                <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.45)" }}>{subtitle}</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap" }}>
+                {ct.tier === "GOLD" ? (
+                  <>
+                    {[
+                      { label: "Activity",  val: result.activityPattern?.botScore           ?? null },
+                      { label: "Reaction",  val: result.reactionTime?.consistencyScore       ?? null },
+                      { label: "Gas",       val: result.gasPattern?.gasConsistencyScore      ?? null },
+                      { label: "Decision",  val: result.decisionEntropy?.patternScore        ?? null },
+                    ].map(s => s.val !== null && (
+                      <div key={s.label} style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: "12px", fontWeight: 700, color: palette.text }}>{s.val}</div>
+                        <div style={{ fontSize: "8px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase" }}>{s.label}</div>
+                      </div>
+                    ))}
+                    {ct.averageForensicScore !== null && (
+                      <div style={{ textAlign: "center", borderLeft: `1px solid ${palette.border}55`, paddingLeft: "14px" }}>
+                        <div style={{ fontSize: "12px", fontWeight: 700, color: palette.text }}>{ct.averageForensicScore}</div>
+                        <div style={{ fontSize: "8px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Avg</div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: "12px", fontWeight: 700, color: palette.text }}>{ct.qualifyingSignals}/{ct.availableSignals}</div>
+                      <div style={{ fontSize: "8px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Signals</div>
+                    </div>
+                    {result.cognitionScore !== null && (
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: "12px", fontWeight: 700, color: palette.text }}>{result.cognitionScore}%</div>
+                        <div style={{ fontSize: "8px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", textTransform: "uppercase" }}>Cognition</div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+            {ct.anomalyCapped && (
+              <div style={{ marginTop: "6px", fontSize: "9px", color: "rgba(255,255,255,0.3)", letterSpacing: "0.05em" }}>
+                Raw score qualifies for {ct.rawTier} — capped at {ct.tier} pending behavioral stability
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Missing Data Notice ── */}
       {result.missingData && result.missingData.length > 0 && (

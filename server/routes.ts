@@ -1050,6 +1050,85 @@ function detectAnomalies(
   };
 }
 
+interface CertificationTierResult {
+  tier: "UNVERIFIED" | "BRONZE" | "SILVER" | "GOLD";
+  rawTier: "UNVERIFIED" | "BRONZE" | "SILVER" | "GOLD";
+  anomalyCapped: boolean;
+  qualifyingSignals: number;
+  availableSignals: number;
+  averageForensicScore: number | null;
+}
+
+function computeCertificationTier(
+  cognitionScore: number | null,
+  forensic: { activity: number | null; reaction: number | null; gas: number | null; decision: number | null },
+  verdict: string | null,
+  anomalyStatus: "STABLE" | "SHIFTING" | "ANOMALOUS" | null,
+): CertificationTierResult {
+  const all = [forensic.activity, forensic.reaction, forensic.gas, forensic.decision];
+  const available = all.filter((s): s is number => s !== null);
+  const n = available.length;
+  const avg = n > 0 ? available.reduce((a, b) => a + b, 0) / n : null;
+
+  const count = (min: number) => available.filter(s => s >= min).length;
+
+  // Evaluate score-based tier top-down
+  let rawTier: CertificationTierResult["tier"] = "UNVERIFIED";
+
+  const notDisqualified =
+    cognitionScore !== null &&
+    cognitionScore >= 50 &&
+    n >= 2 &&
+    verdict !== "Confirmed LARP";
+
+  if (notDisqualified) {
+    if (
+      cognitionScore >= 80 &&
+      n === 4 &&
+      count(75) === 4 &&
+      avg !== null && avg >= 80 &&
+      verdict === "Confirmed Autonomous Agent"
+    ) {
+      rawTier = "GOLD";
+    } else if (
+      cognitionScore >= 65 &&
+      n >= 3 &&
+      count(70) >= 3 &&
+      (verdict === "Confirmed Autonomous Agent" || verdict === "Likely Autonomous")
+    ) {
+      rawTier = "SILVER";
+    } else if (
+      count(60) >= 2 &&
+      verdict !== "Insufficient Data"
+    ) {
+      rawTier = "BRONZE";
+    }
+  }
+
+  // Apply anomaly cap post-award
+  let tier = rawTier;
+  let anomalyCapped = false;
+  if (anomalyStatus === "ANOMALOUS" && (rawTier === "SILVER" || rawTier === "GOLD")) {
+    tier = "BRONZE";
+    anomalyCapped = true;
+  } else if (anomalyStatus === "SHIFTING" && rawTier === "GOLD") {
+    tier = "SILVER";
+    anomalyCapped = true;
+  }
+
+  const qualifyingThreshold = tier === "GOLD" ? 75 : tier === "SILVER" ? 70 : 60;
+  const qualifyingSignals = tier === "UNVERIFIED" ? 0 : count(qualifyingThreshold);
+
+  return {
+    tier,
+    rawTier,
+    anomalyCapped,
+    qualifyingSignals,
+    availableSignals: n,
+    averageForensicScore: avg !== null ? Math.round(avg) : null,
+  };
+}
+
 async function getContractActivity(addr: string): Promise<ContractActivity> {
   const result: ContractActivity = { txCount: 0, contractAgeDays: 0, hasContractCode: false, codeSize: 0, activityPerDay: 0 };
   try {
@@ -2054,6 +2133,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch {}
       }
 
+      const certificationTierResult = computeCertificationTier(
+        finalCognitionScore,
+        {
+          activity: activityPatternResult?.botScore ?? null,
+          reaction: reactionTimeResult?.consistencyScore ?? null,
+          gas: gasPatternResult?.gasConsistencyScore ?? null,
+          decision: decisionEntropyResult?.patternScore ?? null,
+        },
+        verdict,
+        anomalyDetectionResult?.anomalyStatus ?? null,
+      );
+
       const fullResult = {
         agentName: agentName.trim(),
         wallet: wallet || null,
@@ -2099,6 +2190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         gasPattern: gasPatternResult ?? undefined,
         decisionEntropy: decisionEntropyResult ?? undefined,
         anomalyDetection: anomalyDetectionResult ?? undefined,
+        certificationTier: certificationTierResult,
       };
 
       // Fire-and-forget behavioral snapshot — never blocks the scan response
