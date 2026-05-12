@@ -1621,7 +1621,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   contractAddress: t.rawContract?.address || null,
                   category: t.category || "",
                 }));
+                console.log(`[entropy] wallet=${wallet} txCount=${txDiversityData.length} sample=${JSON.stringify(txDiversityData.slice(0, 3))}`);
                 decisionEntropyResult = analyzeDecisionEntropy(txDiversityData);
+                console.log(`[entropy] result: patternScore=${decisionEntropyResult.patternScore} repeatRate=${decisionEntropyResult.actionRepeatRate} entropy=${decisionEntropyResult.decisionEntropy} uniqueContracts=${Math.round(decisionEntropyResult.uniqueContractRatio * txDiversityData.length)}`);
                 try {
                   const sampleTransfers = walletTransfers.slice(0, 15);
                   const txHashes: string[] = sampleTransfers.map((t: any) => t.hash).filter(Boolean);
@@ -2074,6 +2076,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/agent/analyze", agentAnalyzeHandler);
   app.post("/api/x402/agent/analyze", agentAnalyzeHandler);
 
+  // Regenerates reactionTime.insight from stored numeric values so slug results
+  // aren't stuck with insight text built by older code (e.g. "141.3 min" vs "2.4 hrs").
+  function fixStoredReactionInsight(result: any): any {
+    const rt = result?.reactionTime;
+    if (!rt || typeof rt.averageReactionTime !== "number") return result;
+    const mean = rt.averageReactionTime;
+    const avgFmt = mean < 1 ? `${Math.round(mean * 1000)}ms`
+      : mean < 60 ? `${mean.toFixed(1)}s`
+      : mean < 3600 ? `${(mean / 60).toFixed(1)} min`
+      : `${(mean / 3600).toFixed(1)} hrs`;
+    let insight: string;
+    if (rt.reactionPattern === "AUTONOMOUS") {
+      const signal = rt.subSecondPercent >= 20
+        ? `${rt.subSecondPercent}% of gaps are sub-second`
+        : `consistency score of ${rt.consistencyScore}/100`;
+      insight = `Reaction pattern is AUTONOMOUS — ${signal}, with an average gap of ${avgFmt} between transactions.`;
+    } else if (rt.reactionPattern === "MANUAL") {
+      insight = `Reaction pattern is MANUAL — high timing variability (consistency ${rt.consistencyScore}/100) and average gap of ${avgFmt} suggest human operation.`;
+    } else {
+      insight = `Mixed reaction pattern — average gap of ${avgFmt} with ${rt.subSecondPercent}% sub-second transactions and consistency score ${rt.consistencyScore}/100.`;
+    }
+    return { ...result, reactionTime: { ...rt, insight } };
+  }
+
   app.get("/api/agent/result/:slug", async (req, res) => {
     try {
       const slug = String(req.params.slug || "").trim();
@@ -2092,7 +2118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdAt: row.createdAt,
         viewCount: row.viewCount,
         tier: row.tier,
-        result: row.resultJson,
+        result: fixStoredReactionInsight(row.resultJson),
       });
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Failed to load result" });
