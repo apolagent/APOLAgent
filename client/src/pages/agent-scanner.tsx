@@ -209,6 +209,19 @@ type AgentResult = {
     entropyPattern: "ALGORITHMIC" | "ADAPTIVE" | "RANDOM";
     insight: string;
   };
+  anomalyDetection?: {
+    anomalyStatus: "STABLE" | "SHIFTING" | "ANOMALOUS";
+    anomalyScore: number;
+    snapshotCount: number;
+    baselineActivityScore: number | null;
+    baselineReactionScore: number | null;
+    baselineGasScore: number | null;
+    baselineDecisionScore: number | null;
+    activityAnomaly: { detected: boolean; delta: number };
+    reactionAnomaly: { detected: boolean; delta: number };
+    gasAnomaly: { detected: boolean; delta: number };
+    decisionAnomaly: { detected: boolean; delta: number };
+  };
 };
 
 type StatusColor = "green" | "red" | "yellow" | "grey";
@@ -780,6 +793,41 @@ function AdvancedResults({ result }: { result: AgentResult }) {
           </div>
         </div>
       )}
+
+      {/* ── Anomaly Detection Banner ── */}
+      {result.anomalyDetection && result.anomalyDetection.anomalyStatus !== "STABLE" && (() => {
+        const ad = result.anomalyDetection!;
+        const isAnomalous = ad.anomalyStatus === "ANOMALOUS";
+        const color = isAnomalous ? "#f87171" : "#facc15";
+        const bg = isAnomalous ? "rgba(248,113,113,0.07)" : "rgba(250,204,21,0.07)";
+        const flagged: { label: string; delta: number }[] = [
+          ad.activityAnomaly.detected  && { label: "Bot Activity",          delta: ad.activityAnomaly.delta  },
+          ad.reactionAnomaly.detected  && { label: "Reaction Consistency",  delta: ad.reactionAnomaly.delta  },
+          ad.gasAnomaly.detected       && { label: "Gas Consistency",       delta: ad.gasAnomaly.delta       },
+          ad.decisionAnomaly.detected  && { label: "Decision Pattern",      delta: ad.decisionAnomaly.delta  },
+        ].filter(Boolean) as { label: string; delta: number }[];
+        return (
+          <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <div style={{ border: `1px solid ${color}`, background: bg, padding: "12px 14px" }}>
+              <div style={{ fontSize: "11px", fontWeight: 900, color, letterSpacing: "0.1em", marginBottom: "4px" }}>
+                {isAnomalous ? "🚨 ANOMALY DETECTED" : "⚠️ BEHAVIORAL SHIFT DETECTED"}
+              </div>
+              <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.55)", marginBottom: "10px" }}>
+                {isAnomalous
+                  ? "Significant behavioral change from established pattern"
+                  : "Scores changing from 30-day baseline"} — based on {ad.snapshotCount} prior scan{ad.snapshotCount !== 1 ? "s" : ""}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                {flagged.map(sig => (
+                  <div key={sig.label} style={{ fontSize: "10px", color, padding: "2px 8px", border: `1px solid ${color}44`, background: `${color}11`, letterSpacing: "0.04em" }}>
+                    {sig.label}: {sig.delta > 0 ? "+" : ""}{sig.delta} pts
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Activity Pattern ── */}
       {(result.activityPattern || (result.onChainActivityTest && result.onChainActivityTest.scored)) && (

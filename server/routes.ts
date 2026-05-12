@@ -981,6 +981,75 @@ function analyzeDecisionEntropy(transfers: { to: string | null; contractAddress:
   return { contractDiversity, actionRepeatRate, decisionEntropy, patternScore, uniqueContractRatio: parseFloat(uniqueContractRatio.toFixed(3)), entropyPattern, insight };
 }
 
+interface AnomalyDetectionResult {
+  anomalyStatus: "STABLE" | "SHIFTING" | "ANOMALOUS";
+  anomalyScore: number;
+  snapshotCount: number;
+  baselineActivityScore: number | null;
+  baselineReactionScore: number | null;
+  baselineGasScore: number | null;
+  baselineDecisionScore: number | null;
+  activityAnomaly: { detected: boolean; delta: number };
+  reactionAnomaly: { detected: boolean; delta: number };
+  gasAnomaly: { detected: boolean; delta: number };
+  decisionAnomaly: { detected: boolean; delta: number };
+}
+
+function detectAnomalies(
+  current: { activity: number | null; reaction: number | null; gas: number | null; decision: number | null },
+  history: { botActivityScore: number | null; reactionConsistencyScore: number | null; gasConsistencyScore: number | null; decisionPatternScore: number | null }[],
+): AnomalyDetectionResult | null {
+  if (history.length < 2) return null;
+
+  const avg = (vals: (number | null)[]): number | null => {
+    const nums = vals.filter((v): v is number => v !== null);
+    return nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
+  };
+
+  const baselineActivityScore  = avg(history.map(s => s.botActivityScore));
+  const baselineReactionScore  = avg(history.map(s => s.reactionConsistencyScore));
+  const baselineGasScore       = avg(history.map(s => s.gasConsistencyScore));
+  const baselineDecisionScore  = avg(history.map(s => s.decisionPatternScore));
+
+  const THRESHOLD = 20;
+  const makeAnomaly = (curr: number | null, baseline: number | null) => {
+    if (curr === null || baseline === null) return { detected: false, delta: 0 };
+    const delta = Math.round(curr - baseline);
+    return { detected: Math.abs(delta) > THRESHOLD, delta };
+  };
+
+  const activityAnomaly = makeAnomaly(current.activity,  baselineActivityScore);
+  const reactionAnomaly = makeAnomaly(current.reaction,  baselineReactionScore);
+  const gasAnomaly      = makeAnomaly(current.gas,       baselineGasScore);
+  const decisionAnomaly = makeAnomaly(current.decision,  baselineDecisionScore);
+
+  const anomalyCount = [activityAnomaly, reactionAnomaly, gasAnomaly, decisionAnomaly].filter(a => a.detected).length;
+
+  // anomalyScore: average absolute delta across signals with data, capped at 100
+  const deltas: number[] = [];
+  for (const [curr, baseline] of [
+    [current.activity, baselineActivityScore],
+    [current.reaction, baselineReactionScore],
+    [current.gas,      baselineGasScore],
+    [current.decision, baselineDecisionScore],
+  ] as [number | null, number | null][]) {
+    if (curr !== null && baseline !== null) deltas.push(Math.min(Math.abs(curr - baseline), 100));
+  }
+  const anomalyScore = deltas.length > 0 ? Math.round(deltas.reduce((a, b) => a + b, 0) / deltas.length) : 0;
+
+  const anomalyStatus: AnomalyDetectionResult["anomalyStatus"] =
+    anomalyCount === 0 ? "STABLE" : anomalyCount <= 2 ? "SHIFTING" : "ANOMALOUS";
+
+  return {
+    anomalyStatus, anomalyScore, snapshotCount: history.length,
+    baselineActivityScore: baselineActivityScore !== null ? Math.round(baselineActivityScore) : null,
+    baselineReactionScore: baselineReactionScore !== null ? Math.round(baselineReactionScore) : null,
+    baselineGasScore:      baselineGasScore      !== null ? Math.round(baselineGasScore)      : null,
+    baselineDecisionScore: baselineDecisionScore !== null ? Math.round(baselineDecisionScore) : null,
+    activityAnomaly, reactionAnomaly, gasAnomaly, decisionAnomaly,
+  };
+}
+
 async function getContractActivity(addr: string): Promise<ContractActivity> {
   const result: ContractActivity = { txCount: 0, contractAgeDays: 0, hasContractCode: false, codeSize: 0, activityPerDay: 0 };
   try {
@@ -1972,6 +2041,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: { cognitionScore: finalCognitionScore, scoredTests, wallet, socialLink, abilities: autoAbilityAudit?.claimedAbilities },
       }).catch(() => {});
 
+      let anomalyDetectionResult: AnomalyDetectionResult | null = null;
+      if (wallet && /^0x[a-fA-F0-9]{40}$/.test(wallet)) {
+        try {
+          const behavioralHistory = await storage.getAgentBehavioralHistory(wallet.toLowerCase(), 30);
+          anomalyDetectionResult = detectAnomalies({
+            activity: activityPatternResult?.botScore ?? null,
+            reaction: reactionTimeResult?.consistencyScore ?? null,
+            gas: gasPatternResult?.gasConsistencyScore ?? null,
+            decision: decisionEntropyResult?.patternScore ?? null,
+          }, behavioralHistory);
+        } catch {}
+      }
+
       const fullResult = {
         agentName: agentName.trim(),
         wallet: wallet || null,
@@ -2016,6 +2098,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         reactionTime: reactionTimeResult ?? undefined,
         gasPattern: gasPatternResult ?? undefined,
         decisionEntropy: decisionEntropyResult ?? undefined,
+        anomalyDetection: anomalyDetectionResult ?? undefined,
       };
 
       // Fire-and-forget behavioral snapshot — never blocks the scan response
