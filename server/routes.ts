@@ -1075,32 +1075,33 @@ function computeCertificationTier(
   // Evaluate score-based tier top-down
   let rawTier: CertificationTierResult["tier"] = "UNVERIFIED";
 
-  const notDisqualified =
+  const notLarp = verdict !== "Confirmed LARP";
+
+  if (
     cognitionScore !== null &&
     cognitionScore >= 50 &&
     n >= 2 &&
-    verdict !== "Confirmed LARP";
-
-  if (notDisqualified) {
+    count(55) >= 1 &&
+    notLarp
+  ) {
     if (
-      cognitionScore >= 80 &&
-      n === 4 &&
-      count(75) === 4 &&
-      avg !== null && avg >= 80 &&
-      verdict === "Confirmed Autonomous Agent"
+      cognitionScore >= 75 &&
+      n >= 3 &&
+      count(70) >= 2 &&
+      avg !== null && avg >= 65 &&
+      (verdict === "Semi-Autonomous" || verdict === "Fully Autonomous") &&
+      (anomalyStatus === null || anomalyStatus === "STABLE")
     ) {
       rawTier = "GOLD";
     } else if (
-      cognitionScore >= 65 &&
-      n >= 3 &&
-      count(70) >= 3 &&
-      (verdict === "Confirmed Autonomous Agent" || verdict === "Likely Autonomous")
-    ) {
-      rawTier = "SILVER";
-    } else if (
+      cognitionScore >= 60 &&
+      n >= 2 &&
       count(60) >= 2 &&
+      notLarp &&
       verdict !== "Insufficient Data"
     ) {
+      rawTier = "SILVER";
+    } else {
       rawTier = "BRONZE";
     }
   }
@@ -1116,7 +1117,7 @@ function computeCertificationTier(
     anomalyCapped = true;
   }
 
-  const qualifyingThreshold = tier === "GOLD" ? 75 : tier === "SILVER" ? 70 : 60;
+  const qualifyingThreshold = tier === "GOLD" ? 70 : tier === "SILVER" ? 60 : 55;
   const qualifyingSignals = tier === "UNVERIFIED" ? 0 : count(qualifyingThreshold);
 
   return {
