@@ -1745,64 +1745,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 if (t.rawContract?.address) uniqueContracts.add(t.rawContract.address.toLowerCase());
               }
               deployerContractCount = uniqueContracts.size;
-
-              const walletResp = await fetch(BASE_RPC, {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "alchemy_getAssetTransfers",
-                  params: [{ fromBlock: "0x0", toBlock: "latest", fromAddress: wallet, category: ["external", "erc20"], maxCount: "0x32", withMetadata: true }] }),
-                signal: AbortSignal.timeout(6000),
-              });
-              const walletData = await walletResp.json() as any;
-              const walletTransfers = walletData?.result?.transfers || [];
-              if (walletTransfers.length > 2) {
-                const blockNums = walletTransfers.map((t: any) => parseInt(t.blockNum, 16));
-                const uniqueBlocks = new Set(blockNums);
-                speedScore = Math.min(30, uniqueBlocks.size * 2);
-                speedDetail = uniqueBlocks.size >= 20 ? "High on-chain activity detected — consistent with autonomous agent." : uniqueBlocks.size >= 10 ? "Mixed activity patterns — some autonomous behavior." : "Limited activity — likely manual operator.";
-                // extract unix timestamps from Alchemy metadata for pattern analysis
-                const txTimestamps: number[] = walletTransfers
-                  .map((t: any) => t.metadata?.blockTimestamp ? Math.floor(new Date(t.metadata.blockTimestamp).getTime() / 1000) : null)
-                  .filter((ts: number | null): ts is number => ts !== null);
-                console.log(`[activity-pattern] wallet=${wallet} transfers=${walletTransfers.length} timestamps=${txTimestamps.length}`);
-                activityPatternResult = analyzeActivityPattern(txTimestamps);
-                reactionTimeResult = analyzeReactionTime(txTimestamps);
-                const txDiversityData = walletTransfers.map((t: any) => ({
-                  to: t.to || null,
-                  contractAddress: t.rawContract?.address || null,
-                  category: t.category || "",
-                }));
-                console.log(`[entropy] wallet=${wallet} txCount=${txDiversityData.length} sample=${JSON.stringify(txDiversityData.slice(0, 3))}`);
-                decisionEntropyResult = analyzeDecisionEntropy(txDiversityData);
-                console.log(`[entropy] result: patternScore=${decisionEntropyResult.patternScore} repeatRate=${decisionEntropyResult.actionRepeatRate} entropy=${decisionEntropyResult.decisionEntropy} uniqueContracts=${Math.round(decisionEntropyResult.uniqueContractRatio * txDiversityData.length)}`);
-                try {
-                  const sampleTransfers = walletTransfers.slice(0, 15);
-                  const txHashes: string[] = sampleTransfers.map((t: any) => t.hash).filter(Boolean);
-                  const uniqueBlockHexes: string[] = [...new Set<string>(sampleTransfers.map((t: any) => t.blockNum).filter(Boolean))].slice(0, 10);
-                  const [txDatas, blockDatas] = await Promise.all([
-                    rpcBatch(txHashes.map(h => ({ method: "eth_getTransactionByHash", params: [h] }))),
-                    rpcBatch(uniqueBlockHexes.map(n => ({ method: "eth_getBlockByNumber", params: [n, false] }))),
-                  ]);
-                  const blockBaseFeeMap = new Map<string, number>();
-                  for (let i = 0; i < uniqueBlockHexes.length; i++) {
-                    const b = blockDatas[i];
-                    if (b?.baseFeePerGas) blockBaseFeeMap.set(uniqueBlockHexes[i], Number(BigInt(b.baseFeePerGas)) / 1e9);
-                  }
-                  const gasSamples: { gasPrice: number; baseFee: number | null }[] = [];
-                  for (let i = 0; i < txHashes.length; i++) {
-                    const tx = txDatas[i];
-                    if (!tx) continue;
-                    const rawGas = tx.maxFeePerGas ?? tx.gasPrice;
-                    if (!rawGas) continue;
-                    const gasPriceGwei = Number(BigInt(rawGas)) / 1e9;
-                    const baseFee = blockBaseFeeMap.get(sampleTransfers[i]?.blockNum) ?? null;
-                    gasSamples.push({ gasPrice: gasPriceGwei, baseFee });
-                  }
-                  gasPatternResult = analyzeGasPatterns(gasSamples);
-                } catch {}
-              } else {
-                speedScore = 5;
-                speedDetail = "Insufficient transaction history for timing analysis.";
-              }
             }
           } catch {}
 
@@ -1813,6 +1755,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
             treasuryUsd = treasuryEth * ethUsd;
           } catch {}
         }
+
+        try {
+          if (BASE_RPC) {
+            const walletResp = await fetch(BASE_RPC, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "alchemy_getAssetTransfers",
+                params: [{ fromBlock: "0x0", toBlock: "latest", fromAddress: wallet, category: ["external", "erc20"], maxCount: "0x32", withMetadata: true }] }),
+              signal: AbortSignal.timeout(6000),
+            });
+            const walletData = await walletResp.json() as any;
+            const walletTransfers = walletData?.result?.transfers || [];
+            if (walletTransfers.length > 2) {
+              const blockNums = walletTransfers.map((t: any) => parseInt(t.blockNum, 16));
+              const uniqueBlocks = new Set(blockNums);
+              speedScore = Math.min(30, uniqueBlocks.size * 2);
+              speedDetail = uniqueBlocks.size >= 20 ? "High on-chain activity detected — consistent with autonomous agent." : uniqueBlocks.size >= 10 ? "Mixed activity patterns — some autonomous behavior." : "Limited activity — likely manual operator.";
+              const txTimestamps: number[] = walletTransfers
+                .map((t: any) => t.metadata?.blockTimestamp ? Math.floor(new Date(t.metadata.blockTimestamp).getTime() / 1000) : null)
+                .filter((ts: number | null): ts is number => ts !== null);
+              console.log(`[activity-pattern] wallet=${wallet} transfers=${walletTransfers.length} timestamps=${txTimestamps.length}`);
+              activityPatternResult = analyzeActivityPattern(txTimestamps);
+              reactionTimeResult = analyzeReactionTime(txTimestamps);
+              const txDiversityData = walletTransfers.map((t: any) => ({
+                to: t.to || null,
+                contractAddress: t.rawContract?.address || null,
+                category: t.category || "",
+              }));
+              console.log(`[entropy] wallet=${wallet} txCount=${txDiversityData.length} sample=${JSON.stringify(txDiversityData.slice(0, 3))}`);
+              decisionEntropyResult = analyzeDecisionEntropy(txDiversityData);
+              console.log(`[entropy] result: patternScore=${decisionEntropyResult.patternScore} repeatRate=${decisionEntropyResult.actionRepeatRate} entropy=${decisionEntropyResult.decisionEntropy} uniqueContracts=${Math.round(decisionEntropyResult.uniqueContractRatio * txDiversityData.length)}`);
+              try {
+                const sampleTransfers = walletTransfers.slice(0, 15);
+                const txHashes: string[] = sampleTransfers.map((t: any) => t.hash).filter(Boolean);
+                const uniqueBlockHexes: string[] = [...new Set<string>(sampleTransfers.map((t: any) => t.blockNum).filter(Boolean))].slice(0, 10);
+                const [txDatas, blockDatas] = await Promise.all([
+                  rpcBatch(txHashes.map(h => ({ method: "eth_getTransactionByHash", params: [h] }))),
+                  rpcBatch(uniqueBlockHexes.map(n => ({ method: "eth_getBlockByNumber", params: [n, false] }))),
+                ]);
+                const blockBaseFeeMap = new Map<string, number>();
+                for (let i = 0; i < uniqueBlockHexes.length; i++) {
+                  const b = blockDatas[i];
+                  if (b?.baseFeePerGas) blockBaseFeeMap.set(uniqueBlockHexes[i], Number(BigInt(b.baseFeePerGas)) / 1e9);
+                }
+                const gasSamples: { gasPrice: number; baseFee: number | null }[] = [];
+                for (let i = 0; i < txHashes.length; i++) {
+                  const tx = txDatas[i];
+                  if (!tx) continue;
+                  const rawGas = tx.maxFeePerGas ?? tx.gasPrice;
+                  if (!rawGas) continue;
+                  const gasPriceGwei = Number(BigInt(rawGas)) / 1e9;
+                  const baseFee = blockBaseFeeMap.get(sampleTransfers[i]?.blockNum) ?? null;
+                  gasSamples.push({ gasPrice: gasPriceGwei, baseFee });
+                }
+                gasPatternResult = analyzeGasPatterns(gasSamples);
+              } catch {}
+            } else {
+              speedScore = 5;
+              speedDetail = "Insufficient transaction history for timing analysis.";
+            }
+          }
+        } catch {}
       } else if (wallet) {
         traceDetail = "Invalid wallet address format.";
       } else {
