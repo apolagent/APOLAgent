@@ -326,7 +326,7 @@ export default function Registry() {
             Browsable directory of all agents scanned by APOL, filtered by certification tier.
             {total > 0 && (
               <span style={{ color: "rgba(0,255,0,0.6)", marginLeft: "8px" }}>
-                {total.toLocaleString()} scan{total !== 1 ? "s" : ""} on record.
+                {total.toLocaleString()} unique agent{total !== 1 ? "s" : ""} scanned.
               </span>
             )}
           </p>

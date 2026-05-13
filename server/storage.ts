@@ -492,34 +492,67 @@ export class DatabaseStorage implements IStorage {
 
   async getAgentRegistry(opts: { tier?: string; limit: number; offset: number }) {
     const VALID_TIERS = ["GOLD", "SILVER", "BRONZE", "UNVERIFIED"];
-    const tierFilter = opts.tier && VALID_TIERS.includes(opts.tier)
-      ? sql`${agentScanResults.resultJson}->'certificationTier'->>'tier' = ${opts.tier}`
-      : undefined;
+    const tierArg = opts.tier && VALID_TIERS.includes(opts.tier) ? opts.tier : undefined;
 
-    const [{ total }] = await db
-      .select({ total: sql<number>`count(*)::int` })
-      .from(agentScanResults)
-      .where(tierFilter);
+    let total: number;
+    let rows: Record<string, unknown>[];
 
-    const rows = await db
-      .select()
-      .from(agentScanResults)
-      .where(tierFilter)
-      .orderBy(desc(agentScanResults.createdAt))
-      .limit(opts.limit)
-      .offset(opts.offset);
+    if (tierArg) {
+      const countRes = await db.execute(sql`
+        SELECT COUNT(*)::int AS count
+        FROM (
+          SELECT DISTINCT ON (wallet) wallet, result_json
+          FROM agent_scan_results
+          ORDER BY wallet, created_at DESC
+        ) latest
+        WHERE latest.result_json->'certificationTier'->>'tier' = ${tierArg}
+      `);
+      total = (countRes.rows[0] as any).count ?? 0;
 
-    const results = rows.map(row => {
-      const rj = row.resultJson as any;
+      const dataRes = await db.execute(sql`
+        SELECT * FROM (
+          SELECT DISTINCT ON (wallet) id, slug, agent_name, wallet, tier, result_json, created_at
+          FROM agent_scan_results
+          ORDER BY wallet, created_at DESC
+        ) latest
+        WHERE latest.result_json->'certificationTier'->>'tier' = ${tierArg}
+        ORDER BY created_at DESC
+        LIMIT ${opts.limit} OFFSET ${opts.offset}
+      `);
+      rows = dataRes.rows as Record<string, unknown>[];
+    } else {
+      const countRes = await db.execute(sql`
+        SELECT COUNT(*)::int AS count
+        FROM (
+          SELECT DISTINCT ON (wallet) wallet
+          FROM agent_scan_results
+        ) unique_wallets
+      `);
+      total = (countRes.rows[0] as any).count ?? 0;
+
+      const dataRes = await db.execute(sql`
+        SELECT * FROM (
+          SELECT DISTINCT ON (wallet) id, slug, agent_name, wallet, tier, result_json, created_at
+          FROM agent_scan_results
+          ORDER BY wallet, created_at DESC
+        ) latest
+        ORDER BY created_at DESC
+        LIMIT ${opts.limit} OFFSET ${opts.offset}
+      `);
+      rows = dataRes.rows as Record<string, unknown>[];
+    }
+
+    const results = rows.map((row: any) => {
+      const rj = row.result_json as any;
       return {
         slug: row.slug,
-        agentName: row.agentName,
+        agentName: row.agent_name,
         wallet: row.wallet,
         tier: row.tier,
         certificationTier: rj?.certificationTier?.tier ?? "UNVERIFIED",
         cognitionScore: rj?.cognitionScore ?? null,
         verdict: rj?.verdict ?? null,
-        createdAt: row.createdAt,
+        createdAt: row.created_at,
       };
     });
 
