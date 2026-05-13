@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
-import { Menu, X, Bot, Wallet, AlertTriangle, ChevronDown, LayoutGrid } from "lucide-react";
+import { Menu, X, Bot, Wallet, AlertTriangle, ChevronDown } from "lucide-react";
 
 import { useWalletContext, type EIP6963ProviderDetail } from "@/hooks/use-wallet";
 import { useQuery } from "@tanstack/react-query";
@@ -304,16 +304,19 @@ export default function Navigation() {
                 {label}
               </button>
             ))}
+            <Link href="/registry">
+              <span
+                className="text-xs uppercase tracking-widest text-white/60 hover:text-[#00ff00] transition-colors"
+                style={{ fontFamily: "'JetBrains Mono', monospace", cursor: "pointer", whiteSpace: "nowrap" }}
+                data-testid="link-nav-registry"
+              >
+                Registry
+              </span>
+            </Link>
           </div>
 
           {/* Right actions */}
           <div className="flex items-center gap-2 justify-self-end">
-            <Link href="/registry">
-              <span style={actionBtnStyle} data-testid="link-nav-registry">
-                <LayoutGrid size={11} />
-                Registry
-              </span>
-            </Link>
             <Link href="/agent-scanner">
               <span style={actionBtnStyle} data-testid="link-nav-agent-scanner">
                 <Bot size={11} />
@@ -376,13 +379,15 @@ export default function Navigation() {
                 {label}
               </button>
             ))}
+            <Link href="/registry" onClick={() => setIsMobileMenuOpen(false)}>
+              <span
+                className="block w-full text-left py-2 text-xs uppercase tracking-widest text-white/60 hover:text-[#00ff00] transition-colors"
+                style={{ fontFamily: "'JetBrains Mono', monospace", cursor: "pointer" }}
+              >
+                Registry
+              </span>
+            </Link>
             <div style={{ borderTop: "1px solid rgba(0,255,0,0.1)", marginTop: "8px", paddingTop: "10px", display: "flex", flexDirection: "column", gap: "10px" }}>
-              <Link href="/registry" onClick={() => setIsMobileMenuOpen(false)}>
-                <span className="flex items-center gap-2 py-1 text-xs uppercase tracking-widest cursor-pointer" style={{ color: G, fontFamily: "'JetBrains Mono', monospace" }}>
-                  <LayoutGrid size={13} />
-                  Registry
-                </span>
-              </Link>
               <Link href="/agent-scanner" onClick={() => setIsMobileMenuOpen(false)}>
                 <span className="flex items-center gap-2 py-1 text-xs uppercase tracking-widest cursor-pointer" style={{ color: G, fontFamily: "'JetBrains Mono', monospace" }}>
                   <Bot size={13} />
