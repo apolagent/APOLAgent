@@ -750,7 +750,7 @@ function analyzeActivityPattern(timestamps: number[]): ActivityPatternResult {
     insight: "Insufficient transaction data for timing pattern analysis.",
     hourDistribution: new Array(24).fill(0),
   };
-  if (timestamps.length < 3) return empty;
+  if (timestamps.length < 1) return empty;
 
   const hourCounts = new Array(24).fill(0);
   for (const ts of timestamps) {
@@ -1754,7 +1754,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               });
               const walletData = await walletResp.json() as any;
               const walletTransfers = walletData?.result?.transfers || [];
-              if (walletTransfers.length > 5) {
+              if (walletTransfers.length > 2) {
                 const blockNums = walletTransfers.map((t: any) => parseInt(t.blockNum, 16));
                 const uniqueBlocks = new Set(blockNums);
                 speedScore = Math.min(30, uniqueBlocks.size * 2);
@@ -1763,6 +1763,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 const txTimestamps: number[] = walletTransfers
                   .map((t: any) => t.metadata?.blockTimestamp ? Math.floor(new Date(t.metadata.blockTimestamp).getTime() / 1000) : null)
                   .filter((ts: number | null): ts is number => ts !== null);
+                console.log(`[activity-pattern] wallet=${wallet} transfers=${walletTransfers.length} timestamps=${txTimestamps.length}`);
                 activityPatternResult = analyzeActivityPattern(txTimestamps);
                 reactionTimeResult = analyzeReactionTime(txTimestamps);
                 const txDiversityData = walletTransfers.map((t: any) => ({
@@ -1880,7 +1881,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 if (socialAgeDays !== undefined && socialAgeDays < 14) flags.push("account < 14 days old");
                 if ((u.tweets || 0) < 5) flags.push("barely any tweets");
                 if (u.following > 0 && socialFollowers / u.following < 0.05) flags.push("suspicious follow ratio");
-                if (socialFollowers > 10000 && (u.tweets || 0) < 500) flags.push("HIGH FOLLOWER TO TWEET RATIO — possible bought followers or repurposed account");
+                if (socialFollowers > 10000 && (socialFollowers / Math.max(u.tweets || 1, 1)) > 50) flags.push("HIGH FOLLOWER TO TWEET RATIO — possible bought followers or repurposed account");
 
                 if (flags.length >= 2) {
                   socialStatus = "suspicious";
