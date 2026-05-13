@@ -1268,32 +1268,55 @@ export default function AgentScanner() {
   const [subscriptionExpiresAt, setSubscriptionExpiresAt] = useState<string | null>(null);
   const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
 
+  const [alertInput, setAlertInput] = useState("");
+  const [alertSubmitting, setAlertSubmitting] = useState(false);
+  const [alertSubscribed, setAlertSubscribed] = useState(false);
+  const [alertExisting, setAlertExisting] = useState<string | null>(null);
+  const [alertError, setAlertError] = useState<string | null>(null);
+  const [alertUnsubscribing, setAlertUnsubscribing] = useState(false);
+
   useEffect(() => {
     if (IS_INNER_CIRCLE_TEST_MODE) return;
     const eth = getSelectedProvider();
     if (!eth) return;
     let cancelled = false;
+    const checkWallet = async (addr: string) => {
+      setConnectedWallet(addr);
+      try {
+        const res = await fetch(`/api/subscription/status?wallet=${addr}`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (data?.paid) { setDeepDiveUnlocked(true); setSubscriptionExpiresAt(data.expiresAt || null); }
+      } catch {}
+      try {
+        const res = await fetch(`/api/webhook/status?wallet=${addr}`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (data?.subscribed) {
+          setAlertSubscribed(true);
+          setAlertExisting(data.webhookUrl || data.email || null);
+        }
+      } catch {}
+    };
     const check = async () => {
       try {
         const accounts: string[] = await eth.request({ method: "eth_accounts" });
         const addr = accounts?.[0];
-        if (!addr) return;
-        if (cancelled) return;
-        setConnectedWallet(addr);
-        const res = await fetch(`/api/subscription/status?wallet=${addr}`);
-        const data = await res.json();
-        if (cancelled) return;
-        if (data?.paid) {
-          setDeepDiveUnlocked(true);
-          setSubscriptionExpiresAt(data.expiresAt || null);
-        }
+        if (!addr || cancelled) return;
+        await checkWallet(addr);
       } catch {}
     };
     check();
     const handler = (accounts: string[]) => {
       const addr = accounts?.[0] || null;
-      setConnectedWallet(addr);
-      if (!addr) { setDeepDiveUnlocked(false); setSubscriptionExpiresAt(null); return; }
+      if (!addr) {
+        setConnectedWallet(null);
+        setDeepDiveUnlocked(false);
+        setSubscriptionExpiresAt(null);
+        setAlertSubscribed(false);
+        setAlertExisting(null);
+        return;
+      }
       fetch(`/api/subscription/status?wallet=${addr}`)
         .then(r => r.json())
         .then(d => {
@@ -1301,6 +1324,14 @@ export default function AgentScanner() {
           else { setDeepDiveUnlocked(false); setSubscriptionExpiresAt(null); }
         })
         .catch(() => {});
+      fetch(`/api/webhook/status?wallet=${addr}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d?.subscribed) { setAlertSubscribed(true); setAlertExisting(d.webhookUrl || d.email || null); }
+          else { setAlertSubscribed(false); setAlertExisting(null); }
+        })
+        .catch(() => {});
+      setConnectedWallet(addr);
     };
     eth.on?.("accountsChanged", handler);
     return () => { cancelled = true; eth.removeListener?.("accountsChanged", handler); };
@@ -1452,6 +1483,52 @@ export default function AgentScanner() {
     } finally {
       setIsScanning(false);
     }
+  };
+
+  const handleAlertSubscribe = async () => {
+    if (!connectedWallet) return;
+    const val = alertInput.trim();
+    if (!val) { setAlertError("Enter a webhook URL or email address."); return; }
+    const isEmail = val.includes("@");
+    const isUrl = val.startsWith("https://");
+    if (!isEmail && !isUrl) { setAlertError("Enter a valid https:// URL or email address."); return; }
+    setAlertSubmitting(true);
+    setAlertError(null);
+    try {
+      const res = await fetch("/api/webhook/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          walletAddress: connectedWallet,
+          webhookUrl: isUrl ? val : undefined,
+          email: isEmail ? val : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setAlertError(data.error || "Subscription failed."); return; }
+      setAlertSubscribed(true);
+      setAlertExisting(val);
+      setAlertInput("");
+    } catch {
+      setAlertError("Network error. Please try again.");
+    } finally {
+      setAlertSubmitting(false);
+    }
+  };
+
+  const handleAlertUnsubscribe = async () => {
+    if (!connectedWallet) return;
+    setAlertUnsubscribing(true);
+    try {
+      await fetch("/api/webhook/unsubscribe", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ walletAddress: connectedWallet }),
+      });
+      setAlertSubscribed(false);
+      setAlertExisting(null);
+    } catch {}
+    finally { setAlertUnsubscribing(false); }
   };
 
   const handleDeepDive = async () => {
@@ -2592,6 +2669,96 @@ export default function AgentScanner() {
 
             <div id="advanced-results">
               <AdvancedResults result={result} />
+            </div>
+
+            {/* ── Get Alerts ── */}
+            <div
+              style={{
+                border: "1px solid rgba(0,255,0,0.15)",
+                background: "#000",
+                padding: "16px 20px",
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+                <span style={{ fontSize: "10px", fontWeight: 900, color: G, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+                  GET ALERTS
+                </span>
+                <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.3)" }}>
+                  — notify me when this agent is scanned again
+                </span>
+              </div>
+
+              {!connectedWallet ? (
+                <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.3)" }}>
+                  Connect your wallet to subscribe to scan alerts for this agent.
+                </div>
+              ) : alertSubscribed ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: G, fontWeight: 700 }}>
+                    <span style={{ display: "inline-block", width: "7px", height: "7px", background: G, borderRadius: "50%" }} />
+                    SUBSCRIBED
+                  </span>
+                  {alertExisting && (
+                    <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.35)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "260px" }}>
+                      → {alertExisting}
+                    </span>
+                  )}
+                  <button
+                    onClick={handleAlertUnsubscribe}
+                    disabled={alertUnsubscribing}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: "10px", color: "rgba(255,255,255,0.3)", textDecoration: "underline", fontFamily: "'JetBrains Mono', monospace", padding: 0 }}
+                  >
+                    {alertUnsubscribing ? "removing…" : "Unsubscribe"}
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    <input
+                      type="text"
+                      value={alertInput}
+                      onChange={e => { setAlertInput(e.target.value); setAlertError(null); }}
+                      onKeyDown={e => e.key === "Enter" && handleAlertSubscribe()}
+                      placeholder="https://your-webhook.com/hook or email@example.com"
+                      style={{
+                        flex: 1,
+                        minWidth: "220px",
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.15)",
+                        color: "#fff",
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: "11px",
+                        padding: "7px 10px",
+                        outline: "none",
+                      }}
+                    />
+                    <button
+                      onClick={handleAlertSubscribe}
+                      disabled={alertSubmitting}
+                      style={{
+                        padding: "7px 18px",
+                        fontSize: "10px",
+                        fontWeight: 900,
+                        letterSpacing: "0.1em",
+                        textTransform: "uppercase",
+                        fontFamily: "'JetBrains Mono', monospace",
+                        cursor: alertSubmitting ? "not-allowed" : "pointer",
+                        background: "transparent",
+                        border: `1px solid ${G}`,
+                        color: G,
+                        opacity: alertSubmitting ? 0.5 : 1,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {alertSubmitting ? "…" : "SUBSCRIBE"}
+                    </button>
+                  </div>
+                  {alertError && (
+                    <div style={{ fontSize: "10px", color: "#f87171" }}>{alertError}</div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="text-center pt-1">

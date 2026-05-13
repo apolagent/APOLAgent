@@ -157,6 +157,17 @@ app.use((req, res, next) => {
       ON "agent_behavioral_snapshots" ("wallet_address", "scan_date" DESC);
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS "agent_webhooks" (
+      "id" serial PRIMARY KEY NOT NULL,
+      "wallet_address" text NOT NULL UNIQUE,
+      "webhook_url" text,
+      "email" text,
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "active" boolean DEFAULT true NOT NULL
+    );
+  `);
+
   const server = await registerRoutes(app);
 
   const bot = createBot();

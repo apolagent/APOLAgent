@@ -188,6 +188,17 @@ export const subscriptions = pgTable("subscriptions", {
 
 export type Subscription = typeof subscriptions.$inferSelect;
 
+export const agentWebhooks = pgTable("agent_webhooks", {
+  id: serial("id").primaryKey(),
+  walletAddress: text("wallet_address").notNull().unique(),
+  webhookUrl: text("webhook_url"),
+  email: text("email"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  active: boolean("active").notNull().default(true),
+});
+
+export type AgentWebhook = typeof agentWebhooks.$inferSelect;
+
 export const usedPaymentTxHashes = pgTable("used_payment_tx_hashes", {
   txHash: text("tx_hash").primaryKey(),
   telegramUserId: text("telegram_user_id"),

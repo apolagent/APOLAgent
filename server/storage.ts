@@ -1,4 +1,4 @@
-import { users, scamReports, heroNominations, votes, flaggedWallets, verificationRequests, scanLookups, agentActivityLogs, subscriptions, agentScanResults, usedPaymentTxHashes, agentBehavioralSnapshots, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet, type InsertVerificationRequest, type VerificationRequest, type ScanLookup, type AgentActivityLog, type Subscription, type AgentScanResult, type AgentBehavioralSnapshot } from "@shared/schema";
+import { users, scamReports, heroNominations, votes, flaggedWallets, verificationRequests, scanLookups, agentActivityLogs, subscriptions, agentScanResults, usedPaymentTxHashes, agentBehavioralSnapshots, agentWebhooks, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet, type InsertVerificationRequest, type VerificationRequest, type ScanLookup, type AgentActivityLog, type Subscription, type AgentScanResult, type AgentBehavioralSnapshot, type AgentWebhook } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, gte, or, and, sql, sum } from "drizzle-orm";
 
@@ -76,6 +76,9 @@ export interface IStorage {
       createdAt: Date;
     }>;
   }>;
+  upsertAgentWebhook(data: { walletAddress: string; webhookUrl?: string; email?: string }): Promise<AgentWebhook>;
+  getAgentWebhook(walletAddress: string): Promise<AgentWebhook | null>;
+  deactivateAgentWebhook(walletAddress: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -557,6 +560,43 @@ export class DatabaseStorage implements IStorage {
     });
 
     return { total, results };
+  }
+
+  async upsertAgentWebhook(data: { walletAddress: string; webhookUrl?: string; email?: string }): Promise<AgentWebhook> {
+    const [row] = await db
+      .insert(agentWebhooks)
+      .values({
+        walletAddress: data.walletAddress.toLowerCase(),
+        webhookUrl: data.webhookUrl ?? null,
+        email: data.email ?? null,
+        active: true,
+      })
+      .onConflictDoUpdate({
+        target: agentWebhooks.walletAddress,
+        set: {
+          webhookUrl: data.webhookUrl ?? null,
+          email: data.email ?? null,
+          active: true,
+        },
+      })
+      .returning();
+    return row;
+  }
+
+  async getAgentWebhook(walletAddress: string): Promise<AgentWebhook | null> {
+    const [row] = await db
+      .select()
+      .from(agentWebhooks)
+      .where(and(eq(agentWebhooks.walletAddress, walletAddress.toLowerCase()), eq(agentWebhooks.active, true)))
+      .limit(1);
+    return row ?? null;
+  }
+
+  async deactivateAgentWebhook(walletAddress: string): Promise<void> {
+    await db
+      .update(agentWebhooks)
+      .set({ active: false })
+      .where(eq(agentWebhooks.walletAddress, walletAddress.toLowerCase()));
   }
 
   async checkInternalReports(address: string): Promise<boolean> {

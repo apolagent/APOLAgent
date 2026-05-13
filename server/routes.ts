@@ -2241,6 +2241,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (!String(e?.message || "").match(/unique|duplicate/i)) throw e;
           }
         }
+        if (wallet && slug) {
+          storage.getAgentWebhook(wallet.toLowerCase())
+            .then(hook => {
+              if (hook?.webhookUrl) {
+                fireWebhookAlert(hook.webhookUrl, {
+                  event: "agent_scanned",
+                  agentName: agentName.trim(),
+                  wallet,
+                  cognitionScore: fullResult.cognitionScore,
+                  verdict: fullResult.verdict,
+                  certificationTier: fullResult.certificationTier?.tier ?? "UNVERIFIED",
+                  anomalyStatus: anomalyDetectionResult?.anomalyStatus ?? null,
+                  scanUrl: `https://apolagent.online/agent-scanner/${slug}`,
+                  timestamp: new Date().toISOString(),
+                }).catch(() => {});
+              }
+            })
+            .catch(() => {});
+        }
       } catch (e) {
         // saving is best-effort; never block the scan response
       }
@@ -2586,6 +2605,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ ok: false, reason: "This transaction has already been used." });
       }
       res.status(500).json({ ok: false, reason: e?.message || "Verification failed" });
+    }
+  });
+
+  async function fireWebhookAlert(webhookUrl: string, payload: object) {
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(5000),
+    });
+  }
+
+  app.get("/api/webhook/status", async (req, res) => {
+    try {
+      const wallet = String(req.query.wallet || "").trim().toLowerCase();
+      if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) return res.status(400).json({ error: "Invalid wallet address" });
+      const hook = await storage.getAgentWebhook(wallet);
+      if (!hook) return res.json({ subscribed: false });
+      res.json({ subscribed: true, webhookUrl: hook.webhookUrl ?? null, email: hook.email ?? null });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Failed to check webhook status" });
+    }
+  });
+
+  app.post("/api/webhook/subscribe", async (req, res) => {
+    try {
+      const { walletAddress, webhookUrl, email } = req.body;
+      if (!walletAddress || !/^0x[a-fA-F0-9]{40}$/.test(String(walletAddress))) {
+        return res.status(400).json({ error: "Invalid wallet address" });
+      }
+      if (!webhookUrl && !email) {
+        return res.status(400).json({ error: "Provide a webhook URL or email address" });
+      }
+      if (webhookUrl && !String(webhookUrl).startsWith("https://")) {
+        return res.status(400).json({ error: "Webhook URL must start with https://" });
+      }
+      if (email && !String(email).includes("@")) {
+        return res.status(400).json({ error: "Invalid email address" });
+      }
+      await storage.upsertAgentWebhook({
+        walletAddress: String(walletAddress),
+        webhookUrl: webhookUrl ? String(webhookUrl).slice(0, 500) : undefined,
+        email: email ? String(email).slice(0, 254) : undefined,
+      });
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Failed to subscribe" });
+    }
+  });
+
+  app.delete("/api/webhook/unsubscribe", async (req, res) => {
+    try {
+      const { walletAddress } = req.body;
+      if (!walletAddress || !/^0x[a-fA-F0-9]{40}$/.test(String(walletAddress))) {
+        return res.status(400).json({ error: "Invalid wallet address" });
+      }
+      await storage.deactivateAgentWebhook(String(walletAddress));
+      res.json({ ok: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Failed to unsubscribe" });
     }
   });
 
