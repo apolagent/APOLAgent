@@ -63,6 +63,19 @@ export interface IStorage {
     verdict: string | null;
   }): Promise<void>;
   getAgentBehavioralHistory(walletAddress: string, days?: number): Promise<AgentBehavioralSnapshot[]>;
+  getAgentRegistry(opts: { tier?: string; limit: number; offset: number }): Promise<{
+    total: number;
+    results: Array<{
+      slug: string;
+      agentName: string;
+      wallet: string | null;
+      tier: string;
+      certificationTier: string;
+      cognitionScore: number | null;
+      verdict: string | null;
+      createdAt: Date;
+    }>;
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -475,6 +488,42 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(agentBehavioralSnapshots.scanDate);
+  }
+
+  async getAgentRegistry(opts: { tier?: string; limit: number; offset: number }) {
+    const VALID_TIERS = ["GOLD", "SILVER", "BRONZE", "UNVERIFIED"];
+    const tierFilter = opts.tier && VALID_TIERS.includes(opts.tier)
+      ? sql`${agentScanResults.resultJson}->'certificationTier'->>'tier' = ${opts.tier}`
+      : undefined;
+
+    const [{ total }] = await db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(agentScanResults)
+      .where(tierFilter);
+
+    const rows = await db
+      .select()
+      .from(agentScanResults)
+      .where(tierFilter)
+      .orderBy(desc(agentScanResults.createdAt))
+      .limit(opts.limit)
+      .offset(opts.offset);
+
+    const results = rows.map(row => {
+      const rj = row.resultJson as any;
+      return {
+        slug: row.slug,
+        agentName: row.agentName,
+        wallet: row.wallet,
+        tier: row.tier,
+        certificationTier: rj?.certificationTier?.tier ?? "UNVERIFIED",
+        cognitionScore: rj?.cognitionScore ?? null,
+        verdict: rj?.verdict ?? null,
+        createdAt: row.createdAt,
+      };
+    });
+
+    return { total, results };
   }
 
   async checkInternalReports(address: string): Promise<boolean> {

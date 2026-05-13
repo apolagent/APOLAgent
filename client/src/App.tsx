@@ -17,6 +17,7 @@ import VerifiedBuilders from "@/pages/verified-builders";
 import Whitepaper from "@/pages/whitepaper";
 import Docs from "@/pages/docs";
 import ActivityLogs from "@/pages/activity-logs";
+import Registry from "@/pages/registry";
 import NotFound from "@/pages/not-found";
 import ApolAgent from "@/components/apol-agent";
 
@@ -36,6 +37,7 @@ function Router() {
       <Route path="/whitepaper" component={Whitepaper} />
       <Route path="/docs" component={Docs} />
       <Route path="/logs" component={ActivityLogs} />
+      <Route path="/registry" component={Registry} />
       <Route component={NotFound} />
     </Switch>
   );

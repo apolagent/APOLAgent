@@ -2589,6 +2589,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/registry", async (req, res) => {
+    try {
+      const VALID_TIERS = ["GOLD", "SILVER", "BRONZE", "UNVERIFIED"];
+      const tierParam = typeof req.query.tier === "string" ? req.query.tier.toUpperCase() : undefined;
+      const tier = tierParam && VALID_TIERS.includes(tierParam) ? tierParam : undefined;
+      const limit = Math.min(Math.max(1, parseInt(String(req.query.limit || "50"), 10) || 50), 100);
+      const offset = Math.max(0, parseInt(String(req.query.offset || "0"), 10) || 0);
+      const data = await storage.getAgentRegistry({ tier, limit, offset });
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Failed to load registry" });
+    }
+  });
+
   app.get("/skill/skill.md", (_req, res) => {
     const cwd = process.cwd();
     const devPath = path.resolve(cwd, "client/public/skill/skill.md");
