@@ -4,3 +4,8 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+contracts/.env
+contracts/artifacts
+contracts/cache
+contracts/typechain-types
+contracts/deployed.json
