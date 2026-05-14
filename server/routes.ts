@@ -14,6 +14,7 @@ import {
 
 const BASE_RPC = process.env.BASE_RPC_URL || "";
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+console.log("[email-alerts] RESEND_API_KEY present:", !!process.env.RESEND_API_KEY, "| resend client:", resend ? "initialized" : "null (emails will be skipped)");
 
 function pad32(hex: string): string {
   return hex.replace(/^0x/i, "").padStart(64, "0");
@@ -2294,8 +2295,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const _slug = slug;
           const _result = fullResult;
           const _anomaly = anomalyDetectionResult;
+          console.log("[webhook-dispatch] scan complete for wallet:", wallet.toLowerCase(), "| calling getAgentWebhook");
           storage.getAgentWebhook(wallet.toLowerCase())
             .then(async hook => {
+              console.log("[webhook-dispatch] getAgentWebhook result for", wallet.toLowerCase(), ":", hook ? `found (email=${hook.email ?? "none"}, webhookUrl=${hook.webhookUrl ?? "none"}, active=${hook.active})` : "null — no subscription");
               if (!hook) return;
 
               // Detect tier change vs the previous scan for this wallet
@@ -2324,10 +2327,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 timestamp: new Date().toISOString(),
               };
 
-              if (hook.webhookUrl) fireWebhookAlert(hook.webhookUrl, alertPayload).catch(() => {});
-              if (hook.email) sendAlertEmail(hook.email, alertPayload).catch(() => {});
+              if (hook.webhookUrl) {
+                console.log("[webhook-dispatch] firing webhook to:", hook.webhookUrl);
+                fireWebhookAlert(hook.webhookUrl, alertPayload).catch((e: any) => {
+                  console.error("[webhook-dispatch] webhook POST error:", e?.message);
+                });
+              }
+              if (hook.email) {
+                console.log("[webhook-dispatch] sending email alert to:", hook.email);
+                sendAlertEmail(hook.email, alertPayload).catch((e: any) => {
+                  console.error("[webhook-dispatch] sendAlertEmail error:", e?.message);
+                });
+              }
             })
-            .catch(() => {});
+            .catch((e: any) => {
+              console.error("[webhook-dispatch] getAgentWebhook threw:", e?.message);
+            });
         }
       } catch (e) {
         // saving is best-effort; never block the scan response
@@ -2697,7 +2712,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     tierChanged: boolean;
     previousTier?: string;
   }) {
-    if (!resend) return;
+    console.log("[sendAlertEmail] called — to:", to, "| resend initialized:", !!resend);
+    if (!resend) {
+      console.warn("[sendAlertEmail] resend is null — RESEND_API_KEY missing, skipping email");
+      return;
+    }
     const tierColor: Record<string, string> = { GOLD: "#ffd700", SILVER: "#c0c0c0", BRONZE: "#cd7f32", UNVERIFIED: "#888888" };
     const tc = tierColor[payload.certificationTier] ?? "#888888";
     const subject = payload.tierChanged
@@ -2731,12 +2750,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   <p style="color:#333;font-size:10px;text-align:center;margin-top:16px">APOL Agent · apolagent.online · You are receiving this because you subscribed to alerts for this wallet.</p>
 </div>
 </body></html>`;
-    await resend.emails.send({
-      from: "APOL Agent <alerts@apolagent.online>",
-      to,
-      subject,
-      html,
-    });
+    console.log("[sendAlertEmail] calling Resend — from: APOL Agent <alerts@send.apolagent.online>, to:", to, "subject:", subject);
+    try {
+      const result = await resend.emails.send({
+        from: "APOL Agent <alerts@send.apolagent.online>",
+        to,
+        subject,
+        html,
+      });
+      console.log("[sendAlertEmail] Resend response:", JSON.stringify(result));
+    } catch (e: any) {
+      console.error("[sendAlertEmail] Resend threw:", e?.message, "| statusCode:", e?.statusCode, "| name:", e?.name);
+      throw e;
+    }
   }
 
   app.get("/api/webhook/status", async (req, res) => {
@@ -2766,11 +2792,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (email && !String(email).includes("@")) {
         return res.status(400).json({ error: "Invalid email address" });
       }
-      await storage.upsertAgentWebhook({
+      const saved = await storage.upsertAgentWebhook({
         walletAddress: String(walletAddress),
         webhookUrl: webhookUrl ? String(webhookUrl).slice(0, 500) : undefined,
         email: email ? String(email).slice(0, 254) : undefined,
       });
+      console.log("[subscribe] upsertAgentWebhook saved — id:", saved.id, "wallet:", saved.walletAddress, "email:", saved.email ?? "none", "webhookUrl:", saved.webhookUrl ?? "none", "active:", saved.active);
       res.json({ ok: true });
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Failed to subscribe" });
