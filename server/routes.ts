@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import path from "path";
 import fs from "fs";
+import { ethers } from "ethers";
 import { Resend } from "resend";
 import { storage } from "./storage";
 import { installX402 } from "./x402";
@@ -2837,6 +2838,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.sendFile(filePath, (err) => {
       if (err) res.status(404).send("Skill file not found");
     });
+  });
+
+  const SBT_ABI = [
+    "function getTokenData(uint256 tokenId) view returns (tuple(address agentWallet, string agentName, string certificationTier, uint256 cognitionScore, string scanUrl, uint256 mintTimestamp))",
+  ];
+  const SBT_RPC = "https://sepolia.base.org";
+
+  app.get("/api/sbt/metadata/:tokenId", async (req, res) => {
+    try {
+      const tokenId = parseInt(req.params.tokenId, 10);
+      if (isNaN(tokenId) || tokenId < 1) return res.status(400).json({ error: "Invalid token ID" });
+
+      const deployedPath = path.resolve(process.cwd(), "contracts/deployed.json");
+      if (!fs.existsSync(deployedPath)) return res.status(503).json({ error: "Contract not deployed" });
+      const deployed = JSON.parse(fs.readFileSync(deployedPath, "utf8"));
+
+      const provider = new ethers.JsonRpcProvider(SBT_RPC);
+      const contract = new ethers.Contract(deployed.address, SBT_ABI, provider);
+
+      let tokenData: any;
+      try {
+        tokenData = await contract.getTokenData(tokenId);
+      } catch {
+        return res.status(404).json({ error: "Token not found" });
+      }
+
+      const agentWallet: string = tokenData.agentWallet;
+      const scan = await storage.getLatestScanByWallet(agentWallet);
+      const rj = scan?.resultJson as any;
+
+      const tier: string = rj?.certificationTier?.tier ?? "UNVERIFIED";
+      const cognitionScore: number | null = rj?.cognitionScore ?? null;
+      const verdict: string | null = rj?.verdict ?? null;
+      const agentName: string = scan?.agentName ?? tokenData.agentName;
+      const slug: string | null = scan?.slug ?? null;
+      const scanUrl = slug ? `https://apolagent.online/agent/${slug}` : (tokenData.scanUrl as string);
+      const isExpired = !scan || !["SILVER", "GOLD"].includes(tier);
+
+      res.json({
+        name: `APOL Certification #${tokenId} — ${agentName}`,
+        description: isExpired
+          ? `This APOL Certification SBT for ${agentName} is no longer valid.`
+          : `APOL ${tier} Certification for AI agent ${agentName}. Cognition score: ${cognitionScore ?? "N/A"}/100.`,
+        image: "https://apolagent.online/apol-logo.png",
+        attributes: [
+          { trait_type: "status", value: isExpired ? "expired" : "active" },
+          { trait_type: "certificationTier", value: isExpired ? "EXPIRED" : tier },
+          { trait_type: "cognitionScore", display_type: "number", value: isExpired ? 0 : (cognitionScore ?? 0) },
+          { trait_type: "verdict", value: isExpired ? "Expired" : (verdict ?? "Unknown") },
+          { trait_type: "wallet", value: agentWallet },
+          { trait_type: "scanUrl", value: isExpired ? "" : scanUrl },
+        ],
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Failed to load token metadata" });
+    }
   });
 
   const httpServer = createServer(app);
