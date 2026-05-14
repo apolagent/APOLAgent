@@ -812,11 +812,26 @@ function AdvancedResults({ result, shareSlug }: { result: AgentResult; shareSlug
       })()}
 
       {/* ── Certification SBT ── */}
-      {isSbtEligible && sbtDeployed?.address && (() => {
+      {isSbtEligible && (() => {
         const ct = result.certificationTier!;
         const palette = ct.tier === "GOLD"
           ? { border: "#fbbf24", bg: "rgba(251,191,36,0.04)", text: "#fbbf24" }
           : { border: "#94a3b8", bg: "rgba(148,163,184,0.04)", text: "#b0bec5" };
+        if (!sbtDeployed?.address) {
+          return (
+            <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: palette.bg, fontFamily: "'JetBrains Mono', monospace" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+                <span style={{ fontSize: "9px", fontWeight: 900, color: "#00ff00", letterSpacing: "0.14em", textTransform: "uppercase" }}>Certification SBT</span>
+                <div style={{ padding: "2px 8px", border: `1px solid ${palette.border}`, fontSize: "9px", fontWeight: 700, color: palette.text, letterSpacing: "0.1em" }}>
+                  {ct.tier}
+                </div>
+              </div>
+              <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.03em" }}>
+                SBT minting coming soon
+              </div>
+            </div>
+          );
+        }
         const activeTokenId = sbtMintSuccess?.tokenId ?? sbtTokenId;
         const alreadyMinted = activeTokenId !== null && activeTokenId > BigInt(0);
         return (

@@ -2816,7 +2816,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/sbt/contract-address", (_req, res) => {
     try {
-      const deployedPath = path.resolve(process.cwd(), "contracts/deployed.json");
+      const deployedPath = path.resolve(__dirname, "../contracts/deployed.json");
       if (!fs.existsSync(deployedPath)) return res.status(503).json({ error: "Contract not deployed" });
       const deployed = JSON.parse(fs.readFileSync(deployedPath, "utf8"));
       res.json({ address: deployed.address, network: deployed.network, chainId: 84532 });
@@ -2861,7 +2861,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tokenId = parseInt(req.params.tokenId, 10);
       if (isNaN(tokenId) || tokenId < 1) return res.status(400).json({ error: "Invalid token ID" });
 
-      const deployedPath = path.resolve(process.cwd(), "contracts/deployed.json");
+      const deployedPath = path.resolve(__dirname, "../contracts/deployed.json");
       if (!fs.existsSync(deployedPath)) return res.status(503).json({ error: "Contract not deployed" });
       const deployed = JSON.parse(fs.readFileSync(deployedPath, "utf8"));
 
