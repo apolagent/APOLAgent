@@ -7,7 +7,7 @@ import {
   Zap, Lock, ExternalLink, ShieldAlert, Activity, Clock, Shield,
   ShieldCheck, Droplets, Users, TrendingUp, FileBarChart2, Eye,
 } from "lucide-react";
-import { BrowserProvider, JsonRpcProvider, parseEther } from "ethers";
+import { BrowserProvider, Contract, JsonRpcProvider, parseEther } from "ethers";
 import { getSelectedProvider } from "@/hooks/use-wallet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -512,8 +512,109 @@ function BehavioralHistory({ wallet }: { wallet: string }) {
   );
 }
 
-function AdvancedResults({ result }: { result: AgentResult }) {
+function AdvancedResults({ result, shareSlug }: { result: AgentResult; shareSlug?: string | null }) {
   const [briefingOpen, setBriefingOpen] = useState(false);
+
+  // ── SBT ──────────────────────────────────────────────────────────────────
+  const SBT_OWNER = "0x857aca6A8A743C9262d64819D239f509a1Cd0A85";
+  const SBT_CHAIN_HEX = "0x14A34";
+  const SBT_RPC = "https://sepolia.base.org";
+  const SBT_EXPLORER = "https://sepolia.basescan.org";
+
+  const { data: sbtDeployed } = useQuery<{ address: string; network: string; chainId: number }>({
+    queryKey: ["/api/sbt/contract-address"],
+    staleTime: Infinity,
+  });
+
+  const [sbtTokenId, setSbtTokenId] = useState<bigint | null>(null);
+  const [sbtChecking, setSbtChecking] = useState(false);
+  const [sbtMinting, setSbtMinting] = useState(false);
+  const [sbtMintError, setSbtMintError] = useState<string | null>(null);
+  const [sbtMintSuccess, setSbtMintSuccess] = useState<{ tokenId: bigint; txHash: string } | null>(null);
+
+  const isSbtEligible =
+    (result.certificationTier?.tier === "SILVER" || result.certificationTier?.tier === "GOLD") &&
+    !!result.wallet && /^0x[a-fA-F0-9]{40}$/.test(result.wallet);
+
+  useEffect(() => {
+    if (!isSbtEligible || !sbtDeployed?.address || !result.wallet) return;
+    let cancelled = false;
+    setSbtChecking(true);
+    setSbtTokenId(null);
+    const provider = new JsonRpcProvider(SBT_RPC);
+    const contract = new Contract(
+      sbtDeployed.address,
+      ["function walletToTokenId(address) view returns (uint256)"],
+      provider,
+    );
+    contract.walletToTokenId(result.wallet)
+      .then((id: bigint) => { if (!cancelled) setSbtTokenId(id); })
+      .catch(() => { if (!cancelled) setSbtTokenId(BigInt(0)); })
+      .finally(() => { if (!cancelled) setSbtChecking(false); });
+    return () => { cancelled = true; };
+  }, [isSbtEligible, sbtDeployed?.address, result.wallet]);
+
+  const handleMintSbt = async () => {
+    if (!sbtDeployed?.address || !result.wallet || !result.certificationTier) return;
+    const eth = getSelectedProvider();
+    if (!eth) { setSbtMintError("No wallet connected"); return; }
+    setSbtMintError(null);
+    setSbtMinting(true);
+    try {
+      const accounts: string[] = await eth.request({ method: "eth_requestAccounts" });
+      const account = accounts?.[0];
+      if (!account) throw new Error("No account returned");
+      if (account.toLowerCase() !== SBT_OWNER.toLowerCase()) {
+        throw new Error("Only the APOL owner wallet can mint certification SBTs");
+      }
+      try {
+        await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: SBT_CHAIN_HEX }] });
+      } catch (switchErr: any) {
+        if (switchErr?.code === 4902) {
+          await eth.request({
+            method: "wallet_addEthereumChain",
+            params: [{
+              chainId: SBT_CHAIN_HEX,
+              chainName: "Base Sepolia",
+              rpcUrls: [SBT_RPC],
+              nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+              blockExplorerUrls: [SBT_EXPLORER],
+            }],
+          });
+        } else throw switchErr;
+      }
+      const provider = new BrowserProvider(eth);
+      const signer = await provider.getSigner();
+      const contract = new Contract(
+        sbtDeployed.address,
+        ["function mint(address agentWallet, string agentName, string certificationTier, uint256 cognitionScore, string scanUrl) external"],
+        signer,
+      );
+      const scanUrl = shareSlug ? `https://apolagent.online/agent/${shareSlug}` : "";
+      const tx = await contract.mint(
+        result.wallet,
+        result.agentName,
+        result.certificationTier.tier,
+        result.cognitionScore ?? 0,
+        scanUrl,
+      );
+      await tx.wait();
+      const readProvider = new JsonRpcProvider(SBT_RPC);
+      const readContract = new Contract(
+        sbtDeployed.address,
+        ["function walletToTokenId(address) view returns (uint256)"],
+        readProvider,
+      );
+      const tokenId: bigint = await readContract.walletToTokenId(result.wallet);
+      setSbtTokenId(tokenId);
+      setSbtMintSuccess({ tokenId, txHash: tx.hash });
+    } catch (e: any) {
+      setSbtMintError(e?.reason ?? e?.shortMessage ?? e?.message ?? "Mint failed");
+    } finally {
+      setSbtMinting(false);
+    }
+  };
+  // ─────────────────────────────────────────────────────────────────────────
   const cs = result.contractScan;
 
   const riskLevel = result.cognitionScore === null ? "UNKNOWN"
@@ -705,6 +806,78 @@ function AdvancedResults({ result }: { result: AgentResult }) {
               <div style={{ marginTop: "6px", fontSize: "9px", color: "rgba(255,255,255,0.3)", letterSpacing: "0.05em" }}>
                 Raw score qualifies for {ct.rawTier} — capped at {ct.tier} pending behavioral stability
               </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ── Certification SBT ── */}
+      {isSbtEligible && sbtDeployed?.address && (() => {
+        const ct = result.certificationTier!;
+        const palette = ct.tier === "GOLD"
+          ? { border: "#fbbf24", bg: "rgba(251,191,36,0.04)", text: "#fbbf24" }
+          : { border: "#94a3b8", bg: "rgba(148,163,184,0.04)", text: "#b0bec5" };
+        const activeTokenId = sbtMintSuccess?.tokenId ?? sbtTokenId;
+        const alreadyMinted = activeTokenId !== null && activeTokenId > BigInt(0);
+        return (
+          <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: palette.bg, fontFamily: "'JetBrains Mono', monospace" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", marginBottom: "8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span style={{ fontSize: "9px", fontWeight: 900, color: "#00ff00", letterSpacing: "0.14em", textTransform: "uppercase" }}>Certification SBT</span>
+                <div style={{ padding: "2px 8px", border: `1px solid ${palette.border}`, fontSize: "9px", fontWeight: 700, color: palette.text, letterSpacing: "0.1em" }}>
+                  {ct.tier}
+                </div>
+              </div>
+              {sbtChecking && (
+                <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.03em" }}>Checking token status…</span>
+              )}
+            </div>
+            <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.4)", marginBottom: "12px", letterSpacing: "0.03em" }}>
+              Mint your APOL certification as a non-transferable soulbound token on Base
+            </div>
+            {!sbtChecking && sbtTokenId !== null && (
+              alreadyMinted ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "11px", color: "#00ff00", letterSpacing: "0.04em" }}>✓ Token #{String(activeTokenId)}</span>
+                  <a
+                    href={`${SBT_EXPLORER}/token/${sbtDeployed.address}?a=${String(activeTokenId)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: "10px", color: palette.text, textDecoration: "underline", letterSpacing: "0.04em" }}
+                  >
+                    View on Basescan ↗
+                  </a>
+                  {sbtMintSuccess?.txHash && (
+                    <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.3)" }}>
+                      tx: {sbtMintSuccess.txHash.slice(0, 10)}…
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", alignItems: "flex-start" }}>
+                  <button
+                    onClick={handleMintSbt}
+                    disabled={sbtMinting}
+                    style={{
+                      background: sbtMinting ? "rgba(0,255,0,0.15)" : "#00ff00",
+                      color: "#000",
+                      border: "none",
+                      padding: "8px 20px",
+                      fontSize: "11px",
+                      fontWeight: 900,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      cursor: sbtMinting ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {sbtMinting ? "Minting…" : "Mint SBT →"}
+                  </button>
+                  {sbtMintError && (
+                    <span style={{ fontSize: "10px", color: "#f87171", letterSpacing: "0.03em" }}>{sbtMintError}</span>
+                  )}
+                </div>
+              )
             )}
           </div>
         );
@@ -2658,7 +2831,7 @@ export default function AgentScanner() {
             )}
 
             <div id="advanced-results">
-              <AdvancedResults result={result} />
+              <AdvancedResults result={result} shareSlug={shareSlug} />
             </div>
 
             {/* ── Get Alerts ── */}

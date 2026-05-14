@@ -2814,6 +2814,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/sbt/contract-address", (_req, res) => {
+    try {
+      const deployedPath = path.resolve(process.cwd(), "contracts/deployed.json");
+      if (!fs.existsSync(deployedPath)) return res.status(503).json({ error: "Contract not deployed" });
+      const deployed = JSON.parse(fs.readFileSync(deployedPath, "utf8"));
+      res.json({ address: deployed.address, network: deployed.network, chainId: 84532 });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Failed to read contract address" });
+    }
+  });
+
   app.get("/api/registry", async (req, res) => {
     try {
       const VALID_TIERS = ["GOLD", "SILVER", "BRONZE", "UNVERIFIED"];
