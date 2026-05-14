@@ -557,13 +557,13 @@ function AdvancedResults({ result, shareSlug }: { result: AgentResult; shareSlug
   const handleMintSbt = async () => {
     if (!sbtDeployed?.address || !result.wallet || !result.certificationTier) return;
     const eth = getSelectedProvider();
-    if (!eth) { setSbtMintError("No wallet connected"); return; }
+    if (!eth) { setSbtMintError("Please connect your wallet first"); return; }
+    const existingAccounts: string[] = await eth.request({ method: "eth_accounts" });
+    if (!existingAccounts?.[0]) { setSbtMintError("Please connect your wallet first"); return; }
     setSbtMintError(null);
     setSbtMinting(true);
     try {
-      const accounts: string[] = await eth.request({ method: "eth_requestAccounts" });
-      const account = accounts?.[0];
-      if (!account) throw new Error("No account returned");
+      const account = existingAccounts[0];
       if (account.toLowerCase() !== SBT_OWNER.toLowerCase()) {
         throw new Error("Only the APOL owner wallet can mint certification SBTs");
       }
@@ -609,7 +609,11 @@ function AdvancedResults({ result, shareSlug }: { result: AgentResult; shareSlug
       setSbtTokenId(tokenId);
       setSbtMintSuccess({ tokenId, txHash: tx.hash });
     } catch (e: any) {
-      setSbtMintError(e?.reason ?? e?.shortMessage ?? e?.message ?? "Mint failed");
+      if (e?.code === 4001) {
+        setSbtMintError("Transaction rejected");
+      } else {
+        setSbtMintError(e?.reason ?? e?.shortMessage ?? e?.message ?? "Mint failed");
+      }
     } finally {
       setSbtMinting(false);
     }
