@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import path from "path";
 import fs from "fs";
+import { Resend } from "resend";
 import { storage } from "./storage";
 import { installX402 } from "./x402";
 import {
@@ -12,6 +13,7 @@ import {
 } from "./constants";
 
 const BASE_RPC = process.env.BASE_RPC_URL || "";
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 function pad32(hex: string): string {
   return hex.replace(/^0x/i, "").padStart(64, "0");
@@ -2289,21 +2291,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         if (wallet && slug) {
+          const _slug = slug;
+          const _result = fullResult;
+          const _anomaly = anomalyDetectionResult;
           storage.getAgentWebhook(wallet.toLowerCase())
-            .then(hook => {
-              if (hook?.webhookUrl) {
-                fireWebhookAlert(hook.webhookUrl, {
-                  event: "agent_scanned",
-                  agentName: agentName.trim(),
-                  wallet,
-                  cognitionScore: fullResult.cognitionScore,
-                  verdict: fullResult.verdict,
-                  certificationTier: fullResult.certificationTier?.tier ?? "UNVERIFIED",
-                  anomalyStatus: anomalyDetectionResult?.anomalyStatus ?? null,
-                  scanUrl: `https://apolagent.online/agent-scanner/${slug}`,
-                  timestamp: new Date().toISOString(),
-                }).catch(() => {});
-              }
+            .then(async hook => {
+              if (!hook) return;
+
+              // Detect tier change vs the previous scan for this wallet
+              let tierChanged = false;
+              let previousTier: string | undefined;
+              try {
+                const prevScan = await storage.getLatestScanByWallet(wallet, _slug);
+                if (prevScan) {
+                  const prevTier = (prevScan.resultJson as any)?.certificationTier?.tier ?? "UNVERIFIED";
+                  const currTier = _result.certificationTier?.tier ?? "UNVERIFIED";
+                  if (prevTier !== currTier) { tierChanged = true; previousTier = prevTier; }
+                }
+              } catch {}
+
+              const alertPayload = {
+                event: "agent_scanned",
+                agentName: agentName.trim(),
+                wallet,
+                cognitionScore: _result.cognitionScore,
+                certificationTier: _result.certificationTier?.tier ?? "UNVERIFIED",
+                verdict: _result.verdict,
+                anomalyStatus: _anomaly?.anomalyStatus ?? null,
+                scanUrl: `https://apolagent.online/agent-scanner/${_slug}`,
+                tierChanged,
+                previousTier,
+                timestamp: new Date().toISOString(),
+              };
+
+              if (hook.webhookUrl) fireWebhookAlert(hook.webhookUrl, alertPayload).catch(() => {});
+              if (hook.email) sendAlertEmail(hook.email, alertPayload).catch(() => {});
             })
             .catch(() => {});
         }
@@ -2661,6 +2683,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(5000),
+    });
+  }
+
+  async function sendAlertEmail(to: string, payload: {
+    agentName: string;
+    wallet: string;
+    cognitionScore: number | null;
+    certificationTier: string;
+    verdict: string | null;
+    anomalyStatus: string | null;
+    scanUrl: string;
+    tierChanged: boolean;
+    previousTier?: string;
+  }) {
+    if (!resend) return;
+    const tierColor: Record<string, string> = { GOLD: "#ffd700", SILVER: "#c0c0c0", BRONZE: "#cd7f32", UNVERIFIED: "#888888" };
+    const tc = tierColor[payload.certificationTier] ?? "#888888";
+    const subject = payload.tierChanged
+      ? `APOL Alert — ${payload.agentName} tier changed to ${payload.certificationTier}`
+      : `APOL Alert — ${payload.agentName} scan completed`;
+    const tierChangeBanner = payload.tierChanged && payload.previousTier
+      ? `<div style="border:1px solid ${tc};padding:12px 16px;margin-bottom:20px;background:#111">
+           <span style="color:${tc};font-size:12px;letter-spacing:2px">⚡ TIER CHANGE</span>
+           <p style="color:#fff;margin:6px 0 0;font-size:14px">${payload.previousTier} → <strong style="color:${tc}">${payload.certificationTier}</strong></p>
+         </div>`
+      : "";
+    const anomalyRow = payload.anomalyStatus
+      ? `<tr><td style="color:#888;padding:6px 0;border-bottom:1px solid #222">Anomaly Status</td><td style="color:#ff4444;padding:6px 0;border-bottom:1px solid #222;text-align:right">${payload.anomalyStatus}</td></tr>`
+      : "";
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:'Courier New',Courier,monospace">
+<div style="max-width:560px;margin:0 auto;padding:32px 16px">
+  <div style="border:1px solid #1a1a1a;padding:28px;background:#0f0f0f">
+    <p style="color:#00ff00;font-size:10px;letter-spacing:4px;margin:0 0 20px;text-transform:uppercase">APOL Agent Monitor</p>
+    <h1 style="color:#ffffff;font-size:16px;margin:0 0 24px;font-weight:normal">${payload.tierChanged ? "⚡ " : ""}${payload.agentName}</h1>
+    ${tierChangeBanner}
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr><td style="color:#888;padding:6px 0;border-bottom:1px solid #222">Wallet</td><td style="color:#ccc;padding:6px 0;border-bottom:1px solid #222;text-align:right;font-size:11px">${payload.wallet}</td></tr>
+      <tr><td style="color:#888;padding:6px 0;border-bottom:1px solid #222">Cognition Score</td><td style="color:#00ff00;padding:6px 0;border-bottom:1px solid #222;text-align:right">${payload.cognitionScore ?? "—"} / 100</td></tr>
+      <tr><td style="color:#888;padding:6px 0;border-bottom:1px solid #222">Certification</td><td style="color:${tc};padding:6px 0;border-bottom:1px solid #222;text-align:right;font-weight:bold">${payload.certificationTier}</td></tr>
+      <tr><td style="color:#888;padding:6px 0;border-bottom:1px solid #222">Verdict</td><td style="color:#ccc;padding:6px 0;border-bottom:1px solid #222;text-align:right">${payload.verdict ?? "—"}</td></tr>
+      ${anomalyRow}
+    </table>
+    <a href="${payload.scanUrl}" style="display:block;background:#00ff00;color:#000;text-align:center;padding:14px;text-decoration:none;font-weight:bold;font-size:13px;letter-spacing:2px;margin-top:24px">VIEW FULL REPORT →</a>
+  </div>
+  <p style="color:#333;font-size:10px;text-align:center;margin-top:16px">APOL Agent · apolagent.online · You are receiving this because you subscribed to alerts for this wallet.</p>
+</div>
+</body></html>`;
+    await resend.emails.send({
+      from: "APOL Agent <alerts@apolagent.online>",
+      to,
+      subject,
+      html,
     });
   }
 

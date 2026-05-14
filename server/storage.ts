@@ -1,6 +1,6 @@
 import { users, scamReports, heroNominations, votes, flaggedWallets, verificationRequests, scanLookups, agentActivityLogs, subscriptions, agentScanResults, usedPaymentTxHashes, agentBehavioralSnapshots, agentWebhooks, type User, type InsertUser, type ScamReport, type InsertScamReport, type HeroNomination, type InsertHeroNomination, type Vote, type InsertVote, type FlaggedWallet, type InsertVerificationRequest, type VerificationRequest, type ScanLookup, type AgentActivityLog, type Subscription, type AgentScanResult, type AgentBehavioralSnapshot, type AgentWebhook } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, gte, or, and, sql, sum } from "drizzle-orm";
+import { eq, desc, gte, or, and, sql, sum, ne } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -47,6 +47,7 @@ export interface IStorage {
   markTxHashUsed(txHash: string, telegramUserId: string | null, walletAddress: string | null): Promise<void>;
   saveAgentScanResult(data: { slug: string; agentName: string; wallet: string | null; chain: string; twitterHandle: string | null; socialLink: string | null; logsUrl: string | null; claimedAbilities: string | null; resultJson: any; tier: string }): Promise<AgentScanResult>;
   getAgentScanResultBySlug(slug: string): Promise<AgentScanResult | null>;
+  getLatestScanByWallet(wallet: string, excludeSlug?: string): Promise<AgentScanResult | null>;
   upgradeAgentScanResultTier(slug: string, tier: string): Promise<AgentScanResult | null>;
   saveAgentBehavioralSnapshot(data: {
     walletAddress: string;
@@ -436,6 +437,20 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return row;
+  }
+
+  async getLatestScanByWallet(wallet: string, excludeSlug?: string): Promise<AgentScanResult | null> {
+    const [row] = await db
+      .select()
+      .from(agentScanResults)
+      .where(
+        excludeSlug
+          ? and(eq(agentScanResults.wallet, wallet), ne(agentScanResults.slug, excludeSlug))
+          : eq(agentScanResults.wallet, wallet)
+      )
+      .orderBy(desc(agentScanResults.createdAt))
+      .limit(1);
+    return row ?? null;
   }
 
   async upgradeAgentScanResultTier(slug: string, tier: string): Promise<AgentScanResult | null> {
