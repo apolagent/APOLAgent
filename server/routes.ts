@@ -1228,24 +1228,34 @@ async function detectPlatformFromProxyImpl(tokenAddr: string): Promise<string | 
 }
 
 async function detectPlatformFromQuoteToken(tokenAddr: string): Promise<string | null> {
+  const lq = (p: any) => parseFloat(p?.liquidity?.usd || "0") || 0;
+  const tokenLow = tokenAddr.toLowerCase();
+  const platformOf = (p: any) => {
+    const q = (p?.quoteToken?.address || "").toLowerCase();
+    if (q && PLATFORM_MAP[q]) return PLATFORM_MAP[q];
+    const b = (p?.baseToken?.address || "").toLowerCase();
+    if (b && b !== tokenLow && PLATFORM_MAP[b]) return PLATFORM_MAP[b];
+    return null;
+  };
+  const evalPairs = (pairs: any[]): string | null => {
+    if (pairs.length === 0) return null;
+    const topPair = pairs.reduce((a: any, b: any) => lq(b) > lq(a) ? b : a, pairs[0]);
+    const p = platformOf(topPair);
+    if (!p || lq(topPair) < 1000) return null;
+    return p;
+  };
   try {
+    // Primary: tokens/v1/base returns array directly
     const data = await dexFetch(`${DEXSCREENER_BASE}/tokens/v1/base/${tokenAddr}`, 5000);
     const pairs = (Array.isArray(data) ? data : []).filter((p: any) => (p?.chainId || "").toLowerCase() === "base");
-    if (pairs.length === 0) return null;
-    const lq = (p: any) => parseFloat(p?.liquidity?.usd || "0") || 0;
-    const tokenLow = tokenAddr.toLowerCase();
-    const topPair = pairs.reduce((a: any, b: any) => lq(b) > lq(a) ? b : a, pairs[0]);
-    const platformOf = (p: any) => {
-      const q = (p?.quoteToken?.address || "").toLowerCase();
-      if (q && PLATFORM_MAP[q]) return PLATFORM_MAP[q];
-      const b = (p?.baseToken?.address || "").toLowerCase();
-      if (b && b !== tokenLow && PLATFORM_MAP[b]) return PLATFORM_MAP[b];
-      return null;
-    };
-    const topPlatform = platformOf(topPair);
-    if (!topPlatform) return null;
-    if (lq(topPair) < 1000) return null;
-    return topPlatform;
+    const result = evalPairs(pairs);
+    if (result) return result;
+  } catch {}
+  try {
+    // Fallback: latest/dex/tokens returns { pairs: [...] }
+    const data2 = await dexFetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${tokenAddr}`, 5000);
+    const pairs2 = ((data2?.pairs || []) as any[]).filter((p: any) => (p?.chainId || "").toLowerCase() === "base");
+    return evalPairs(pairs2);
   } catch { return null; }
 }
 
@@ -1758,29 +1768,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         try {
           if (BASE_RPC) {
+            // For ERC20 token contracts: fetch all token transfers (buys/sells/moves) using
+            // contractAddresses — the token contract itself never sends transactions so
+            // fromAddress would return 0 results. For EOA agent wallets: use fromAddress.
+            const alchemyParams = traceIsContract
+              ? { fromBlock: "0x0", toBlock: "latest", contractAddresses: [wallet], category: ["erc20"], maxCount: "0x32", withMetadata: true }
+              : { fromBlock: "0x0", toBlock: "latest", fromAddress: wallet, category: ["external", "erc20"], maxCount: "0x32", withMetadata: true };
             const walletResp = await fetch(BASE_RPC, {
               method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "alchemy_getAssetTransfers",
-                params: [{ fromBlock: "0x0", toBlock: "latest", fromAddress: wallet, category: ["external", "erc20"], maxCount: "0x32", withMetadata: true }] }),
+              body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "alchemy_getAssetTransfers", params: [alchemyParams] }),
               signal: AbortSignal.timeout(6000),
             });
             const walletData = await walletResp.json() as any;
             let walletTransfers: any[] = walletData?.result?.transfers || [];
 
-            // Alchemy getAssetTransfers only returns value-bearing transfers (ETH/ERC20 moves).
-            // Agents that only make zero-value smart contract calls (e.g. inference requests)
-            // appear invisible to that API despite high tx counts. Fall back to Blockscout which
-            // returns all transaction types including zero-value function calls, with timestamps.
+            // Fallback: Alchemy getAssetTransfers misses zero-value function calls (e.g. inference
+            // requests). When Alchemy returns < 3, try Blockscout which includes all tx types.
+            // Token contracts use filter=to (inbound calls); EOA agents use filter=from (outbound).
             if (walletTransfers.length <= 2) {
               try {
+                const bsFilter = traceIsContract ? "to" : "from";
                 const bsResp = await fetch(
-                  `${BLOCKSCOUT_BASE}/api/v2/addresses/${wallet}/transactions?filter=from&sort=asc&limit=50`,
+                  `${BLOCKSCOUT_BASE}/api/v2/addresses/${wallet}/transactions?filter=${bsFilter}&sort=asc&limit=50`,
                   { signal: AbortSignal.timeout(7000) }
                 );
                 if (bsResp.ok) {
                   const bsData = await bsResp.json() as any;
                   const bsTxs: any[] = bsData?.items || [];
-                  console.log(`[activity-pattern] blockscout fallback wallet=${wallet} txCount=${bsTxs.length}`);
+                  console.log(`[activity-pattern] blockscout fallback wallet=${wallet} filter=${bsFilter} txCount=${bsTxs.length}`);
                   if (bsTxs.length > walletTransfers.length) {
                     walletTransfers = bsTxs.map((tx: any) => ({
                       hash: tx.hash,
