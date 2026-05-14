@@ -1765,7 +1765,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
               signal: AbortSignal.timeout(6000),
             });
             const walletData = await walletResp.json() as any;
-            const walletTransfers = walletData?.result?.transfers || [];
+            let walletTransfers: any[] = walletData?.result?.transfers || [];
+
+            // Alchemy getAssetTransfers only returns value-bearing transfers (ETH/ERC20 moves).
+            // Agents that only make zero-value smart contract calls (e.g. inference requests)
+            // appear invisible to that API despite high tx counts. Fall back to Blockscout which
+            // returns all transaction types including zero-value function calls, with timestamps.
+            if (walletTransfers.length <= 2) {
+              try {
+                const bsResp = await fetch(
+                  `${BLOCKSCOUT_BASE}/api/v2/addresses/${wallet}/transactions?filter=from&sort=asc&limit=50`,
+                  { signal: AbortSignal.timeout(7000) }
+                );
+                if (bsResp.ok) {
+                  const bsData = await bsResp.json() as any;
+                  const bsTxs: any[] = bsData?.items || [];
+                  console.log(`[activity-pattern] blockscout fallback wallet=${wallet} txCount=${bsTxs.length}`);
+                  if (bsTxs.length > walletTransfers.length) {
+                    walletTransfers = bsTxs.map((tx: any) => ({
+                      hash: tx.hash,
+                      blockNum: tx.block != null ? "0x" + tx.block.toString(16) : null,
+                      metadata: { blockTimestamp: tx.timestamp },
+                      to: tx.to?.hash || null,
+                      rawContract: { address: tx.to?.hash || null },
+                      category: "external",
+                    }));
+                  }
+                }
+              } catch {}
+            }
             if (walletTransfers.length > 2) {
               const blockNums = walletTransfers.map((t: any) => parseInt(t.blockNum, 16));
               const uniqueBlocks = new Set(blockNums);
