@@ -2767,9 +2767,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/webhook/status", async (req, res) => {
     try {
-      const wallet = String(req.query.wallet || "").trim().toLowerCase();
-      if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) return res.status(400).json({ error: "Invalid wallet address" });
-      const hook = await storage.getAgentWebhook(wallet);
+      const agentWallet = String(req.query.agentWallet || "").trim().toLowerCase();
+      if (!/^0x[a-fA-F0-9]{40}$/.test(agentWallet)) return res.status(400).json({ error: "Invalid agent wallet address" });
+      const hook = await storage.getAgentWebhook(agentWallet);
       if (!hook) return res.json({ subscribed: false });
       res.json({ subscribed: true, webhookUrl: hook.webhookUrl ?? null, email: hook.email ?? null });
     } catch (e: any) {
@@ -2779,9 +2779,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/webhook/subscribe", async (req, res) => {
     try {
-      const { walletAddress, webhookUrl, email } = req.body;
-      if (!walletAddress || !/^0x[a-fA-F0-9]{40}$/.test(String(walletAddress))) {
-        return res.status(400).json({ error: "Invalid wallet address" });
+      console.log("[subscribe] raw body:", JSON.stringify(req.body));
+      const { agentWallet, webhookUrl, email } = req.body;
+      if (!agentWallet || !/^0x[a-fA-F0-9]{40}$/.test(String(agentWallet))) {
+        return res.status(400).json({ error: "Invalid agent wallet address" });
       }
       if (!webhookUrl && !email) {
         return res.status(400).json({ error: "Provide a webhook URL or email address" });
@@ -2793,11 +2794,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid email address" });
       }
       const saved = await storage.upsertAgentWebhook({
-        walletAddress: String(walletAddress),
+        walletAddress: String(agentWallet),
         webhookUrl: webhookUrl ? String(webhookUrl).slice(0, 500) : undefined,
         email: email ? String(email).slice(0, 254) : undefined,
       });
-      console.log("[subscribe] upsertAgentWebhook saved — id:", saved.id, "wallet:", saved.walletAddress, "email:", saved.email ?? "none", "webhookUrl:", saved.webhookUrl ?? "none", "active:", saved.active);
+      console.log("[subscribe] saved — id:", saved.id, "agentWallet:", saved.walletAddress, "email:", saved.email ?? "none", "webhookUrl:", saved.webhookUrl ?? "none", "active:", saved.active);
       res.json({ ok: true });
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Failed to subscribe" });
@@ -2806,11 +2807,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/webhook/unsubscribe", async (req, res) => {
     try {
-      const { walletAddress } = req.body;
-      if (!walletAddress || !/^0x[a-fA-F0-9]{40}$/.test(String(walletAddress))) {
-        return res.status(400).json({ error: "Invalid wallet address" });
+      const { agentWallet } = req.body;
+      if (!agentWallet || !/^0x[a-fA-F0-9]{40}$/.test(String(agentWallet))) {
+        return res.status(400).json({ error: "Invalid agent wallet address" });
       }
-      await storage.deactivateAgentWebhook(String(walletAddress));
+      await storage.deactivateAgentWebhook(String(agentWallet));
       res.json({ ok: true });
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Failed to unsubscribe" });

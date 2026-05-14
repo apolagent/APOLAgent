@@ -1288,15 +1288,6 @@ export default function AgentScanner() {
         if (cancelled) return;
         if (data?.paid) { setDeepDiveUnlocked(true); setSubscriptionExpiresAt(data.expiresAt || null); }
       } catch {}
-      try {
-        const res = await fetch(`/api/webhook/status?wallet=${addr}`);
-        const data = await res.json();
-        if (cancelled) return;
-        if (data?.subscribed) {
-          setAlertSubscribed(true);
-          setAlertExisting(data.webhookUrl || data.email || null);
-        }
-      } catch {}
     };
     const check = async () => {
       try {
@@ -1313,8 +1304,6 @@ export default function AgentScanner() {
         setConnectedWallet(null);
         setDeepDiveUnlocked(false);
         setSubscriptionExpiresAt(null);
-        setAlertSubscribed(false);
-        setAlertExisting(null);
         return;
       }
       fetch(`/api/subscription/status?wallet=${addr}`)
@@ -1322,13 +1311,6 @@ export default function AgentScanner() {
         .then(d => {
           if (d?.paid) { setDeepDiveUnlocked(true); setSubscriptionExpiresAt(d.expiresAt || null); }
           else { setDeepDiveUnlocked(false); setSubscriptionExpiresAt(null); }
-        })
-        .catch(() => {});
-      fetch(`/api/webhook/status?wallet=${addr}`)
-        .then(r => r.json())
-        .then(d => {
-          if (d?.subscribed) { setAlertSubscribed(true); setAlertExisting(d.webhookUrl || d.email || null); }
-          else { setAlertSubscribed(false); setAlertExisting(null); }
         })
         .catch(() => {});
       setConnectedWallet(addr);
@@ -1355,6 +1337,17 @@ export default function AgentScanner() {
     fetch(`/api/contracts/verified/${result.wallet.toLowerCase()}`)
       .then(r => r.json()).then(setApolCertified).catch(() => setApolCertified(null));
   }, [result?.wallet, result?.traceabilityTest.isContract]);
+
+  useEffect(() => {
+    if (!result?.wallet) { setAlertSubscribed(false); setAlertExisting(null); return; }
+    fetch(`/api/webhook/status?agentWallet=${result.wallet.toLowerCase()}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d?.subscribed) { setAlertSubscribed(true); setAlertExisting(d.email ?? d.webhookUrl ?? null); }
+        else { setAlertSubscribed(false); setAlertExisting(null); }
+      })
+      .catch(() => {});
+  }, [result?.wallet]);
 
   const [lastScanxRun, setLastScanxRun] = useState<string | null>(null);
   const [lastCheckRun, setLastCheckRun] = useState<string | null>(null);
@@ -1486,12 +1479,10 @@ export default function AgentScanner() {
   };
 
   const handleAlertSubscribe = async () => {
-    if (!connectedWallet) return;
+    if (!result?.wallet) return;
     const val = alertInput.trim();
-    if (!val) { setAlertError("Enter a webhook URL or email address."); return; }
-    const isEmail = val.includes("@");
-    const isUrl = val.startsWith("https://");
-    if (!isEmail && !isUrl) { setAlertError("Enter a valid https:// URL or email address."); return; }
+    if (!val) { setAlertError("Enter an email address."); return; }
+    if (!val.includes("@")) { setAlertError("Enter a valid email address."); return; }
     setAlertSubmitting(true);
     setAlertError(null);
     try {
@@ -1499,9 +1490,8 @@ export default function AgentScanner() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          walletAddress: connectedWallet,
-          webhookUrl: isUrl ? val : undefined,
-          email: isEmail ? val : undefined,
+          agentWallet: result.wallet,
+          email: val,
         }),
       });
       const data = await res.json();
@@ -1517,13 +1507,13 @@ export default function AgentScanner() {
   };
 
   const handleAlertUnsubscribe = async () => {
-    if (!connectedWallet) return;
+    if (!result?.wallet) return;
     setAlertUnsubscribing(true);
     try {
       await fetch("/api/webhook/unsubscribe", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress: connectedWallet }),
+        body: JSON.stringify({ agentWallet: result.wallet }),
       });
       setAlertSubscribed(false);
       setAlertExisting(null);
@@ -2689,11 +2679,7 @@ export default function AgentScanner() {
                 </span>
               </div>
 
-              {!connectedWallet ? (
-                <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.3)" }}>
-                  Connect your wallet to subscribe to scan alerts for this agent.
-                </div>
-              ) : alertSubscribed ? (
+              {alertSubscribed ? (
                 <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
                   <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: G, fontWeight: 700 }}>
                     <span style={{ display: "inline-block", width: "7px", height: "7px", background: G, borderRadius: "50%" }} />
@@ -2720,7 +2706,7 @@ export default function AgentScanner() {
                       value={alertInput}
                       onChange={e => { setAlertInput(e.target.value); setAlertError(null); }}
                       onKeyDown={e => e.key === "Enter" && handleAlertSubscribe()}
-                      placeholder="https://your-webhook.com/hook or email@example.com"
+                      placeholder="email@example.com"
                       style={{
                         flex: 1,
                         minWidth: "220px",
