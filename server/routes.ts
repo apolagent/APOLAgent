@@ -2892,7 +2892,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: isExpired
           ? `This APOL Certification SBT for ${agentName} is no longer valid.`
           : `APOL ${tier} Certification for AI agent ${agentName}. Cognition score: ${cognitionScore ?? "N/A"}/100.`,
-        image: "https://apolagent.online/apol-logo.png",
+        image: "https://apolagent.online/apol-agent-logo.png",
         attributes: [
           { trait_type: "status", value: isExpired ? "expired" : "active" },
           { trait_type: "certificationTier", value: isExpired ? "EXPIRED" : tier },
