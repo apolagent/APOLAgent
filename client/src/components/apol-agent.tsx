@@ -6,92 +6,11 @@ type Message = {
   text: string;
 };
 
-const KB: { patterns: RegExp[]; answer: string }[] = [
-  {
-    patterns: [/hello|hi|hey|sup|yo|gm/i],
-    answer: "APOL Agent online. Query received. Ask anything about $APOL, scam reporting, or agent verification.",
-  },
-  {
-    patterns: [/what is apol agent|what('s| is) this site|about/i],
-    answer: "APOL Agent is an autonomous on-chain forensics protocol. Functions: scam exposure, builder verification, community intelligence. Powered by the $APOL token on Base.",
-  },
-  {
-    patterns: [/\$apol|apol token|tokenomics|supply|tax/i],
-    answer: "$APOL :: Total Supply: 100,000,000,000 [HARD CAPPED] :: Buy/Sell Tax: 0% [IMMUTABLE] :: Chain: Base :: Liquidity: BURNED/LOCKED. See Network Specifications section for full data.",
-  },
-  {
-    patterns: [/report.*(scam|fraud|rug)|scam report|how.*report/i],
-    answer: "THREAT REPORTING PROTOCOL:\n[01] Navigate to Report a Scam\n[02] Run wallet scan via APOL Agent Intelligence\n[03] Flag address in community database\n[04] Submit community report with evidence",
-  },
-  {
-    patterns: [/check.*address|address.*check|blacklist|detective/i],
-    answer: "DETECTIVE SERVICE :: Enter any wallet or contract address on the Report a Scam page. Select chain (ETH, BTC, SOL, Base). Execute scan. Risk flags returned from APOL AGENT threat intelligence.",
-  },
-  {
-    patterns: [/nominate|hero|good.*dev|honest/i],
-    answer: "HERO NOMINATION :: Identify verified builders contributing to ecosystem integrity. Submit nomination via Nominate a Hero. Community voting determines leaderboard placement.",
-  },
-  {
-    patterns: [/leaderboard|ranking|top.*report|most.*report/i],
-    answer: "RANKINGS :: Community-ranked scam reports and hero nominations sorted by upvote count. Access via Rankings page in navigation.",
-  },
-  {
-    patterns: [/vote|upvote|community.*vote/i],
-    answer: "VOTING :: Upvote scam reports or hero nominations on their respective pages. High-vote entries surface to leaderboard. Consensus-based threat validation.",
-  },
-  {
-    patterns: [/join|community|telegram|channel/i],
-    answer: "FIELD COMMS :: Join the APOL Agent channel via the Communications & Access section. Active threat monitoring, scam alerts, and contributor recognition.",
-  },
-  {
-    patterns: [/roadmap|plan|future|phase/i],
-    answer: "OPERATIONAL MILESTONES :: Phase 1 [COMPLETED] token + tools. Phase 2: Agent-LARP Detector [ACTIVE]. Phase 3: Predictive Threat Engine. Phase 4: Institutional API Access. See Roadmap section.",
-  },
-  {
-    patterns: [/buy.*apol|\$apol.*buy|where.*buy|how.*buy/i],
-    answer: "NETWORK ACCESS :: Click Acquire Access Key on the homepage to obtain $APOL. Execute own research before committing capital.",
-  },
-  {
-    patterns: [/safe|trust|legit|real/i],
-    answer: "APOL operates as a community intelligence layer. No financial advice issued. All data sourced from public on-chain streams. User assumes full trading responsibility.",
-  },
-  {
-    patterns: [/rug|rugpull|scam.*type|type.*scam/i],
-    answer: "KNOWN THREAT VECTORS:\n[01] Rug Pull: dev abandons + dumps\n[02] Fake Token: project impersonation\n[03] Ponzi: old investors paid by new\n[04] Phishing: wallet credential theft\n[05] Fake Airdrop: pre-payment required\n\nReport confirmed threats via Report a Scam.",
-  },
-  {
-    patterns: [/dyor|research|how.*safe/i],
-    answer: "PRE-INVESTMENT CHECKLIST:\n[01] Verify contract on block explorer\n[02] Run APOL Agent security scan\n[03] Confirm team identity\n[04] Check audit status\n[05] Never send crypto to receive crypto",
-  },
-  {
-    patterns: [/help|what can you do|features|how.*work/i],
-    answer: "APOL AGENT CAPABILITIES:\n[01] Site and feature navigation\n[02] Scam reporting protocol\n[03] Address scan guidance\n[04] $APOL token data\n[05] Hero nomination flow\n[06] Leaderboard and voting\n[07] Operational threat intel",
-  },
-  {
-    patterns: [/thanks|thank you|thx|ty|appreciate/i],
-    answer: "Acknowledged. Stay vigilant. If you identify a threat, report it. APOL network depends on community intelligence.",
-  },
-  {
-    patterns: [/bye|goodbye|cya|later/i],
-    answer: "Session closed. APOL Agent standing by.",
-  },
-];
-
-const FALLBACK = "Query unrecognized. Try: scam reporting / address checking / $APOL data / hero nomination / leaderboard. Type 'help' for full capability list.";
-
-function getAnswer(input: string): string {
-  const trimmed = input.trim();
-  for (const entry of KB) {
-    if (entry.patterns.some((p) => p.test(trimmed))) return entry.answer;
-  }
-  return FALLBACK;
-}
-
 const QUICK_QUESTIONS = [
-  "What is APOL Agent?",
-  "How do I report a scam?",
-  "What is $APOL?",
-  "How do I nominate a hero?",
+  "What is APOL?",
+  "How do I scan an agent?",
+  "What are the certification tiers?",
+  "What is the SBT certificate?",
 ];
 
 const G = "#00ff00";
@@ -101,24 +20,42 @@ const BORDER = "1px solid rgba(0,255,0,0.25)";
 export default function ApolAgent() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { from: "agent", text: "APOL AGENT :: SYSTEM ONLINE\nIntelligence layer active. Submit query to begin." },
+    { from: "agent", text: "APOL AGENT :: SYSTEM ONLINE\nAsk me anything about APOL forensic certification." },
   ]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, open]);
+  }, [messages, open, loading]);
 
-  const send = (text?: string) => {
+  const send = async (text?: string) => {
     const msg = (text || input).trim();
-    if (!msg) return;
-    setMessages((prev) => [
-      ...prev,
-      { from: "user", text: msg },
-      { from: "agent", text: getAnswer(msg) },
-    ]);
+    if (!msg || loading) return;
     setInput("");
+
+    const history = messages
+      .slice(1) // skip initial greeting
+      .map(m => ({ role: m.from === "user" ? "user" : "assistant", content: m.text } as const));
+
+    setMessages(prev => [...prev, { from: "user", text: msg }]);
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg, history }),
+      });
+      const data = await res.json();
+      const reply: string = data.reply || "Unable to connect. Please try again.";
+      setMessages(prev => [...prev, { from: "agent", text: reply }]);
+    } catch {
+      setMessages(prev => [...prev, { from: "agent", text: "Connection error. Please try again." }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -223,8 +160,27 @@ export default function ApolAgent() {
               </div>
             ))}
 
+            {/* Typing indicator */}
+            {loading && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+                <span style={{ fontSize: "9px", letterSpacing: "0.1em", color: "rgba(0,255,0,0.5)", textTransform: "uppercase" }}>
+                  [APOL-AGENT]
+                </span>
+                <div style={{
+                  padding: "7px 10px",
+                  border: `1px solid ${G}`,
+                  color: G,
+                  fontSize: "12px",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  letterSpacing: "0.1em",
+                }}>
+                  ▋
+                </div>
+              </div>
+            )}
+
             {/* Quick queries — only at start */}
-            {messages.length === 1 && (
+            {messages.length === 1 && !loading && (
               <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "6px" }}>
                 <span style={{ fontSize: "9px", color: "rgba(0,255,0,0.82)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
                   SUGGESTED QUERIES
@@ -267,8 +223,9 @@ export default function ApolAgent() {
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && send()}
-              placeholder="enter query..."
+              onKeyDown={(e) => e.key === "Enter" && !loading && send()}
+              placeholder={loading ? "processing..." : "enter query..."}
+              disabled={loading}
               data-testid="input-apol-agent"
               style={{
                 flex: 1,
@@ -276,7 +233,7 @@ export default function ApolAgent() {
                 border: "none",
                 borderBottom: "1px solid rgba(0,255,0,0.2)",
                 padding: "4px 0",
-                color: "#ffffff",
+                color: loading ? "rgba(255,255,255,0.4)" : "#ffffff",
                 fontSize: "12px",
                 outline: "none",
                 caretColor: G,
@@ -284,6 +241,7 @@ export default function ApolAgent() {
             />
             <button
               onClick={() => send()}
+              disabled={loading}
               data-testid="button-apol-agent-send"
               style={{
                 background: "transparent",
@@ -294,8 +252,9 @@ export default function ApolAgent() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                cursor: "pointer",
+                cursor: loading ? "not-allowed" : "pointer",
                 flexShrink: 0,
+                opacity: loading ? 0.4 : 1,
               }}
             >
               <Send size={13} color="#ffffff" />

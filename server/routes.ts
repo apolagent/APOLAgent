@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import { ethers } from "ethers";
 import { Resend } from "resend";
+import Anthropic from "@anthropic-ai/sdk";
 import { storage } from "./storage";
 import { installX402 } from "./x402";
 import {
@@ -16,6 +17,42 @@ import {
 const BASE_RPC = process.env.BASE_RPC_URL || "";
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 console.log("[email-alerts] RESEND_API_KEY present:", !!process.env.RESEND_API_KEY, "| resend client:", resend ? "initialized" : "null (emails will be skipped)");
+
+const anthropic = process.env.ANTHROPIC_API_KEY
+  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  : null;
+
+const APOL_CHAT_SYSTEM_PROMPT = `You are an assistant for APOL Agent (apolagent.online), a forensic certification platform for AI agents on the Base blockchain.
+
+WHAT APOL DOES:
+APOL scans and certifies AI agents on Base using on-chain forensic analysis. Users submit an agent's contract address or X (Twitter) handle to receive a full security and legitimacy report.
+
+FORENSIC ANALYSIS FEATURES:
+- Activity Pattern Analysis: evaluates transaction frequency, timing patterns, and behavioral consistency
+- Reaction Time Analysis: measures how quickly an agent responds to on-chain events
+- Gas Optimization Score: assesses whether gas usage reflects genuine autonomous decision-making
+- Decision Entropy: measures the unpredictability and diversity of agent actions (low entropy = scripted bot)
+- Behavioral Snapshots: 30-day rolling history tracking bot-activity and reaction-consistency scores
+
+CERTIFICATION TIERS:
+- GOLD: Highest tier — strong on-chain evidence of autonomous, consistent, legitimate AI agent behavior
+- SILVER: Good scores with minor gaps — certified as a legitimate agent with some limitations
+- BRONZE: Basic certification — passes minimum checks but lacks strong evidence of genuine autonomy
+- UNVERIFIED / LARP: Failed certification — insufficient evidence of authentic AI agent behavior
+
+KEY FEATURES:
+- Public Registry at /registry: browse all scanned and certified agents
+- 30-day Behavioral Monitoring: continuous anomaly detection with email alerts when an agent's certification tier changes
+- SBT (Soulbound Token): SILVER and GOLD certified agents can mint a non-transferable ERC-5192 certificate on Base Sepolia
+- Email Subscriptions: users can subscribe to receive alerts when an agent is re-scanned and its tier changes
+
+HOW TO SCAN AN AGENT:
+1. Go to the APOL scanner on the home page
+2. Enter the agent's Base contract address OR their X (Twitter) handle
+3. Wait for the forensic analysis (~30-60 seconds)
+4. View the full report including scores, tier, verdict, and behavioral history
+
+Answer questions concisely in 2-4 sentences. If asked about something not covered above, say you don't have that information and direct the user to apolagent.online.`;
 
 async function sendAlertEmail(to: string, payload: {
   agentName: string;
@@ -2904,6 +2941,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (e: any) {
       res.status(500).json({ error: e?.message || "Failed to load token metadata" });
+    }
+  });
+
+  app.post("/api/chat", async (req: Request, res: Response) => {
+    if (!anthropic) {
+      return res.status(503).json({ error: "Chat service unavailable — ANTHROPIC_API_KEY not configured" });
+    }
+    const { message, history = [] } = req.body as {
+      message: string;
+      history?: Array<{ role: "user" | "assistant"; content: string }>;
+    };
+    if (!message || typeof message !== "string" || message.length > 1000) {
+      return res.status(400).json({ error: "Invalid message" });
+    }
+    try {
+      const messages: Array<{ role: "user" | "assistant"; content: string }> = [
+        ...history.slice(-10),
+        { role: "user", content: message },
+      ];
+      const response = await anthropic.messages.create({
+        model: "claude-haiku-4-5",
+        max_tokens: 512,
+        system: APOL_CHAT_SYSTEM_PROMPT,
+        messages,
+      });
+      const reply = response.content.find(b => b.type === "text")?.text ?? "Unable to generate a response.";
+      res.json({ reply });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || "Chat request failed" });
     }
   });
 
