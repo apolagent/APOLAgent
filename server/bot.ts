@@ -13,6 +13,7 @@ function log(message: string, source = "bot") {
 }
 
 const BASE_RPC = process.env.BASE_RPC_URL || "";
+const GECKO_BASE = "https://api.geckoterminal.com/api/v2";
 
 function getAlchemyKey(): string {
   const m = BASE_RPC.match(/\/v2\/([a-zA-Z0-9_-]+)/);
@@ -376,6 +377,48 @@ async function getDexScreenerData(addr: string): Promise<{ poolVersion: string |
     return result;
   } catch {
     return cached?.data || empty;
+  }
+}
+
+async function getGeckoTerminalData(addr: string): Promise<{ poolVersion: string | null; dexId: string | null; volume24h: number; pairCreatedAt: number | null }> {
+  const key = addr.toLowerCase();
+  const cached = DEX_CACHE.get(key);
+  if (cached && Date.now() - cached.timestamp < DEX_CACHE_TTL) return cached.data;
+  const empty = { poolVersion: null, dexId: null, volume24h: 0, pairCreatedAt: null };
+  try {
+    const [tokenResp, poolsResp] = await Promise.all([
+      fetch(`${GECKO_BASE}/networks/base/tokens/${addr}`, { signal: AbortSignal.timeout(6000) }),
+      fetch(`${GECKO_BASE}/networks/base/tokens/${addr}/pools?page=1`, { signal: AbortSignal.timeout(6000) }),
+    ]);
+    let volume24h = 0;
+    if (tokenResp.ok) {
+      const tokenData = await tokenResp.json() as any;
+      volume24h = parseFloat(tokenData?.data?.attributes?.volume_usd?.h24 || "0") || 0;
+    }
+    let poolVersion: string | null = null;
+    let dexId: string | null = null;
+    let pairCreatedAt: number | null = null;
+    if (poolsResp.ok) {
+      const poolsData = await poolsResp.json() as any;
+      const pools: any[] = Array.isArray(poolsData?.data) ? poolsData.data : [];
+      if (pools.length > 0) {
+        const best = pools.reduce((a: any, b: any) =>
+          parseFloat(b?.attributes?.reserve_in_usd || "0") > parseFloat(a?.attributes?.reserve_in_usd || "0") ? b : a,
+          pools[0]
+        );
+        const rawDexId: string = (best?.relationships?.dex?.data?.id || "").toLowerCase();
+        dexId = rawDexId || null;
+        poolVersion = /v4/.test(rawDexId) ? "v4" : /v3/.test(rawDexId) ? "v3" : "v2";
+        const createdAt: string | null = best?.attributes?.pool_created_at ?? null;
+        pairCreatedAt = createdAt ? new Date(createdAt).getTime() : null;
+      }
+    }
+    if (!dexId && volume24h === 0) return getDexScreenerData(addr);
+    const result = { volume24h, pairCreatedAt, poolVersion, dexId };
+    DEX_CACHE.set(key, { data: result, timestamp: Date.now() });
+    return result;
+  } catch {
+    return getDexScreenerData(addr);
   }
 }
 
@@ -1269,7 +1312,7 @@ async function runAgentScan(address: string, searchedName: string | null, paid: 
     softTimeout(getHolderCount(address), 8000, 0),
     softTimeout(getTopHolders(address), 8000, []),
     softTimeout(getEthUsdPrice(), 8000, 0),
-    softTimeout(getDexScreenerData(address), 10000, { poolVersion: null, dexId: null, volume24h: 0, pairCreatedAt: null }),
+    softTimeout(getGeckoTerminalData(address), 10000, { poolVersion: null, dexId: null, volume24h: 0, pairCreatedAt: null }),
     softTimeout(getAlchemyPrice(address), 6000, 0),
     softTimeout(getDexScreenerSocials(address), 8000, { twitter: null, website: null, telegram: null, description: null }),
     !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),

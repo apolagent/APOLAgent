@@ -15,6 +15,7 @@ import {
 } from "./constants";
 
 const BASE_RPC = process.env.BASE_RPC_URL || "";
+const GECKO_BASE = "https://api.geckoterminal.com/api/v2";
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 console.log("[email-alerts] RESEND_API_KEY present:", !!process.env.RESEND_API_KEY, "| resend client:", resend ? "initialized" : "null (emails will be skipped)");
 console.log("[defi-shield] DEFI_API_KEY present:", !!process.env.DEFI_API_KEY, "|", process.env.DEFI_API_KEY ? "De.Fi Shield enabled" : "De.Fi Shield disabled (403 errors will be ignored)");
@@ -431,6 +432,53 @@ async function getDexScreenerData(addr: string): Promise<DexData> {
   } catch (err: any) {
     console.log(`[getDexScreenerData] addr=${addr} error=${err?.message ?? err}`);
     return cached?.data || empty;
+  }
+}
+
+async function getGeckoTerminalData(addr: string): Promise<DexData> {
+  const key = addr.toLowerCase();
+  const cached = routesDexCache.get(key);
+  if (cached && Date.now() - cached.timestamp < ROUTES_CACHE_TTL) return cached.data;
+  const empty: DexData = { volume24h: 0, pairCreatedAt: null, poolVersion: null, dexId: null };
+  try {
+    const [tokenResp, poolsResp] = await Promise.all([
+      fetch(`${GECKO_BASE}/networks/base/tokens/${addr}`, { signal: AbortSignal.timeout(6000) }),
+      fetch(`${GECKO_BASE}/networks/base/tokens/${addr}/pools?page=1`, { signal: AbortSignal.timeout(6000) }),
+    ]);
+    console.log(`[GeckoTerminal] token=${tokenResp.status} pools=${poolsResp.status} addr=${addr}`);
+    let volume24h = 0;
+    if (tokenResp.ok) {
+      const tokenData = await tokenResp.json() as any;
+      volume24h = parseFloat(tokenData?.data?.attributes?.volume_usd?.h24 || "0") || 0;
+    }
+    let poolVersion: string | null = null;
+    let dexId: string | null = null;
+    let pairCreatedAt: number | null = null;
+    if (poolsResp.ok) {
+      const poolsData = await poolsResp.json() as any;
+      const pools: any[] = Array.isArray(poolsData?.data) ? poolsData.data : [];
+      if (pools.length > 0) {
+        const best = pools.reduce((a: any, b: any) =>
+          parseFloat(b?.attributes?.reserve_in_usd || "0") > parseFloat(a?.attributes?.reserve_in_usd || "0") ? b : a,
+          pools[0]
+        );
+        const rawDexId: string = (best?.relationships?.dex?.data?.id || "").toLowerCase();
+        dexId = rawDexId || null;
+        poolVersion = /v4/.test(rawDexId) ? "V4" : /v3/.test(rawDexId) ? "V3" : "V2";
+        const createdAt: string | null = best?.attributes?.pool_created_at ?? null;
+        pairCreatedAt = createdAt ? new Date(createdAt).getTime() : null;
+      }
+    }
+    if (!dexId && volume24h === 0) {
+      console.log(`[GeckoTerminal] no data for ${addr}, falling back to DexScreener`);
+      return getDexScreenerData(addr);
+    }
+    const result: DexData = { volume24h, pairCreatedAt, poolVersion, dexId };
+    routesDexCache.set(key, { data: result, timestamp: Date.now() });
+    return result;
+  } catch (err: any) {
+    console.log(`[GeckoTerminal] error addr=${addr}: ${err?.message ?? err}, falling back to DexScreener`);
+    return getDexScreenerData(addr);
   }
 }
 
@@ -1529,7 +1577,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           getHolderCount(address),
           getTopHolders(address),
           getEthUsdPrice(),
-          getDexScreenerData(address),
+          getGeckoTerminalData(address),
           getAlchemyPrice(address),
           getGoPlusSecurityData(address),
           getBlockaidTokenScan(address),
