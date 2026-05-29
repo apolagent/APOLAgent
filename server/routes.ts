@@ -460,7 +460,7 @@ async function getGeckoTerminalData(addr: string): Promise<DexData> {
       name = attrs.name || null;
       symbol = attrs.symbol || null;
       priceUsd = parseFloat(attrs.price_usd || "0") || null;
-      marketCap = parseFloat(attrs.market_cap_usd || "0") || null;
+      marketCap = parseFloat(attrs.market_cap_usd || "0") || parseFloat(attrs.fdv_usd || "0") || null;
       liquidity = parseFloat(attrs.total_reserve_in_usd || "0") || 0;
     }
     let poolVersion: string | null = null;
@@ -1618,10 +1618,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       let fallbackData: FallbackTokenData | null = null;
-      if (holderCount === 0 || (!sim.simulationSuccess && !deployer)) {
+      if (holderCount < 20 || (!sim.simulationSuccess && !deployer)) {
         fallbackData = await getFallbackTokenData(address).catch(() => null);
         if (fallbackData) {
-          if (holderCount === 0 && fallbackData.holderCount >= 20) holderCount = fallbackData.holderCount;
+          console.log(`[GoPlus] holderCount=${fallbackData.holderCount} for ${address} (primary source had ${holderCount})`);
+          if (fallbackData.holderCount > holderCount) holderCount = fallbackData.holderCount;
           if (!deployer && fallbackData.creatorAddress) deployer = fallbackData.creatorAddress.toLowerCase();
         }
       }
