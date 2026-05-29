@@ -17,6 +17,7 @@ import {
 const BASE_RPC = process.env.BASE_RPC_URL || "";
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 console.log("[email-alerts] RESEND_API_KEY present:", !!process.env.RESEND_API_KEY, "| resend client:", resend ? "initialized" : "null (emails will be skipped)");
+console.log("[defi-shield] DEFI_API_KEY present:", !!process.env.DEFI_API_KEY, "|", process.env.DEFI_API_KEY ? "De.Fi Shield enabled" : "De.Fi Shield disabled (403 errors will be ignored)");
 
 const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -337,6 +338,8 @@ let routesEthCache: { price: number; timestamp: number } | null = null;
 const ROUTES_CACHE_TTL = 60000;
 const routesAlchemyPriceCache = new Map<string, { price: number; timestamp: number }>();
 const ROUTES_ALCHEMY_PRICE_TTL = 30000;
+const dexFetchCache = new Map<string, { data: any; timestamp: number }>();
+const DEX_FETCH_CACHE_TTL = 60000;
 
 function getAlchemyKey(): string {
   const m = BASE_RPC.match(/\/v2\/([a-zA-Z0-9_-]+)/);
@@ -344,6 +347,11 @@ function getAlchemyKey(): string {
 }
 
 async function dexFetch(url: string, timeoutMs: number): Promise<any> {
+  const cached = dexFetchCache.get(url);
+  if (cached && Date.now() - cached.timestamp < DEX_FETCH_CACHE_TTL) {
+    console.log(`[DexScreener] cache hit for ${url}`);
+    return cached.data;
+  }
   const headers = { "User-Agent": "Mozilla/5.0 (compatible; APOLAgent/1.0; +https://apolagent.online)" };
   let resp = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
   console.log(`[DexScreener] GET ${url} → ${resp.status}`);
@@ -357,7 +365,9 @@ async function dexFetch(url: string, timeoutMs: number): Promise<any> {
     console.log(`[DexScreener] Non-OK response (${resp.status}), returning null`);
     return null;
   }
-  return resp.json() as Promise<any>;
+  const data = await resp.json() as any;
+  dexFetchCache.set(url, { data, timestamp: Date.now() });
+  return data;
 }
 
 async function getEthUsdPrice(): Promise<number> {

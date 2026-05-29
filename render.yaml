@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: apol-agent
+    runtime: node
+    buildCommand: pip3 install tweepy && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
