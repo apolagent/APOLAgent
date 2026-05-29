@@ -27,7 +27,7 @@ const SCAN_IN_FLIGHT = new Map<string, Promise<string>>();
 const PENDING_COMMAND = new Map<number, { command: string; timestamp: number }>();
 const PENDING_TTL = 120000;
 
-const DEX_CACHE = new Map<string, { data: { poolVersion: string | null; dexId: string | null; volume24h: number; pairCreatedAt: number | null }; timestamp: number }>();
+const DEX_CACHE = new Map<string, { data: { poolVersion: string | null; dexId: string | null; volume24h: number; pairCreatedAt: number | null; name: string | null; symbol: string | null; priceUsd: number | null; marketCap: number | null; liquidity: number }; timestamp: number }>();
 const DEX_CACHE_TTL = 60000;
 let ETH_PRICE_CACHE: { price: number; timestamp: number } | null = null;
 const ETH_CACHE_TTL = 60000;
@@ -350,13 +350,13 @@ async function getEthUsdPrice(): Promise<number> {
   return price || ETH_PRICE_CACHE?.price || 0;
 }
 
-async function getDexScreenerData(addr: string): Promise<{ poolVersion: string | null; dexId: string | null; volume24h: number; pairCreatedAt: number | null }> {
+async function getDexScreenerData(addr: string): Promise<{ poolVersion: string | null; dexId: string | null; volume24h: number; pairCreatedAt: number | null; name: string | null; symbol: string | null; priceUsd: number | null; marketCap: number | null; liquidity: number }> {
   const key = addr.toLowerCase();
   const cached = DEX_CACHE.get(key);
   if (cached && Date.now() - cached.timestamp < DEX_CACHE_TTL) {
     return cached.data;
   }
-  const empty = { poolVersion: null, dexId: null, volume24h: 0, pairCreatedAt: null };
+  const empty = { poolVersion: null, dexId: null, volume24h: 0, pairCreatedAt: null, name: null, symbol: null, priceUsd: null, marketCap: null, liquidity: 0 };
   try {
     const data = await dexFetch(`${DEXSCREENER_BASE}/tokens/v1/base/${addr}`, 8000);
     const pairs = Array.isArray(data) ? data : [];
@@ -372,6 +372,7 @@ async function getDexScreenerData(addr: string): Promise<{ poolVersion: string |
       dexId: rawDexId || null,
       volume24h: parseFloat(pair?.volume?.h24 || "0") || 0,
       pairCreatedAt: pair?.pairCreatedAt ? Number(pair.pairCreatedAt) : null,
+      name: null as string | null, symbol: null as string | null, priceUsd: null as number | null, marketCap: null as number | null, liquidity: 0,
     };
     DEX_CACHE.set(key, { data: result, timestamp: Date.now() });
     return result;
@@ -380,20 +381,31 @@ async function getDexScreenerData(addr: string): Promise<{ poolVersion: string |
   }
 }
 
-async function getGeckoTerminalData(addr: string): Promise<{ poolVersion: string | null; dexId: string | null; volume24h: number; pairCreatedAt: number | null }> {
+async function getGeckoTerminalData(addr: string): Promise<{ poolVersion: string | null; dexId: string | null; volume24h: number; pairCreatedAt: number | null; name: string | null; symbol: string | null; priceUsd: number | null; marketCap: number | null; liquidity: number }> {
   const key = addr.toLowerCase();
   const cached = DEX_CACHE.get(key);
   if (cached && Date.now() - cached.timestamp < DEX_CACHE_TTL) return cached.data;
-  const empty = { poolVersion: null, dexId: null, volume24h: 0, pairCreatedAt: null };
+  const empty = { poolVersion: null, dexId: null, volume24h: 0, pairCreatedAt: null, name: null, symbol: null, priceUsd: null, marketCap: null, liquidity: 0 };
   try {
     const [tokenResp, poolsResp] = await Promise.all([
       fetch(`${GECKO_BASE}/networks/base/tokens/${addr}`, { signal: AbortSignal.timeout(6000) }),
       fetch(`${GECKO_BASE}/networks/base/tokens/${addr}/pools?page=1`, { signal: AbortSignal.timeout(6000) }),
     ]);
     let volume24h = 0;
+    let name: string | null = null;
+    let symbol: string | null = null;
+    let priceUsd: number | null = null;
+    let marketCap: number | null = null;
+    let liquidity = 0;
     if (tokenResp.ok) {
       const tokenData = await tokenResp.json() as any;
-      volume24h = parseFloat(tokenData?.data?.attributes?.volume_usd?.h24 || "0") || 0;
+      const attrs = tokenData?.data?.attributes ?? {};
+      volume24h = parseFloat(attrs?.volume_usd?.h24 || "0") || 0;
+      name = attrs.name || null;
+      symbol = attrs.symbol || null;
+      priceUsd = parseFloat(attrs.price_usd || "0") || null;
+      marketCap = parseFloat(attrs.market_cap_usd || "0") || null;
+      liquidity = parseFloat(attrs.total_reserve_in_usd || "0") || 0;
     }
     let poolVersion: string | null = null;
     let dexId: string | null = null;
@@ -413,8 +425,8 @@ async function getGeckoTerminalData(addr: string): Promise<{ poolVersion: string
         pairCreatedAt = createdAt ? new Date(createdAt).getTime() : null;
       }
     }
-    if (!dexId && volume24h === 0) return getDexScreenerData(addr);
-    const result = { volume24h, pairCreatedAt, poolVersion, dexId };
+    if (!dexId && volume24h === 0 && !name) return getDexScreenerData(addr);
+    const result = { volume24h, pairCreatedAt, poolVersion, dexId, name, symbol, priceUsd, marketCap, liquidity };
     DEX_CACHE.set(key, { data: result, timestamp: Date.now() });
     return result;
   } catch {
@@ -1302,7 +1314,7 @@ async function runAgentScan(address: string, searchedName: string | null, paid: 
 
   const sim: SimResult = simR.status === "fulfilled" ? simR.value
     : { isHoneypot: false, buyTax: 0, sellTax: 0, simulationSuccess: false, feeTier: null, tokensReceived: BigInt(0), failReason: "Simulation error" };
-  const tokenInfo = tokenR.status === "fulfilled" ? tokenR.value
+  let tokenInfo = tokenR.status === "fulfilled" ? tokenR.value
     : { name: "Unknown", symbol: "???", totalSupply: BigInt(0), decimals: 18 };
   let deployer = deployerR.status === "fulfilled" ? deployerR.value : null;
 
@@ -1312,7 +1324,7 @@ async function runAgentScan(address: string, searchedName: string | null, paid: 
     softTimeout(getHolderCount(address), 8000, 0),
     softTimeout(getTopHolders(address), 8000, []),
     softTimeout(getEthUsdPrice(), 8000, 0),
-    softTimeout(getGeckoTerminalData(address), 10000, { poolVersion: null, dexId: null, volume24h: 0, pairCreatedAt: null }),
+    softTimeout(getGeckoTerminalData(address), 10000, { poolVersion: null, dexId: null, volume24h: 0, pairCreatedAt: null, name: null, symbol: null, priceUsd: null, marketCap: null, liquidity: 0 }),
     softTimeout(getAlchemyPrice(address), 6000, 0),
     softTimeout(getDexScreenerSocials(address), 8000, { twitter: null, website: null, telegram: null, description: null }),
     !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
@@ -1324,10 +1336,14 @@ async function runAgentScan(address: string, searchedName: string | null, paid: 
   if (holderCount === 0 || (!sim.simulationSuccess && !deployer)) {
     fallbackData = await softTimeout(getFallbackTokenData(address), 5000, null);
     if (fallbackData) {
-      if (holderCount === 0 && fallbackData.holderCount > 0) holderCount = fallbackData.holderCount;
+      if (holderCount === 0 && fallbackData.holderCount >= 20) holderCount = fallbackData.holderCount;
       if (!deployer && fallbackData.creatorAddress) deployer = fallbackData.creatorAddress.toLowerCase();
     }
   }
+
+  // Use GT name/symbol when RPC ABI-decode returned the default fallback
+  if (tokenInfo.name === "Unknown" && dexData.name) tokenInfo = { ...tokenInfo, name: dexData.name };
+  if (tokenInfo.symbol === "???" && dexData.symbol) tokenInfo = { ...tokenInfo, symbol: dexData.symbol };
 
   const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || proxyImplPlatform || creationPlatform || deployerChainPlatform;
   const isVirtuals = platform === "Virtuals";
@@ -1363,7 +1379,8 @@ async function runAgentScan(address: string, searchedName: string | null, paid: 
     const tokensWholeUnits = Number(sim.tokensReceived) / (10 ** tokenInfo.decimals);
     tokenPriceUsd = tokensWholeUnits > 0 ? (0.001 / tokensWholeUnits) * ethUsd : 0;
   }
-  const mcap = Number(tokenInfo.totalSupply) * tokenPriceUsd;
+  if (tokenPriceUsd === 0 && dexData.priceUsd && dexData.priceUsd > 0) tokenPriceUsd = dexData.priceUsd;
+  const mcap = (dexData.marketCap && dexData.marketCap > 0) ? dexData.marketCap : Number(tokenInfo.totalSupply) * tokenPriceUsd;
 
   const agentFlags: string[] = [];
   const agentPasses: string[] = [];
