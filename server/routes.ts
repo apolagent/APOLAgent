@@ -1514,13 +1514,13 @@ function detectPlatform(addr: string, deployer: string | null, holders: { addres
 }
 
 function detectLpStatus(holders: { address: string; percent: number }[], platform: string | null): string {
-  if (platform && MANAGED_PROTOCOLS.has(platform)) return `${platform} Managed`;
+  if (platform && MANAGED_PROTOCOLS.has(platform)) return "PROTOCOL MANAGED";
   for (const h of holders) {
     if (BURN_ADDRS.has(h.address)) return "BURNED";
     if (LOCKER_MAP[h.address]) return `LOCKED (${LOCKER_MAP[h.address]})`;
   }
-  if (platform) return `${platform} Managed`;
-  return "OPEN";
+  if (platform) return "PROTOCOL MANAGED";
+  return "UNLOCKED";
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {

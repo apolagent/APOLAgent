@@ -863,13 +863,13 @@ function detectPlatform(addr: string, deployer: string | null, holders: { addres
 }
 
 function detectLpStatus(holders: { address: string; percent: number }[], platform: string | null, holdersComplete: boolean): string {
-  if (platform && MANAGED_PROTOCOLS.has(platform)) return `${platform} Managed ✅`;
+  if (platform && MANAGED_PROTOCOLS.has(platform)) return "PROTOCOL MANAGED ✅";
   for (const h of holders) {
     if (BURN_ADDRS.has(h.address)) return `Burned 🔥`;
     if (LOCKER_MAP[h.address]) return `${LOCKER_MAP[h.address]} Locked 🔒`;
   }
-  if (platform) return `${platform} Managed ✅`;
-  return "Unlocked ⚠️";
+  if (platform) return "PROTOCOL MANAGED ✅";
+  return "UNLOCKED ⚠️";
 }
 
 function formatPrice(usdPrice: number): string {
