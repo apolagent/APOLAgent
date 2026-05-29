@@ -391,6 +391,7 @@ async function getGeckoTerminalData(addr: string): Promise<{ poolVersion: string
       fetch(`${GECKO_BASE}/networks/base/tokens/${addr}`, { signal: AbortSignal.timeout(6000) }),
       fetch(`${GECKO_BASE}/networks/base/tokens/${addr}/pools?page=1`, { signal: AbortSignal.timeout(6000) }),
     ]);
+    console.log(`[GeckoTerminal] token=${tokenResp.status} pools=${poolsResp.status} addr=${addr}`);
     let volume24h = 0;
     let name: string | null = null;
     let symbol: string | null = null;
@@ -399,7 +400,9 @@ async function getGeckoTerminalData(addr: string): Promise<{ poolVersion: string
     let liquidity = 0;
     if (tokenResp.ok) {
       const tokenData = await tokenResp.json() as any;
+      console.log(`[GeckoTerminal DEBUG] full token response for ${addr}:`, JSON.stringify(tokenData?.data, null, 2));
       const attrs = tokenData?.data?.attributes ?? {};
+      console.log(`[GeckoTerminal DEBUG] attrs for ${addr}:`, JSON.stringify(attrs, null, 2));
       volume24h = parseFloat(attrs?.volume_usd?.h24 || "0") || 0;
       name = attrs.name || null;
       symbol = attrs.symbol || null;

@@ -455,7 +455,9 @@ async function getGeckoTerminalData(addr: string): Promise<DexData> {
     let liquidity = 0;
     if (tokenResp.ok) {
       const tokenData = await tokenResp.json() as any;
+      console.log(`[GeckoTerminal DEBUG] full token response for ${addr}:`, JSON.stringify(tokenData?.data, null, 2));
       const attrs = tokenData?.data?.attributes ?? {};
+      console.log(`[GeckoTerminal DEBUG] attrs for ${addr}:`, JSON.stringify(attrs, null, 2));
       volume24h = parseFloat(attrs?.volume_usd?.h24 || "0") || 0;
       name = attrs.name || null;
       symbol = attrs.symbol || null;
