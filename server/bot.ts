@@ -400,14 +400,12 @@ async function getGeckoTerminalData(addr: string): Promise<{ poolVersion: string
     let liquidity = 0;
     if (tokenResp.ok) {
       const tokenData = await tokenResp.json() as any;
-      console.log(`[GeckoTerminal DEBUG] full token response for ${addr}:`, JSON.stringify(tokenData?.data, null, 2));
       const attrs = tokenData?.data?.attributes ?? {};
-      console.log(`[GeckoTerminal DEBUG] attrs for ${addr}:`, JSON.stringify(attrs, null, 2));
       volume24h = parseFloat(attrs?.volume_usd?.h24 || "0") || 0;
       name = attrs.name || null;
       symbol = attrs.symbol || null;
       priceUsd = parseFloat(attrs.price_usd || "0") || null;
-      marketCap = parseFloat(attrs.market_cap_usd || "0") || null;
+      marketCap = parseFloat(attrs.market_cap_usd || "0") || parseFloat(attrs.fdv_usd || "0") || null;
       liquidity = parseFloat(attrs.total_reserve_in_usd || "0") || 0;
     }
     let poolVersion: string | null = null;
@@ -854,6 +852,36 @@ async function detectPlatformFromDeployerChain(deployer: string): Promise<string
       } catch {}
     }
     return null;
+  } catch { return null; }
+}
+
+async function detectPlatformFromQuoteToken(tokenAddr: string): Promise<string | null> {
+  const lq = (p: any) => parseFloat(p?.liquidity?.usd || "0") || 0;
+  const tokenLow = tokenAddr.toLowerCase();
+  const platformOf = (p: any) => {
+    const q = (p?.quoteToken?.address || "").toLowerCase();
+    if (q && PLATFORM_MAP[q]) return PLATFORM_MAP[q];
+    const b = (p?.baseToken?.address || "").toLowerCase();
+    if (b && b !== tokenLow && PLATFORM_MAP[b]) return PLATFORM_MAP[b];
+    return null;
+  };
+  const evalPairs = (pairs: any[]): string | null => {
+    if (pairs.length === 0) return null;
+    const topPair = pairs.reduce((a: any, b: any) => lq(b) > lq(a) ? b : a, pairs[0]);
+    const p = platformOf(topPair);
+    if (!p || lq(topPair) < 1000) return null;
+    return p;
+  };
+  try {
+    const data = await dexFetch(`${DEXSCREENER_BASE}/tokens/v1/base/${tokenAddr}`, 5000);
+    const pairs = (Array.isArray(data) ? data : []).filter((p: any) => (p?.chainId || "").toLowerCase() === "base");
+    const result = evalPairs(pairs);
+    if (result) return result;
+  } catch {}
+  try {
+    const data2 = await dexFetch(`${DEXSCREENER_BASE}/latest/dex/tokens/${tokenAddr}`, 5000);
+    const pairs2 = ((data2?.pairs || []) as any[]).filter((p: any) => (p?.chainId || "").toLowerCase() === "base");
+    return evalPairs(pairs2);
   } catch { return null; }
 }
 
@@ -1323,7 +1351,7 @@ async function runAgentScan(address: string, searchedName: string | null, paid: 
 
   const platformFromDeployer = detectPlatform(address, deployer, []);
 
-  let [holderCount, topHolders, ethUsd, dexData, alchemyPrice, dexSocials, creationPlatform, deployerChainPlatform, proxyImplPlatform] = await Promise.all([
+  let [holderCount, topHolders, ethUsd, dexData, alchemyPrice, dexSocials, creationPlatform, deployerChainPlatform, proxyImplPlatform, quoteTokenPlatform] = await Promise.all([
     softTimeout(getHolderCount(address), 8000, 0),
     softTimeout(getTopHolders(address), 8000, []),
     softTimeout(getEthUsdPrice(), 8000, 0),
@@ -1333,6 +1361,7 @@ async function runAgentScan(address: string, searchedName: string | null, paid: 
     !platformFromDeployer ? softTimeout(detectPlatformFromCreationTx(address), 7000, null) : Promise.resolve(null),
     !platformFromDeployer && deployer ? softTimeout(detectPlatformFromDeployerChain(deployer), 7000, null) : Promise.resolve(null),
     !platformFromDeployer ? softTimeout(detectPlatformFromProxyImpl(address), 5000, null) : Promise.resolve(null),
+    !platformFromDeployer ? softTimeout(detectPlatformFromQuoteToken(address), 5000, null) : Promise.resolve(null),
   ]);
 
   let fallbackData: FallbackTokenData | null = null;
@@ -1348,7 +1377,7 @@ async function runAgentScan(address: string, searchedName: string | null, paid: 
   if (tokenInfo.name === "Unknown" && dexData.name) tokenInfo = { ...tokenInfo, name: dexData.name };
   if (tokenInfo.symbol === "???" && dexData.symbol) tokenInfo = { ...tokenInfo, symbol: dexData.symbol };
 
-  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || proxyImplPlatform || creationPlatform || deployerChainPlatform;
+  const platform = detectPlatform(address, deployer, topHolders) || platformFromDeployer || proxyImplPlatform || creationPlatform || deployerChainPlatform || quoteTokenPlatform;
   const isVirtuals = platform === "Virtuals";
   const isManaged = !!(platform && MANAGED_PROTOCOLS.has(platform));
   const isClanker = platform === "Clanker";
