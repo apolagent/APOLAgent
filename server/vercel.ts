@@ -11,6 +11,7 @@
  */
 
 import path from "path";
+import fs from "fs";
 import express, { type Request, Response, NextFunction } from "express";
 import type { IncomingMessage, ServerResponse } from "http";
 import rateLimit from "express-rate-limit";
@@ -162,6 +163,16 @@ const ready: Promise<void> = (async () => {
       });
     });
   }
+
+  // ── Debug endpoint (temporary — remove after cwd is confirmed) ──────────
+  app.get("/debug-cwd", (_req, res) => {
+    const cwd = process.cwd();
+    const dirname = __dirname;
+    const cwdFiles = fs.existsSync(cwd) ? fs.readdirSync(cwd) : ["(unreadable)"];
+    const distExists = fs.existsSync(path.join(cwd, "dist"));
+    const distPublicExists = fs.existsSync(path.join(cwd, "dist", "public"));
+    res.json({ cwd, dirname, cwdFiles, distExists, distPublicExists });
+  });
 
   // ── Static files (Vite build output) ────────────────────────────────────
   // process.cwd() is /var/task in the Vercel Lambda runtime, which is the
