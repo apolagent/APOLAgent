@@ -5,8 +5,7 @@
       "src": "server/vercel.ts",
       "use": "@vercel/node",
       "config": {
-        "includeFiles": ["dist/public/**", "server/**"],
-        "bundle": false
+        "includeFiles": ["dist/public/**"]
       }
     }
   ],
