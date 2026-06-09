@@ -136,7 +136,10 @@ app.use((req, res, next) => {
 
 // ── Async initialization (routes + bot) ───────────────────────────────────────
 // Resolved once on the first cold start; warm invocations skip it instantly.
+let initError: Error | null = null;
+
 const ready: Promise<void> = (async () => {
+  try {
   await registerRoutes(app);
 
   // ── Telegram bot webhook (receive only — no health-check intervals) ──────
@@ -191,11 +194,20 @@ const ready: Promise<void> = (async () => {
     if (res.headersSent) return next(err);
     return res.status(status).json({ message });
   });
+  } catch (err: any) {
+    initError = err;
+    console.error("APOL init failed:", err);
+  }
 })();
 
 // ── Vercel handler ────────────────────────────────────────────────────────────
 // @vercel/node invokes this for every request.
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   await ready;
+  if (initError) {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: initError.message, stack: initError.stack }));
+    return;
+  }
   app(req as any, res as any);
 }
