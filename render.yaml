@@ -2,7 +2,7 @@ services:
   - type: web
     name: apol-agent
     runtime: node
-    buildCommand: npm ci --include=dev && ./node_modules/.bin/tsx script/build.ts
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start
     envVars:
       - key: NODE_ENV
