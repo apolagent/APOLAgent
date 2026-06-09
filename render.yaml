@@ -2,7 +2,7 @@ services:
   - type: web
     name: apol-agent
     runtime: node
-    buildCommand: npm install; ./node_modules/.bin/tsx script/build.ts
+    buildCommand: npm install && npx vite build && npx esbuild server/index.ts --bundle --platform=node --format=cjs --outfile=dist/index.cjs --external:pg-native
     startCommand: npm run start
     envVars:
       - key: NODE_ENV
