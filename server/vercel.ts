@@ -15,8 +15,6 @@ import fs from "fs";
 import express, { type Request, Response, NextFunction } from "express";
 import type { IncomingMessage, ServerResponse } from "http";
 import rateLimit from "express-rate-limit";
-import { registerRoutes } from "./routes";
-import { createBot } from "./bot";
 
 function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -140,6 +138,9 @@ let initError: Error | null = null;
 
 const ready: Promise<void> = (async () => {
   try {
+  const { registerRoutes } = await import("./routes");
+  const { createBot } = await import("./bot");
+
   await registerRoutes(app);
 
   // ── Telegram bot webhook (receive only — no health-check intervals) ──────
