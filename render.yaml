@@ -2,7 +2,7 @@ services:
   - type: web
     name: apol-agent
     runtime: node
-    buildCommand: pip3 install tweepy; npm install; npm run build
+    buildCommand: npm install; ./node_modules/.bin/tsx script/build.ts
     startCommand: npm run start
     envVars:
       - key: NODE_ENV
