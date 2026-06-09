@@ -10,6 +10,7 @@
  * Keep this file in sync with index.ts when adding new middleware or limiters.
  */
 
+import path from "path";
 import express, { type Request, Response, NextFunction } from "express";
 import type { IncomingMessage, ServerResponse } from "http";
 import rateLimit from "express-rate-limit";
@@ -161,6 +162,15 @@ const ready: Promise<void> = (async () => {
       });
     });
   }
+
+  // ── Static files (Vite build output) ────────────────────────────────────
+  // process.cwd() is /var/task in the Vercel Lambda runtime, which is the
+  // project root — the same location that includeFiles bundles dist/public into.
+  const distPath = path.resolve(process.cwd(), "dist", "public");
+  app.use(express.static(distPath));
+  app.use("/{*path}", (_req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
+  });
 
   // ── Error handler ────────────────────────────────────────────────────────
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
